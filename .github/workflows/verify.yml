@@ -13,14 +13,15 @@ on:
 jobs:
   verify-packages:
     runs-on: ubuntu-latest
-    env:
-      STATS_DIR: ${{ runner.workspace }}/.gobra
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Create stats dir
-        run: mkdir -p ${{ env.STATS_DIR }}
+        run: |
+          STATS_DIR="${{ runner.workspace }}/.gobra"
+          mkdir -p $STATS_DIR
+          echo "STATS_DIR=" >> $GITHUB_ENV
 
       - name: Verify package
         uses: viperproject/gobra-action@main
