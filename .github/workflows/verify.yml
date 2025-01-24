@@ -11,11 +11,16 @@ on:
   pull_request: # run this workflow on every pull_request
 
 jobs:
-  verify-package:
+  verify-packages:
     runs-on: ubuntu-latest
+    env:
+      STATS_DIR: ${{ runner.workspace }}/.gobra
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create stats dir
+        run: mkdir -p ${{ env.STATS_DIR }}
 
       - name: Verify package
         uses: viperproject/gobra-action@main
@@ -26,10 +31,12 @@ jobs:
           javaXss: 64m
           globalTimeout: 20m
           packageTimeout: 5m
+          statsFile: ${{ env.STATS_DIR }}
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: stats.json
-          path: /tmp/stats.json
+          path: ${{ env.STATS_DIR }}/stats.json
+          if-no-files-found: error
