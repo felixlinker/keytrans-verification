@@ -26,7 +26,11 @@ jobs:
       - name: Verify package
         uses: viperproject/gobra-action@main
         with:
-          imageVersion: sha-391bd97
+          # use latest Gobra image instead of a fixed one.
+          # otherwise, we would need another action to periodically update
+          # the used image version by opening and, if successful, merging a
+          # corresponding PR
+          # imageVersion: sha-391bd97
           recursive: 1
           caching: 0
           javaXss: 64m
