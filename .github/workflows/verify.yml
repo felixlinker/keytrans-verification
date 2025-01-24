@@ -21,6 +21,7 @@ jobs:
         uses: viperproject/gobra-action@main
         with:
           imageVersion: sha-391bd97
+          recursive: 1
           caching: 0
           javaXss: 64m
           globalTimeout: 20m
