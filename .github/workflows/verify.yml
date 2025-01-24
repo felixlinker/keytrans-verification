@@ -1,0 +1,46 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Copyright (c) 2011-2025 ETH Zurich.
+
+name: verify
+
+on:
+  push: # run this workflow on every push
+  pull_request: # run this workflow on every pull_request
+
+jobs:
+  verify-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create stats dir
+        run: |
+          STATS_DIR="${{ runner.workspace }}/.gobra"
+          mkdir -p $STATS_DIR
+          echo "STATS_DIR=$STATS_DIR" >> $GITHUB_ENV
+
+      - name: Verify package
+        uses: viperproject/gobra-action@main
+        with:
+          # use latest Gobra image instead of a fixed one.
+          # otherwise, we would need another action to periodically update
+          # the used image version by opening and, if successful, merging a
+          # corresponding PR
+          # imageVersion: sha-391bd97
+          recursive: 1
+          caching: 0
+          javaXss: 64m
+          timeout: 20m
+          statsFile: ${{ env.STATS_DIR }}
+
+      - name: Upload Gobra statistics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: stats.json
+          path: ${{ env.STATS_DIR }}/stats.json
+          if-no-files-found: error
