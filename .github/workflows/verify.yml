@@ -20,7 +20,7 @@ jobs:
       - name: Verify package
         uses: viperproject/gobra-action@main
         with:
-          imageVersion: 391bd97
+          imageVersion: sha-391bd97
           caching: 0
           javaXss: 64m
           globalTimeout: 20m
