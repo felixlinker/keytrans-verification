@@ -32,4 +32,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: stats.json
-          path: ${{ runner.workspace }}/.gobra/stats.json
+          path: /tmp/stats.json
