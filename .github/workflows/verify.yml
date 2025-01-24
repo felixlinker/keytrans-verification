@@ -1,0 +1,34 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Copyright (c) 2011-2025 ETH Zurich.
+
+name: verify
+
+on:
+  push: # run this workflow on every push
+  pull_request: # run this workflow on every pull_request
+
+jobs:
+  verify-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify package
+        uses: viperproject/gobra-action@main
+        with:
+          imageVersion: 391bd97
+          caching: 0
+          javaXss: 64m
+          globalTimeout: 20m
+          packageTimeout: 5m
+
+      - name: Upload Gobra statistics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: stats.json
+          path: ${{ runner.workspace }}/.gobra/stats.json
