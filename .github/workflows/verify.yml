@@ -21,7 +21,7 @@ jobs:
         run: |
           STATS_DIR="${{ runner.workspace }}/.gobra"
           mkdir -p $STATS_DIR
-          echo "STATS_DIR=" >> $GITHUB_ENV
+          echo "STATS_DIR=$STATS_DIR" >> $GITHUB_ENV
 
       - name: Verify package
         uses: viperproject/gobra-action@main
@@ -30,8 +30,7 @@ jobs:
           recursive: 1
           caching: 0
           javaXss: 64m
-          globalTimeout: 20m
-          packageTimeout: 5m
+          timeout: 20m
           statsFile: ${{ env.STATS_DIR }}
 
       - name: Upload Gobra statistics
