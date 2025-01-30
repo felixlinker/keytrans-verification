@@ -1,5 +1,7 @@
 package prefixtree
 
+import "errors"
+
 type Node struct {
     hasData bool
     key int
@@ -7,6 +9,8 @@ type Node struct {
     left *Node
     right *Node
 }
+
+const InexistentSubtreeHash = -1
 
 /*@
 type BitConversion domain {
@@ -19,6 +23,8 @@ type BitConversion domain {
 }
 @*/
 
+//@ trusted
+//@ decreases
 //@ ensures acc(res)
 //@ ensures len(res) == len(GetBits(key))
 //@ ensures forall i int :: { res[i] } 0 <= i && i < len(res) ==> res[i] == GetBits(key)[i]
@@ -59,24 +65,45 @@ func test() {
 
 /*@
 type Hashing domain {
-    func hash2(int, int) int
-    func inv21(int) int
-    func inv22(int) int
+    // type 0
+    func hashKeyValue(int, int) int
+    func invKeyValue1(int) int
+    func invKeyValue2(int) int
 
-    axiom { // hash2 is injective
-        forall i1, i2 int :: { hash2(i1, i2) } inv21(hash2(i1, i2)) == i1 && inv22(hash2(i1, i2)) == i2
+    // type 1
+    func hashSubtrees(int, int) int
+    func invSubtrees1(int) int
+    func invSubtrees2(int) int
+
+    func getType(int) int
+
+    axiom { // hashKeyValue is injective and disjoint from hashSubtrees
+        forall i1, i2 int :: { hashKeyValue(i1, i2) } invKeyValue1(hashKeyValue(i1, i2)) == i1 && invKeyValue2(hashKeyValue(i1, i2)) == i2 && getType(hashKeyValue(i1, i2)) == 0
+    }
+
+    axiom { // hashKeyValue never produces InexistentSubtreeHash
+        forall i1, i2 int :: { hashKeyValue(i1, i2) } hashKeyValue(i1, i2) != InexistentSubtreeHash
+    }
+
+    axiom { // hashSubtrees is injective and disjoint from hashKeyValue
+        forall i1, i2 int :: { hashSubtrees(i1, i2) } invSubtrees1(hashSubtrees(i1, i2)) == i1 && invSubtrees2(hashSubtrees(i1, i2)) == i2 && getType(hashSubtrees(i1, i2)) == 1
+    }
+
+    axiom { // hashSubtrees never produces InexistentSubtreeHash
+        forall i1, i2 int :: { hashSubtrees(i1, i2) } hashSubtrees(i1, i2) != InexistentSubtreeHash
     }
 }
 @*/
 
 //@ trusted
-//@ ensures   res == hash2(key, value)
+//@ decreases
+//@ ensures   res == hashKeyValue(key, value)
 func HashData(key, value int) (res int) {
     return key + value // just a stupid example
 }
 
 //@ preserves acc(n.PrefixSubtree(prefix), 1/2)
-//@ ensures   res == unfolding acc(n.PrefixSubtree(prefix), 1/2) in hash2(n.key, n.value)
+//@ ensures   res == unfolding acc(n.PrefixSubtree(prefix), 1/2) in hashKeyValue(n.key, n.value)
 func HashNodeData(n *Node /*@, ghost prefix seq[bool] @*/) (res int) {
     //@ unfold acc(n.PrefixSubtree(prefix), 1/4)
     res = HashData(n.key, n.value)
@@ -84,7 +111,8 @@ func HashNodeData(n *Node /*@, ghost prefix seq[bool] @*/) (res int) {
 }
 
 //@ trusted
-//@ ensures   res == hash2(left, right)
+//@ decreases
+//@ ensures   res == hashSubtrees(left, right)
 func CombineSubtreeHashes(left, right int) (res int) {
     return left + right // just a stupid example
 }
@@ -103,10 +131,10 @@ requires acc(n.PrefixSubtree(prefix), _)
 pure func (n *Node) prefixSubtreeHash(prefix seq[bool]) int {
     return unfolding acc(n.PrefixSubtree(prefix), _) in (
         n.hasData ?
-            hash2(n.key, n.value) :
-            hash2(
-                n.left == nil ? 0 : n.left.prefixSubtreeHash(prefix ++ seq[bool]{false}),
-                n.right == nil ? 0 : n.right.prefixSubtreeHash(prefix ++ seq[bool]{true})))
+            hashKeyValue(n.key, n.value) :
+            hashSubtrees(
+                n.left == nil ? InexistentSubtreeHash : n.left.prefixSubtreeHash(prefix ++ seq[bool]{false}),
+                n.right == nil ? InexistentSubtreeHash : n.right.prefixSubtreeHash(prefix ++ seq[bool]{true})))
 }
 
 ghost
@@ -124,7 +152,7 @@ pure func (n *Node) prefixSubtreeContains(prefix seq[bool], key, value int) bool
         len(GetBits(key)) < len(prefix) ?
             false :
             len(GetBits(key)) == len(prefix) ?
-                n.hasData && n.hasData :
+                n.hasData && n.key == key && n.value == value :
                 GetBits(key)[len(prefix)] ?
                     (n.right == nil ? false : n.right.prefixSubtreeContains(prefix ++ seq[bool]{true}, key, value)) :
                     (n.left == nil ? false : n.left.prefixSubtreeContains(prefix ++ seq[bool]{false}, key, value)))
@@ -132,56 +160,286 @@ pure func (n *Node) prefixSubtreeContains(prefix seq[bool], key, value int) bool
 @*/
 
 // copath is sorted such that hashes for subtrees deeper in the prefix tree appear later in the slice
-//@ preserves acc(copath, 1/2) && len(copath) == len(GetBits(key)) + 1
-//@ preserves acc(n.PrefixTree(), 1/2) && rootHash == n.prefixTreeHash()
-// ensures   res ==> n.prefixTreeContains(key, value) // TODO
-func CheckInclusion(key int, value int, rootHash int, copath []int, n *Node) (res bool) {
-    dataHash := HashData(key, value)
-    bits := ComputeBits(key)
-    var computedHash int
-
-    //@ invariant -1 <= i && i < len(bits)
-    //@ invariant acc(copath, 1/4) && acc(bits, 1/4)
-    //@ invariant len(copath) == len(GetBits(key)) + 1
-    //@ invariant len(bits) == len(GetBits(key))
-    for i := len(bits) - 1; i >= 0; i-- {
-        if bits[i] {
-            computedHash = CombineSubtreeHashes(copath[i], dataHash)
-        } else {
-            computedHash = CombineSubtreeHashes(dataHash, copath[i])
-        }
-    }
-
-    res = computedHash == rootHash
+//@ requires  noPerm < p
+//@ preserves acc(copath, p) && len(copath) == len(GetBits(key)) + 1
+//@ preserves acc(n.PrefixTree(), p) && rootHash == n.prefixTreeHash()
+//@ ensures   res ==> n.prefixTreeContains(key, value)
+func CheckInclusion(key int, value int, rootHash int, copath []int, n *Node /*@, ghost p perm @*/) (res bool) {
+    computedHash, err := ComputePathWithError(key, value, copath, n /*@, p/2 @*/)
+    res = computedHash == rootHash && err == nil
 }
 
-// recursive implementation of computing the root hash using the copath
+// copath is sorted such that hashes for subtrees deeper in the prefix tree appear later in the slice
+//@ requires  noPerm < p
+//@ preserves acc(copath, p) && len(copath) == len(GetBits(key)) + 1
+//@ preserves acc(n.PrefixTree(), p) && rootHash == n.prefixTreeHash()
+//@ ensures   res ==> n.prefixTreeContains(key, value)
+func CheckInclusionWithoutTree(key int, value int, rootHash int, copath []int, /*@ ghost n *Node, ghost p perm @*/) (res bool) {
+    computedHash := ComputePathWithoutTree(key, value, copath /*@, n, p/2 @*/)
+    res = computedHash == rootHash
+    if res {
+        //@ UniqueCopathLemma(key, value, copath, n, p/2)
+    }
+}
+
+/*@
+ghost
+decreases
+requires acc(copath, _)
+requires len(copath) == len(keyBits) + 1
+pure func IsValidCoPath(rootHash, leafHash int, copath []int, keyBits seq[bool]) bool {
+    return len(keyBits) == 0 ? rootHash == leafHash : PureComputePath(0, leafHash, copath, keyBits) == rootHash
+}
+
+ghost
+decreases len(keyBits) - i
+requires acc(copath, _)
+requires  0 <= i && i < len(keyBits)
+requires len(copath) == len(keyBits) + 1
+ensures  res != InexistentSubtreeHash
+pure func PureComputePath(i int, leafHash int, copath []int, keyBits seq[bool]) (res int) {
+    return let pathPostfix := i + 1 == len(keyBits) ? leafHash : PureComputePath(i + 1, leafHash, copath, keyBits) in
+        let lhsHash := keyBits[i] ? copath[i] : pathPostfix in
+        let rhsHash := keyBits[i] ? pathPostfix : copath[i] in
+        hashSubtrees(lhsHash, rhsHash)
+}
+@*/
+
+//@ requires  len(copath) == len(GetBits(key)) + 1
+//@ requires  acc(n.PrefixTree(), 1/2)
+//@ requires  n.prefixTreeContains(key, value)
+//@ preserves acc(copath, 1/2)
+//@ ensures   acc(n.PrefixTree(), 1/2)
+//@ ensures   0 == len(GetBits(key)) ==> hash == hashKeyValue(key, value)
+//@ ensures   0 != len(GetBits(key)) ==> hash == PureComputePath(0, hashKeyValue(key, value), copath, GetBits(key))
+func ComputePath(key int, value int, copath []int, n *Node) (hash int) {
+    //@ unfold acc(n.PrefixTree(), 1/2)
+    hash = ComputePathSubtree(key, value, 0, copath, n /*@, seq[bool]{ } @*/)
+    //@ fold acc(n.PrefixTree(), 1/2)
+    return
+}
+
+// recursive implementation of computing the root hash using the copath. Assumes that key is in tree
 //@ requires  0 <= i && i <= len(GetBits(key))
 //@ requires  len(copath) == len(GetBits(key)) + 1
+//@ requires  i == len(prefix)
+//@ requires  acc(n.PrefixSubtree(prefix), 1/2)
+//@ requires  n.prefixSubtreeContains(prefix, key, value)
 //@ preserves acc(copath, 1/2)
-//@ preserves acc(n.PrefixSubtree(prefix), 1/2)
-func ComputePath(key int, value int, i int, copath []int, n *Node /*@, ghost prefix seq[bool] @*/) (hash int) {
+//@ ensures   acc(n.PrefixSubtree(prefix), 1/2)
+//@ ensures   i == len(GetBits(key)) ==> hash == hashKeyValue(key, value)
+//@ ensures   i != len(GetBits(key)) ==> hash == PureComputePath(i, hashKeyValue(key, value), copath, GetBits(key))
+func ComputePathSubtree(key int, value int, i int, copath []int, n *Node /*@, ghost prefix seq[bool] @*/) (hash int) {
     //@ unfold acc(n.PrefixSubtree(prefix), 1/2)
     bits := ComputeBits(key)
     if len(bits) == i {
         hash = HashData(key, value)
     } else if bits[i] {
-        var prevHash int
-        if n.right == nil {
-            prevHash = 0
-        } else {
-            prevHash = ComputePath(key, value, i + 1, copath, n.right /*@, prefix ++ seq[bool]{ true } @*/)
-        }
+        //@ assert n.right != nil
+        prevHash := ComputePathSubtree(key, value, i + 1, copath, n.right /*@, prefix ++ seq[bool]{ true } @*/)
         hash = CombineSubtreeHashes(copath[i], prevHash)
     } else {
-        var prevHash int
-        if n.left == nil {
-            prevHash = 0
-        } else {
-            prevHash = ComputePath(key, value, i + 1, copath, n.left /*@, prefix ++ seq[bool]{ false } @*/)
-        }
+        //@ assert n.left != nil
+        prevHash := ComputePathSubtree(key, value, i + 1, copath, n.left /*@, prefix ++ seq[bool]{ false } @*/)
         hash = CombineSubtreeHashes(prevHash, copath[i])
     }
     //@ fold acc(n.PrefixSubtree(prefix), 1/2)
     return
+}
+
+//@ requires  len(copath) == len(GetBits(key)) + 1
+//@ requires  noPerm < p
+//@ preserves acc(n.PrefixTree(), p) && acc(copath, p)
+//@ ensures   0 == len(GetBits(key)) && err == nil ==> hash == hashKeyValue(key, value)
+//@ ensures   0 != len(GetBits(key)) && err == nil ==> hash == PureComputePath(0, hashKeyValue(key, value), copath, GetBits(key))
+//@ ensures   n.prefixTreeContains(key, value) == (err == nil)
+func ComputePathWithError(key int, value int, copath []int, n *Node /*@, ghost p perm @*/) (hash int, err error) {
+    //@ unfold acc(n.PrefixTree(), p)
+    hash, err = ComputePathSubtreeWithError(key, value, 0, copath, n /*@, seq[bool]{ }, p @*/)
+    //@ fold acc(n.PrefixTree(), p)
+    return
+}
+
+// recursive implementation of computing the root hash using the copath. Returns an error if key is not in tree
+//@ requires  0 <= i && i <= len(GetBits(key))
+//@ requires  len(copath) == len(GetBits(key)) + 1
+//@ requires  i == len(prefix)
+//@ requires  noPerm < p
+//@ preserves acc(n.PrefixSubtree(prefix), p) && acc(copath, p)
+//@ ensures   i == len(GetBits(key)) && err == nil ==> hash == hashKeyValue(key, value)
+//@ ensures   i != len(GetBits(key)) && err == nil ==> hash == PureComputePath(i, hashKeyValue(key, value), copath, GetBits(key))
+//@ ensures   n.prefixSubtreeContains(prefix, key, value) == (err == nil)
+func ComputePathSubtreeWithError(key int, value int, i int, copath []int, n *Node /*@, ghost prefix seq[bool], ghost p perm @*/) (hash int, err error) {
+    //@ unfold acc(n.PrefixSubtree(prefix), p)
+    bits := ComputeBits(key)
+    if len(bits) == i {
+        if !n.hasData || n.key != key || n.value != value {
+            err = NewError("key not in tree")
+            //@ fold acc(n.PrefixSubtree(prefix), p)
+            return
+        }
+        hash = HashData(key, value)
+    } else if bits[i] {
+        if n.right == nil {
+            err = NewError("key not in tree")
+            //@ fold acc(n.PrefixSubtree(prefix), p)
+            return
+        }
+        var prevHash int
+        prevHash, err = ComputePathSubtreeWithError(key, value, i + 1, copath, n.right /*@, prefix ++ seq[bool]{ true }, p @*/)
+        hash = CombineSubtreeHashes(copath[i], prevHash)
+    } else {
+        if n.left == nil {
+            err = NewError("key not in tree")
+            //@ fold acc(n.PrefixSubtree(prefix), p)
+            assert n.prefixSubtreeContains(prefix, key, value) == (err == nil)
+            return
+        }
+        var prevHash int
+        prevHash, err = ComputePathSubtreeWithError(key, value, i + 1, copath, n.left /*@, prefix ++ seq[bool]{ false }, p @*/)
+        hash = CombineSubtreeHashes(prevHash, copath[i])
+    }
+    //@ fold acc(n.PrefixSubtree(prefix), p)
+    return
+}
+
+// recursive implementation of computing the root hash using the copath. Returns an error if key is not in tree
+//@ decreases
+//@ requires  len(copath) == len(GetBits(key)) + 1
+//@ requires  noPerm < p
+//@ preserves acc(n.PrefixTree(), p)
+//@ preserves acc(copath, p)
+//@ ensures   IsValidCoPath(hash, hashKeyValue(key, value), copath, GetBits(key))
+func ComputePathWithoutTree(key int, value int, copath []int /*@, ghost n *Node, ghost p perm @*/) (hash int) {
+    //@ unfold acc(n.PrefixTree(), p)
+    hash = ComputePathSubtreeWithoutTree(key, value, 0, copath /*@, n, seq[bool]{ }, p @*/)
+    //@ fold acc(n.PrefixTree(), p)
+    return
+}
+
+// recursive implementation of computing the root hash using the copath. Returns an error if key is not in tree
+//@ decreases len(GetBits(key)) + 1 - i
+//@ requires  0 <= i && i <= len(GetBits(key))
+//@ requires  len(copath) == len(GetBits(key)) + 1
+//@ requires  i == len(prefix)
+//@ requires  noPerm < p
+//@ preserves n != nil ==> acc(n.PrefixSubtree(prefix), p)
+//@ preserves acc(copath, p)
+//@ ensures   i == len(GetBits(key)) ==> hash == hashKeyValue(key, value)
+//@ ensures   i != len(GetBits(key)) ==> hash == PureComputePath(i, hashKeyValue(key, value), copath, GetBits(key))
+func ComputePathSubtreeWithoutTree(key int, value int, i int, copath []int /*@, ghost n *Node, ghost prefix seq[bool], ghost p perm @*/) (hash int) {
+    bits := ComputeBits(key)
+    if len(bits) == i {
+        hash = HashData(key, value)
+    } else if bits[i] {
+        /*@
+        ghost var subtree *Node
+        ghost if n == nil {
+            subtree = nil
+        } else {
+            unfold acc(n.PrefixSubtree(prefix), p)
+            subtree = n.right
+        }
+        @*/
+        prevHash := ComputePathSubtreeWithoutTree(key, value, i + 1, copath /*@, subtree, prefix ++ seq[bool]{ true }, p @*/)
+        hash = CombineSubtreeHashes(copath[i], prevHash)
+        /*@
+        ghost if n != nil {
+            fold acc(n.PrefixSubtree(prefix), p)
+        }
+        @*/
+    } else {
+        /*@
+        ghost var subtree *Node
+        ghost if n == nil {
+            subtree = nil
+        } else {
+            unfold acc(n.PrefixSubtree(prefix), p)
+            subtree = n.left
+        }
+        @*/
+        prevHash := ComputePathSubtreeWithoutTree(key, value, i + 1, copath /*@, subtree, prefix ++ seq[bool]{ false }, p @*/)
+        hash = CombineSubtreeHashes(prevHash, copath[i])
+        /*@
+        ghost if n != nil {
+            fold acc(n.PrefixSubtree(prefix), p)
+        }
+        @*/
+    }
+    return
+}
+
+/*@
+ghost
+decreases
+requires  noPerm < p
+requires  len(copath) == len(GetBits(key)) + 1
+requires  acc(n.PrefixTree(), p) && acc(copath, p)
+requires  IsValidCoPath(n.prefixTreeHash(), hashKeyValue(key, value), copath, GetBits(key))
+ensures   acc(n.PrefixTree(), p) && acc(copath, p)
+ensures   n.prefixTreeContains(key, value)
+// proves that the postcondition of `ComputePathWithoutTree` implies tree containment if root hash matches
+func UniqueCopathLemma(key, value int, copath []int, n *Node, p perm) {
+    unfold acc(n.PrefixTree(), p)
+    UniqueCopathSubtreeLemma(key, value, 0, copath, n, seq[bool]{ }, p)
+    fold acc(n.PrefixTree(), p)
+}
+
+
+ghost
+decreases len(GetBits(key)) - i
+requires  noPerm < p
+requires  0 <= i && i <= len(GetBits(key))
+requires  i == len(prefix)
+requires  len(copath) == len(GetBits(key)) + 1
+requires  acc(n.PrefixSubtree(prefix), p) && acc(copath, p)
+requires  i == len(GetBits(key)) ==> n.prefixSubtreeHash(prefix) == hashKeyValue(key, value)
+requires  i != len(GetBits(key)) ==> n.prefixSubtreeHash(prefix) == PureComputePath(i, hashKeyValue(key, value), copath, GetBits(key))
+ensures   acc(n.PrefixSubtree(prefix), p) && acc(copath, p)
+ensures   n.prefixSubtreeContains(prefix, key, value)
+// proves that the postcondition of `ComputePathSubtreeWithoutTree` implies tree containment if root hash matches
+func UniqueCopathSubtreeLemma(key, value, i int, copath []int, n *Node, prefix seq[bool], p perm) {
+    if i == len(GetBits(key)) {
+        assert unfolding acc(n.PrefixSubtree(prefix), p) in n.hasData
+    } else if GetBits(key)[i] {
+        assert n.prefixSubtreeHash(prefix) == PureComputePath(i, hashKeyValue(key, value), copath, GetBits(key))
+        hash := n.prefixSubtreeHash(prefix)
+
+        unfold acc(n.PrefixSubtree(prefix), p)
+        if n.right == nil {
+            if !n.hasData {
+                // unfold definition of n.prefixSubtreeHash(prefix):
+                lhsHash := n.left == nil ? InexistentSubtreeHash : n.left.prefixSubtreeHash(prefix ++ seq[bool]{false})
+                assert hash == hashSubtrees(lhsHash, InexistentSubtreeHash)
+
+                // unfold definition of PureComputePath:
+                var pathPostfix int
+                if i + 1 == len(GetBits(key)) {
+                    pathPostfix = hashKeyValue(key, value)
+                } else {
+                    pathPostfix = PureComputePath(i + 1, hashKeyValue(key, value), copath, GetBits(key))
+                }
+                assert hash == hashSubtrees(copath[i], pathPostfix)
+                assert copath[i] == lhsHash
+                assert pathPostfix == InexistentSubtreeHash // contradiction
+            }
+            assert false
+        } else {
+            UniqueCopathSubtreeLemma(key, value, i + 1, copath, n.right, prefix ++ seq[bool]{true}, p)
+        }
+        fold acc(n.PrefixSubtree(prefix), p)
+    } else {
+        unfold acc(n.PrefixSubtree(prefix), p)
+        if n.left != nil {
+            UniqueCopathSubtreeLemma(key, value, i + 1, copath, n.left, prefix ++ seq[bool]{false}, p)
+        }
+        fold acc(n.PrefixSubtree(prefix), p)
+    }
+}
+@*/
+
+//@ trusted
+//@ ensures err != nil
+func NewError(msg string) (err error) {
+    return errors.New(msg)
 }
