@@ -25,9 +25,7 @@ jobs:
 
       - name: Create stats dir
         run: |
-          STATS_DIR="${{ runner.workspace }}/.gobra"
-          mkdir -p $STATS_DIR
-          echo "STATS_DIR=$STATS_DIR" >> $GITHUB_ENV
+          mkdir .gobra
 
       - name: Clone Gobra
         run: |
@@ -50,5 +48,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: stats.json
-          path: ${{ env.STATS_DIR }}/stats.json
+          path: .gobra/stats.json
           if-no-files-found: error
