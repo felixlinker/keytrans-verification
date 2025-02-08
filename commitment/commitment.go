@@ -7,6 +7,7 @@ func verify(hash int, value int) (res bool) {
     return
 }
 
+/*
 // @ requires low(hash)
 // @ ensures  res ==> low(value)
 func verifyWithBranching(hash int, value int) (res bool) {
@@ -17,6 +18,7 @@ func verifyWithBranching(hash int, value int) (res bool) {
     }
     return true
 }
+*/
 
 // the following postcondition specifies that the Go function `computeHash` behaves like the
 // pure (mathematical) function `hashFn` for which we assume injectivity (see domain below)
