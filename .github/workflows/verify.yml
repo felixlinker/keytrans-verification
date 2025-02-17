@@ -41,7 +41,9 @@ jobs:
 
       - name: Verify files
         run: |
-          java -jar -Xss128m gobra/target/scala-2.13/gobra.jar -i "$VERIFY_FILES"
+          java -jar -Xss128m gobra/target/scala-2.13/gobra.jar \
+            -i "$VERIFY_FILES" \
+            --hyperMode extended
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
