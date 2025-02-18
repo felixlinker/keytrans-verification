@@ -161,9 +161,14 @@ pure func (n *Node) prefixSubtreeContains(prefix seq[bool], key, value int) bool
 
 // copath is sorted such that hashes for subtrees deeper in the prefix tree appear later in the slice
 //@ requires  noPerm < p
+//@ requires low(key)
+//@ requires low(value)
+//@ requires low(rootHash)
+//@ requires low(copath)
 //@ preserves acc(copath, p) && len(copath) == len(GetBits(key)) + 1
 //@ preserves acc(n.PrefixTree(), p) && rootHash == n.prefixTreeHash()
 //@ ensures   res ==> n.prefixTreeContains(key, value)
+//@ ensures   res ==> low(value)
 func CheckInclusionWithoutTree(key int, value int, rootHash int, copath []int, /*@ ghost n *Node, ghost p perm @*/) (res bool) {
     computedHash := ComputePath(key, value, copath /*@, n, p/2 @*/)
     res = computedHash == rootHash
