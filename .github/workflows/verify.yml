@@ -17,7 +17,8 @@ jobs:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
     env:
       GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
-      VERIFY_FILES: prefixtree/prefixtree.go
+      PKG_NAME: github.com/felixlinker/keytrans-verification
+      VERIFY_FILES: pkg/prefixtree/prefixtree.go
 
     steps:
       - name: Checkout repository
@@ -42,8 +43,9 @@ jobs:
       - name: Verify files
         run: |
           java -jar -Xss128m gobra/target/scala-2.13/gobra.jar \
-            -i "$VERIFY_FILES" \
-            --hyperMode extended
+            --module "$PKG_NAME" \
+            --hyperMode extended \
+            -i "$VERIFY_FILES"
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
