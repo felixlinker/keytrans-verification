@@ -13,34 +13,42 @@ on:
 jobs:
   verify-packages:
     runs-on: ubuntu-latest
+    container:
+      image: gobraverifier/gobra-base:v6_z3_4.8.7
+    env:
+      GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
+      VERIFY_FILES: prefixtree/prefixtree.go
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Create stats dir
         run: |
-          STATS_DIR="${{ runner.workspace }}/.gobra"
-          mkdir -p $STATS_DIR
-          echo "STATS_DIR=$STATS_DIR" >> $GITHUB_ENV
+          mkdir .gobra
 
-      - name: Verify package
-        uses: viperproject/gobra-action@main
-        with:
-          # use latest Gobra image instead of a fixed one.
-          # otherwise, we would need another action to periodically update
-          # the used image version by opening and, if successful, merging a
-          # corresponding PR
-          # imageVersion: sha-391bd97
-          recursive: 1
-          caching: 0
-          javaXss: 64m
-          timeout: 20m
-          statsFile: ${{ env.STATS_DIR }}
+      - name: Clone Gobra
+        run: |
+          git clone https://github.com/viperproject/gobra
+
+      - name: Build Gobra
+        working-directory: gobra/
+        run: |
+          git checkout "$GOBRA_REF"
+          git submodule update --init --recursive
+          sbt compile
+          sbt assembly
+
+      - name: Verify files
+        run: |
+          java -jar -Xss128m gobra/target/scala-2.13/gobra.jar \
+            -i "$VERIFY_FILES" \
+            --hyperMode extended
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: stats.json
-          path: ${{ env.STATS_DIR }}/stats.json
+          path: .gobra/stats.json
           if-no-files-found: error
