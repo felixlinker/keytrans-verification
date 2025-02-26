@@ -23,26 +23,29 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          path: keytrans-verification
+
+      - name: Checkout Gobra
+        uses: actions/checkout@v4
+        with:
+          path: gobra
+          repository: viperproject/gobra
+          ref: "$GOBRA_REF"
+          submodules: 'recursive'
+
+      - name: Assemble Gobra
+        working-directory: gobra
+        run: sbt assembly
 
       - name: Create stats dir
-        run: |
-          mkdir .gobra
-
-      - name: Clone Gobra
-        run: |
-          git clone https://github.com/viperproject/gobra
-
-      - name: Build Gobra
-        working-directory: gobra/
-        run: |
-          git checkout "$GOBRA_REF"
-          git submodule update --init --recursive
-          sbt compile
-          sbt assembly
+        working-directory: keytrans-verification
+        run: mkdir .gobra
 
       - name: Verify files
+        working-directory: keytrans-verification
         run: |
-          java -jar -Xss128m gobra/target/scala-2.13/gobra.jar \
+          java -jar -Xss128m ../gobra/target/scala-2.13/gobra.jar \
             --module "$PKG_NAME" \
             --hyperMode extended \
             --recursive \
@@ -53,5 +56,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: stats.json
-          path: .gobra/stats.json
+          path: keytrans-verification/.gobra/stats.json
           if-no-files-found: error
