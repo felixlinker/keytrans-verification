@@ -31,7 +31,7 @@ jobs:
         with:
           path: gobra
           repository: viperproject/gobra
-          ref: "$GOBRA_REF"
+          ref: ${{ env.GOBRA_REF }}
           submodules: 'recursive'
 
       - name: Assemble Gobra
