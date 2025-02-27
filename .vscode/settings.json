@@ -1,3 +1,6 @@
 {
-    "gobraSettings.buildVersion": "Nightly"
+    "gobraSettings.buildVersion": "Nightly",
+    "[go]": {
+        "editor.formatOnSave": false,
+    }
 }
