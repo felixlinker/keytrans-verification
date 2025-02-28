@@ -11,14 +11,14 @@ type UpdateValue struct {
 }
 
 type CommitmentValue struct {
-	Opening []byte      // VRF proof
+	Opening []byte
 	Label   []byte      // pseudonym; max length 2^8-1 bytes
 	Update  UpdateValue // value associated with label, e.g., public key
 }
 
 type BinaryLadderStep struct {
 	Proof      [sha256.Size]byte
-	Commitment []byte // TODO: Make array of
+	Commitment [sha256.Size]byte
 }
 
 type InclusionProof struct {
@@ -32,18 +32,18 @@ const (
 )
 
 type PrefixLeaf struct {
-	vrf_output [sha256.Size]byte
-	commitment [sha256.Size]byte
+	Vrf_output [sha256.Size]byte
+	Commitment [sha256.Size]byte
 }
 
 type PrefixSearchResults struct {
-	result_type int
-	leaf        *PrefixLeaf // only present when result_type == NonInclusionLeaf
-	depth       uint8
+	Result_type int
+	Leaf        *PrefixLeaf // only present when result_type == NonInclusionLeaf
+	Depth       uint8
 }
 
 type PrefixProof struct {
-	results  []PrefixSearchResults
+	Results  []PrefixSearchResults
 	Elements []NodeValue
 }
 

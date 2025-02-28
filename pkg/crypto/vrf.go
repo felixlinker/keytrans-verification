@@ -24,14 +24,14 @@ func VRF_hash(sk []byte, input VrfInput) [32]byte {
 	return sha256.Sum256(encode(input))
 }
 
-func VRF_prove(sk []byte, input VrfInput) []byte {
-	return encode(input)
+func VRF_prove(sk []byte, input VrfInput) [32]byte {
+	return VRF_hash(sk, input)
 }
 
-func VRF_proof_to_hash(proof []byte) [32]byte {
-	return sha256.Sum256(proof)
+func VRF_proof_to_hash(proof [32]byte) [32]byte {
+	return proof
 }
 
-func VRF_verify(pk []byte, input VrfInput, proof []byte) (bool, [32]byte) {
-	return bytes.Equal(encode(input), proof), VRF_proof_to_hash(proof)
+func VRF_verify(pk []byte, input VrfInput, proof [32]byte) (bool, [32]byte) {
+	return VRF_hash(nil, input) == proof, VRF_proof_to_hash(proof)
 }
