@@ -33,15 +33,15 @@ type SearchResponse struct {
 	Value          proofs.UpdateValue // value associated with queried label
 }
 
-func (st *UserState) VerifyLatest(query SearchRequest, proof SearchResponse) (*proofs.UpdateValue, error) {
-	if err := st.UpdateView(proof.Full_tree_head, proof.Search); err != nil {
+func (st *UserState) VerifyLatest(query SearchRequest, prf SearchResponse) (*proofs.UpdateValue, error) {
+	if err := st.UpdateView(prf.Full_tree_head, prf.Search); err != nil {
 		return nil, err
-	} else if len(proof.Search.Prefix_roots) > 0 {
+	} else if len(prf.Search.Prefix_roots) > 0 {
 		return nil, errors.New("too many prefix roots")
 	}
 
-	vrfOutputs := make([][32]byte, 0, len(proof.Binary_ladder))
-	for _, step := range proof.Binary_ladder {
+	vrfOutputs := make([][32]byte, 0, len(prf.Binary_ladder))
+	for _, step := range prf.Binary_ladder {
 		vrfOutputs = append(vrfOutputs, crypto.VRF_proof_to_hash(step.Proof))
 	}
 

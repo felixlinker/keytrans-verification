@@ -103,8 +103,8 @@ func checkIncreasing(timestamps []uint64) bool {
 }
 
 //@ ensures e == nil ==> *st.Size == new_head.Tree_head.Tree_size
-func (st *UserState) UpdateView(new_head FullTreeHead, proof proofs.CombinedTreeProof) (err error) {
-	if !checkIncreasing(proof.Timestamps) {
+func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreeProof) (err error) {
+	if !checkIncreasing(prf.Timestamps) {
 		return errors.New("timestamps not increasing")
 	} else if (new_head.Tree_head.Tree_size == 0) {
 		return errors.New("new tree cannot be empty")
@@ -125,7 +125,7 @@ func (st *UserState) UpdateView(new_head FullTreeHead, proof proofs.CombinedTree
 		for pathToOldHead[i] == oldFrontier[i] {
 			i++
 		}
-		st.Frontier_timestamps = append(st.Frontier_timestamps[:i], proof.Timestamps[i:]...)
+		st.Frontier_timestamps = append(st.Frontier_timestamps[:i], prf.Timestamps[i:]...)
 	}
 
 	st.Size = new_head.Tree_head.Tree_size
