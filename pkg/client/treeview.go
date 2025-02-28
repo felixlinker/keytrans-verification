@@ -55,7 +55,7 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64) (path []uint64, err er
 	}
 }
 
-//@ tree != nil ==> len(path) > 0
+//@ ensures tree != nil ==> len(path) > 0
 func (tree *ImplicitBinarySearchTree) FrontierNodes() (path []uint64) {
 	path = []uint64{}
 	for tree != nil {
