@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -35,11 +36,14 @@ type SearchResponse struct {
 func (st *UserState) VerifyLatest(query SearchRequest, proof SearchResponse) (*proofs.UpdateValue, error) {
 	if err := st.UpdateView(proof.Full_tree_head, proof.Search); err != nil {
 		return nil, err
-	} else if len(proof.Search.Timestamps) > 0 {
-		return nil, errors.New("too many timestamps")
 	} else if len(proof.Search.Prefix_roots) > 0 {
 		return nil, errors.New("too many prefix roots")
-	} else {
-		return nil, nil
 	}
+
+	vrfOutputs := make([][32]byte, 0, len(proof.Binary_ladder))
+	for _, step := range proof.Binary_ladder {
+		vrfOutputs = append(vrfOutputs, crypto.VRF_proof_to_hash(step.Proof))
+	}
+
+	return nil, nil
 }
