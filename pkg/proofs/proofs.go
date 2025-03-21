@@ -10,6 +10,12 @@ type UpdateValue struct {
 	Value []byte
 }
 
+/*@
+pred (u UpdateValue) Inv() {
+	acc(u.Value)
+}
+@*/
+
 type CommitmentValue struct {
 	Opening []byte
 	Label   []byte      // pseudonym; max length 2^8-1 bytes
@@ -23,6 +29,12 @@ type BinaryLadderStep struct {
 
 type InclusionProof struct {
 }
+
+/*@
+pred (i InclusionProof) Inv() {
+	true
+}
+@*/
 
 const (
 	Reserved           = 0
@@ -52,3 +64,11 @@ type CombinedTreeProof struct {
 	Prefix_proofs []PrefixProof
 	Prefix_roots  []NodeValue
 }
+
+/*@
+pred (c CombinedTreeProof) Inv() {
+	acc(c.Timestamps) &&
+	acc(c.Prefix_proofs) &&
+	acc(c.Prefix_roots)
+}
+@*/

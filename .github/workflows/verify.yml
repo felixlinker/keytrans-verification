@@ -17,7 +17,7 @@ jobs:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
     env:
       GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
-      PKG_NAME: github.com/felixlinker/keytrans-verification
+      MOD_NAME: github.com/felixlinker/keytrans-verification
       EXCLUDE_PKGS: "main"
 
     steps:
@@ -46,10 +46,11 @@ jobs:
         working-directory: keytrans-verification
         run: |
           java -jar -Xss128m ../gobra/target/scala-2.13/gobra.jar \
-            --module "$PKG_NAME" \
+            --module ${{ env.MOD_NAME }} \
             --hyperMode extended \
             --recursive \
-            --excludePackages "$EXCLUDE_PKGS"
+            --include "." ".verification" \
+            --excludePackages ${{ env.EXCLUDE_PKGS }}
 
       - name: Upload Gobra statistics
         if: ${{ always() }}

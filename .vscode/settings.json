@@ -1,5 +1,10 @@
 {
     "gobraSettings.buildVersion": "Nightly",
+    "gobraSettings.moduleName": "github.com/felixlinker/keytrans-verification",
+    "gobraSettings.includeDirs": [
+        ".",
+        ".verification"
+    ],
     "[go]": {
         "editor.formatOnSave": false,
     }
