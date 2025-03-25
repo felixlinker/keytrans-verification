@@ -169,9 +169,13 @@ pred (s *UserState) Inv() {
 //@ preserves acc(timestamps, p)
 //@ ensures res ==> forall i, j int :: 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] < timestamps[j]
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
+	// The following if statement is not necessary and, also,
+	// triggers bug #898 (see https://github.com/viperproject/gobra/issues/898)
+	/*
 	if len(timestamps) == 0 {
 		return true
 	}
+	*/
 
 	/* the following checks are insufficient:
 	tmp := timestamps[0]
