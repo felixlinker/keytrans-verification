@@ -56,11 +56,23 @@ type PrefixLeaf struct {
 	Commitment [sha256.Size]byte
 }
 
+/*@
+pred (p *PrefixLeaf) Inv() {
+     acc(p)
+}
+@*/
+
 type PrefixSearchResult struct {
 	Result_type int
 	Leaf        *PrefixLeaf // only present when result_type == NonInclusionLeaf
 	Depth       uint8
 }
+
+/*@
+pred (p PrefixSearchResults) Inv() {
+	p.Result_type == NonInclusionLeaf ==> p.Leaf.Inv()
+}
+@*/
 
 type PrefixProof struct {
 	Results  []PrefixSearchResult
