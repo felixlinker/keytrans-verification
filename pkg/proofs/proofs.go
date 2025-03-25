@@ -54,6 +54,12 @@ type PrefixSearchResults struct {
 	Depth       uint8
 }
 
+/*@
+pred (p PrefixSearchResults) Inv() {
+	p.Leaf != nil ==> p.Result_type == NonInclusionLeaf
+}
+@*/
+
 type PrefixProof struct {
 	Results  []PrefixSearchResults
 	Elements []NodeValue
