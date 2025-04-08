@@ -48,8 +48,11 @@ const (
 	NonInclusionParent = 3
 )
 
+// A leaf in a prefix tree
 type PrefixLeaf struct {
+	// Vrf_output for the search key and version pair stored at this leaf.
 	Vrf_output [sha256.Size]byte
+	// Commitment to the public key of the search key and version pair.
 	Commitment [sha256.Size]byte
 }
 
