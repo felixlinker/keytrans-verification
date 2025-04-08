@@ -1,0 +1,4 @@
+package errors
+
+ensures err != nil
+func New(msg string) (err error)
