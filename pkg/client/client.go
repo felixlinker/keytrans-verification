@@ -3,7 +3,6 @@ package client
 import (
 	"errors"
 
-	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -54,46 +53,43 @@ type SearchResponse struct {
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
 	Inclusion      proofs.InclusionProof
-	Opening        []byte             // TODO: For actual VRFs, this would be fixed size
+	Opening        []byte
 	Value          proofs.UpdateValue // value associated with queried label
 }
 
-/*@
-pred (s SearchResponse) Inv() {
-	s.Full_tree_head.Inv() &&
-	acc(s.Version) &&
-	acc(s.Binary_ladder) &&
-	s.Search.Inv() &&
-	s.Inclusion.Inv() &&
-	acc(s.Opening) &&
-	s.Value.Inv()
-}
-@*/
-
 //@ requires noPerm < p
 //@ preserves st.Inv()
-//@ preserves acc(query.Inv(), p) && acc(prf.Inv(), p)
+//@ preserves acc(query.Inv(), p) && acc(resp.Inv(), p)
 //@ ensures err == nil ==> acc(res) && res.Inv()
-func (st *UserState) VerifyLatest(query SearchRequest, prf SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
-	//@ unfold acc(prf.Inv(), p)
-	if err := st.UpdateView(prf.Full_tree_head, prf.Search /*@, p/2 @*/); err != nil {
-		//@ fold acc(prf.Inv(), p)
+func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse) (*proofs.UpdateValue, error) {
+	//@ unfold acc(resp.Inv(), p)
+	if err := st.UpdateView(resp.Full_tree_head, resp.Search); err != nil {
+		//@ fold acc(resp.Inv(), p)
 		return nil, err
-	} else if len(prf.Search.Prefix_roots) > 0 {
-		//@ fold acc(prf.Inv(), p)
-		return nil, errors.New("too many prefix roots")
+		} else if resp.Version != nil {
+		//@ fold acc(resp.Inv(), p)
+		return nil, errors.New("no version provided")
+	} else if len(resp.Search.Prefix_roots) != 0 {
+		//@ fold acc(resp.Inv(), p)
+		return nil, errors.New("prefix roots provided")
 	}
 
-	vrfOutputs := make([][32]byte, len(prf.Binary_ladder))
-
-	//@ invariant 0 <= i && i <= len(prf.Binary_ladder)
-	//@ invariant acc(prf.Binary_ladder, p)
-	//@ invariant acc(vrfOutputs) && len(vrfOutputs) == len(prf.Binary_ladder)
-	for i := 0; i < len(prf.Binary_ladder); i++ {
-		step := prf.Binary_ladder[i]
-		vrfOutputs[i] = crypto.VRF_proof_to_hash(step.Proof)
+	ladderIndices := proofs.FullBinaryLadderSteps(*resp.Version)
+	if len(resp.Binary_ladder) != len(ladderIndices) {
+		return nil, errors.New("length of binary ladder does not match greatest version")
 	}
 
-	//@ fold acc(prf.Inv(), p)
+	trees := make([]*proofs.PrefixTree, 0, len(resp.Search.Prefix_proofs))
+	for _, prf := range(resp.Search.Prefix_proofs) {
+		if tree, err := prf.ToTree(resp.Binary_ladder); err != nil {
+			return nil, err
+		} else {
+			trees = append(trees, tree)
+		}
+	}
+
+	// TODO: Verify proof of inclusion in all trees
+
+	//@ fold acc(resp.Inv(), p)
 	return nil, nil
 }

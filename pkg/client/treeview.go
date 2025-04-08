@@ -34,15 +34,17 @@ func RootNode(tree_size uint64) uint64 {
 //@ preserves tree.Inv()
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	//@ unfold tree.Inv()
-	tree.Root += by
+	if tree == nil {
+		//@ fold tree.Inv()
+		return
+	}
 
-	if tree.Left != nil {
-		tree.Left.OffSet(by)
-	}
-	if tree.Right != nil {
-		tree.Right.OffSet(by)
-	}
+	tree.Root += by
+	tree.Left.OffSet(by)
+	tree.Right.OffSet(by)
+
 	//@ fold tree.Inv()
+	return
 }
 
 //@ requires  noPerm < p
@@ -73,15 +75,15 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 }
 
 //@ requires  noPerm < p
-//@ preserves tree != nil ==> acc(tree.Inv(), p)
-//@ ensures acc(path) && (tree != nil ==> len(path) > 0)
-func (tree *ImplicitBinarySearchTree) FrontierNodes(/*@ ghost p perm @*/) (path []uint64) {
-	if tree == nil {
-		path = []uint64{}
-	} else {
+//@ preserves acc(tree.Inv(), p)
+//@ ensures acc(path) && len(path) > 0
+func (tree ImplicitBinarySearchTree) FrontierNodes() (path []uint64) {
+	path = []uint64{}
+	t := &tree
+	for t != nil {
 		//@ unfold acc(tree.Inv(), p)
-		path = tree.Right.FrontierNodes(/*@ p @*/)
-		path = append(/*@ p, @*/ []uint64{tree.Root}, path...)
+		path = append(/*@ p, @*/ path, tree.Root)
+		t = t.Right
 		//@ fold acc(tree.Inv(), p)
 	}
 	return

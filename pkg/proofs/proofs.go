@@ -1,7 +1,12 @@
 package proofs
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"errors"
+	"slices"
+
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
 
 type NodeValue = [sha256.Size]byte
@@ -48,14 +53,14 @@ type PrefixLeaf struct {
 	Commitment [sha256.Size]byte
 }
 
-type PrefixSearchResults struct {
+type PrefixSearchResult struct {
 	Result_type int
 	Leaf        *PrefixLeaf // only present when result_type == NonInclusionLeaf
 	Depth       uint8
 }
 
 type PrefixProof struct {
-	Results  []PrefixSearchResults
+	Results  []PrefixSearchResult
 	Elements []NodeValue
 }
 
@@ -72,3 +77,32 @@ pred (c CombinedTreeProof) Inv() {
 	acc(c.Prefix_roots)
 }
 @*/
+
+type CompleteBinaryLadderStep struct {
+	Step BinaryLadderStep
+	Result PrefixSearchResult
+}
+
+func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
+	completeSteps = make([]CompleteBinaryLadderStep, 0, len(results))
+	if len(steps) < len(results) {
+		return completeSteps, errors.New("not enough steps")
+	}
+
+	sortedSteps := make([]BinaryLadderStep, 0, len(results))
+	copy(sortedSteps, steps[:len(results)])
+	slices.SortFunc(sortedSteps, func(a, b BinaryLadderStep) int {
+		hashA := crypto.VRF_proof_to_hash(a.Proof)
+		hashB := crypto.VRF_proof_to_hash(b.Proof)
+		return bytes.Compare(hashA[:], hashB[:])
+	})
+
+	for i, step := range(sortedSteps) {
+		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
+			Step: step,
+			Result: results[i],
+		})
+	}
+
+	return completeSteps, nil
+}

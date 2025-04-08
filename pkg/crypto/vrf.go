@@ -8,8 +8,8 @@ import (
 )
 
 type VrfInput struct {
-	label   []byte // max length is 2^8-1, i.e., length can be stored in one byte
-	version uint32
+	Label   []byte // max length is 2^8-1, i.e., length can be stored in one byte
+	Version uint32
 }
 
 /*@
@@ -23,9 +23,9 @@ pred (input VrfInput) Inv() {
 //@ ensures   acc(res)
 func encode(input VrfInput) (res []byte) {
 	buf := bytes.NewBuffer([]byte{})
-	buf.WriteByte(utils.Uint8(len(input.label)))
-	buf.Write(input.label)
-	buf.Write(utils.Uint32(input.version))
+	buf.WriteByte(utils.Uint8(len(input.Label)))
+	buf.Write(input.Label)
+	buf.Write(utils.Uint32(input.Version))
 	return buf.Bytes()
 }
 
