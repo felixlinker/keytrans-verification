@@ -37,6 +37,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gobra.jar
+          retention-days: 2
 
 
   type-check-packages:
