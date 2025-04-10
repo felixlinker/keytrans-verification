@@ -15,25 +15,25 @@ jobs:
   build-gobra:
     runs-on: ubuntu-latest
     GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
-  steps:
-    - name: Checkout Gobra
-      uses: actions/checkout@v4
-      with:
-        path: gobra
-        repository: viperproject/gobra
-        ref: ${{ env.GOBRA_REF }}
-        submodules: 'recursive'
+    steps:
+      - name: Checkout Gobra
+        uses: actions/checkout@v4
+        with:
+          path: gobra
+          repository: viperproject/gobra
+          ref: ${{ env.GOBRA_REF }}
+          submodules: 'recursive'
 
-    - name: Assemble Gobra
-      working-directory: gobra
-      run: sbt assembly
+      - name: Assemble Gobra
+        working-directory: gobra
+        run: sbt assembly
 
-    - run: mv gobra/target/scala-2.13/gobra.jar gobra.jar
+      - run: mv gobra/target/scala-2.13/gobra.jar gobra.jar
 
-    - name: Upload gobra.jar
-      uses: actions/upload-artifact@v4
-      with:
-        name: gobra.jar
+      - name: Upload gobra.jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobra.jar
 
 
   type-check-packages:
