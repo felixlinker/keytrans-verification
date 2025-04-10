@@ -86,7 +86,6 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 		return nil, err
 	}
 
-	// for i, step := range(steps) {
 	for i := 0; i < len(steps); i++ {
 		step := steps[i]
 		r := prf.Results[i]
