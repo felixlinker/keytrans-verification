@@ -1,0 +1,4 @@
+package fmt
+
+func Print(s string)
+func Println(s string)

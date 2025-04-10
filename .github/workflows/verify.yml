@@ -9,43 +9,93 @@ name: verify
 on:
   push: # run this workflow on every push
   pull_request: # run this workflow on every pull_request
+  workflow_dispatch: # allow to manually trigger this workflow
 
 jobs:
-  verify-packages:
+  build-gobra:
     runs-on: ubuntu-latest
+    GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
+  steps:
+    - name: Checkout Gobra
+      uses: actions/checkout@v4
+      with:
+        path: gobra
+        repository: viperproject/gobra
+        ref: ${{ env.GOBRA_REF }}
+        submodules: 'recursive'
+
+    - name: Assemble Gobra
+      working-directory: gobra
+      run: sbt assembly
+
+    - run: mv gobra/target/scala-2.13/gobra.jar gobra.jar
+
+    - name: Upload gobra.jar
+      uses: actions/upload-artifact@v4
+      with:
+        name: gobra.jar
+
+
+  type-check-packages:
+    runs-on: ubuntu-latest
+    needs: build-gobra
     container:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
     env:
-      GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
       MOD_NAME: github.com/felixlinker/keytrans-verification
       EXCLUDE_PKGS: "main"
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           path: keytrans-verification
 
-      - name: Checkout Gobra
-        uses: actions/checkout@v4
+      - name: Download gobra.jar
+        uses: actions/download-artifact@v4
         with:
-          path: gobra
-          repository: viperproject/gobra
-          ref: ${{ env.GOBRA_REF }}
-          submodules: 'recursive'
-
-      - name: Assemble Gobra
-        working-directory: gobra
-        run: sbt assembly
+          name: gobra.jar
 
       - name: Create stats dir
         working-directory: keytrans-verification
         run: mkdir .gobra
 
-      - name: Verify files
+      - name: Type-check packages
         working-directory: keytrans-verification
         run: |
-          java -jar -Xss128m ../gobra/target/scala-2.13/gobra.jar \
+          java -jar -Xss128m gobra.jar \
+            --module ${{ env.MOD_NAME }} \
+            --recursive \
+            --include "." ".verification" \
+            --noVerify
+
+
+  verify-packages:
+    runs-on: ubuntu-latest
+    needs: build-gobra
+    container:
+      image: gobraverifier/gobra-base:v6_z3_4.8.7
+    env:
+      MOD_NAME: github.com/felixlinker/keytrans-verification
+      EXCLUDE_PKGS: "main"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: keytrans-verification
+
+      - name: Download gobra.jar
+        uses: actions/download-artifact@v4
+        with:
+          name: gobra.jar
+
+      - name: Create stats dir
+        working-directory: keytrans-verification
+        run: mkdir .gobra
+
+      - name: Verify packages
+        working-directory: keytrans-verification
+        run: |
+          java -jar -Xss128m gobra.jar \
             --module ${{ env.MOD_NAME }} \
             --hyperMode extended \
             --recursive \

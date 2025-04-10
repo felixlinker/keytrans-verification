@@ -82,10 +82,11 @@ pred (c CombinedTreeProof) Inv() {
 @*/
 
 type CompleteBinaryLadderStep struct {
-	Step BinaryLadderStep
+	Step   BinaryLadderStep
 	Result PrefixSearchResult
 }
 
+//@ trusted
 func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
 	completeSteps = make([]CompleteBinaryLadderStep, 0, len(results))
 	if len(steps) < len(results) {
@@ -94,18 +95,25 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 
 	sortedSteps := make([]BinaryLadderStep, 0, len(results))
 	copy(sortedSteps, steps[:len(results)])
-	slices.SortFunc(sortedSteps, func(a, b BinaryLadderStep) int {
-		hashA := crypto.VRF_proof_to_hash(a.Proof)
-		hashB := crypto.VRF_proof_to_hash(b.Proof)
-		return bytes.Compare(hashA[:], hashB[:])
-	})
+	sortBinaryLadderSteps(sortedSteps)
 
-	for i, step := range(sortedSteps) {
+	for i, step := range sortedSteps {
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
-			Step: step,
+			Step:   step,
 			Result: results[i],
 		})
 	}
 
 	return completeSteps, nil
+}
+
+//@ trusted
+//@ preserves acc(sortedSteps)
+func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
+	slices.SortFunc(sortedSteps, func(a, b BinaryLadderStep) int {
+		hashA := crypto.VRF_proof_to_hash(a.Proof)
+		hashB := crypto.VRF_proof_to_hash(b.Proof)
+		return bytes.Compare(hashA[:], hashB[:])
+	})
+	return
 }

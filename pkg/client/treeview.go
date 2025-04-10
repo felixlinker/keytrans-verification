@@ -9,8 +9,8 @@ import (
 // This file implements Section 4, "Updating Views of the Tree"
 
 type ImplicitBinarySearchTree struct {
-	Root uint64
-	Left *ImplicitBinarySearchTree
+	Root  uint64
+	Left  *ImplicitBinarySearchTree
 	Right *ImplicitBinarySearchTree
 }
 
@@ -53,7 +53,7 @@ func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(tree.Inv(), p)
 	if tree.Root == node {
-		path = []uint64{ node }
+		path = []uint64{node}
 	} else {
 		var recurse *ImplicitBinarySearchTree
 		if tree.Root < node {
@@ -67,7 +67,7 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 			path, err = recurse.PathTo(node /*@, p/2 @*/)
 		}
 		if err == nil {
-			path = append(/*@ p, @*/ []uint64{ tree.Root }, path...)
+			path = append( /*@ p, @*/ []uint64{tree.Root}, path...)
 		}
 	}
 	//@ fold acc(tree.Inv(), p)
@@ -77,12 +77,12 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 //@ requires  noPerm < p
 //@ preserves acc(tree.Inv(), p)
 //@ ensures acc(path) && len(path) > 0
-func (tree ImplicitBinarySearchTree) FrontierNodes() (path []uint64) {
+func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	path = []uint64{}
-	t := &tree
+	t := tree
 	for t != nil {
 		//@ unfold acc(tree.Inv(), p)
-		path = append(/*@ p, @*/ path, tree.Root)
+		path = append( /*@ p, @*/ path, tree.Root)
 		t = t.Right
 		//@ fold acc(tree.Inv(), p)
 	}
@@ -137,7 +137,7 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 	if tree_size == 0 {
 		return nil
 	} else if tree_size == 1 {
-		tree = &ImplicitBinarySearchTree{ root, nil, nil }
+		tree = &ImplicitBinarySearchTree{root, nil, nil}
 		//@ fold tree.Inv()
 		return
 	}
@@ -147,7 +147,7 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 	if right != nil {
 		right.OffSet(root + 1)
 	}
-	tree = &ImplicitBinarySearchTree{ root, left, right }
+	tree = &ImplicitBinarySearchTree{root, left, right}
 	//@ fold tree.Inv()
 	return
 }
@@ -174,9 +174,9 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	// The following if statement is not necessary and, also,
 	// triggers bug #898 (see https://github.com/viperproject/gobra/issues/898)
 	/*
-	if len(timestamps) == 0 {
-		return true
-	}
+		if len(timestamps) == 0 {
+			return true
+		}
 	*/
 
 	/* the following checks are insufficient:
@@ -203,7 +203,7 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 			}
 		}
 	}
-	
+
 	return true
 }
 
@@ -218,7 +218,7 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		err = errors.New("timestamps not increasing")
 		//@ fold acc(prf.Inv(), p)
 		return
-	} else if (new_head.Tree_head.Tree_size == 0) {
+	} else if new_head.Tree_head.Tree_size == 0 {
 		err = errors.New("new tree cannot be empty")
 		//@ fold acc(prf.Inv(), p)
 		return
@@ -229,8 +229,8 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	//@ unfold st.Inv()
 	oldSearchTree := MkImplicitBinarySearchTree(st.Size)
 	newSearchTree := MkImplicitBinarySearchTree(new_head.Tree_head.Tree_size)
-	oldFrontier := oldSearchTree.FrontierNodes(/*@ 1/2 @*/)
-	newFrontier := newSearchTree.FrontierNodes(/*@ 1/2 @*/)
+	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2 @*/ )
+	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 	if st.Size == 0 {
 		st.Frontier_timestamps = newFrontier
 	} else if pathToOldHead, err := newSearchTree.PathTo(st.Size - 1 /*@, 1/2 @*/); err != nil {
@@ -241,14 +241,15 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		i := 0
 		//@ invariant 0 <= i && i <= len(pathToOldHead) && i <= len(oldFrontier)
 		//@ invariant acc(pathToOldHead) && acc(oldFrontier)
-		for ; i < len(pathToOldHead) && i < len(oldFrontier) && pathToOldHead[i] == oldFrontier[i]; i++ {}
-		
+		for ; i < len(pathToOldHead) && i < len(oldFrontier) && pathToOldHead[i] == oldFrontier[i]; i++ {
+		}
+
 		// TODO: the following assume statements should not be needed!
 		//@ assume i < len(st.Frontier_timestamps)
 		//@ assume i < len(prf.Timestamps)
 		// the following assert stmt is needed due to an incompleteness:
 		//@ assert forall j int :: 0 <= j && j < len(prf.Timestamps) - i ==> &(prf.Timestamps[i:][j]) == &(prf.Timestamps[j+i])
-		st.Frontier_timestamps = append(/*@ perm(p/2), @*/ st.Frontier_timestamps[:i], prf.Timestamps[i:]...)
+		st.Frontier_timestamps = append( /*@ perm(p/2), @*/ st.Frontier_timestamps[:i], prf.Timestamps[i:]...)
 	}
 	//@ fold acc(prf.Inv(), p)
 

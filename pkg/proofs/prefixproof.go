@@ -21,14 +21,14 @@ pred (t PrefixTree) Inv() {
 // Recursive prefix tree data structure
 type PrefixTree struct {
 	// Hash value of this node; must be computed if nil
-	Value   *[sha256.Size]byte
+	Value *[sha256.Size]byte
 	// If set, this node is a leaf of the given value. Left and Right must be nil
 	// in this case.
-	Leaf    *PrefixLeaf
+	Leaf *PrefixLeaf
 	// Left subtree. May be nil even if Right is not nil.
-	Left    *PrefixTree
+	Left *PrefixTree
 	// Right subtree. May be nil even if Left is not nil.
-	Right   *PrefixTree
+	Right *PrefixTree
 }
 
 // Get the left or right child of the given tree and initialize if necessary
@@ -55,7 +55,7 @@ func (tree *PrefixTree) initializeAt(vrf_output [32]byte, depth uint8, sub_tree 
 	node := tree
 	var i uint8
 	for i = 0; i < depth; i++ {
-		node = tree.getChild(vrf_output[i / 8] >> (i % 8) != 0)
+		node = tree.getChild(vrf_output[i/8]>>(i%8) != 0)
 	}
 
 	if sub_tree.Value != nil {
@@ -76,7 +76,7 @@ func (tree *PrefixTree) initializeAt(vrf_output [32]byte, depth uint8, sub_tree 
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
-	tree = &PrefixTree{ nil, nil, nil, nil }
+	tree = &PrefixTree{nil, nil, nil, nil}
 	if len(fullLadder) < len(prf.Results) {
 		return nil, errors.New("too many results")
 	}
@@ -86,7 +86,9 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 		return nil, err
 	}
 
-	for i, step := range(steps) {
+	// for i, step := range(steps) {
+	for i := 0; i < len(steps); i++ {
+		step := steps[i]
 		r := prf.Results[i]
 		if r.Result_type == NonInclusionLeaf {
 			if step.Result.Leaf == nil {
@@ -97,14 +99,14 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 				})
 			}
 		} else {
-			leaf := PrefixLeaf{
+			leaf /*@ @ @*/ := PrefixLeaf{
 				Vrf_output: crypto.VRF_proof_to_hash(step.Step.Proof),
 				Commitment: step.Step.Commitment,
 			}
 			if r.Result_type == Inclusion {
-				tree.initializeAt(leaf.Vrf_output, r.Depth, PrefixTree{ Leaf: &leaf })
+				tree.initializeAt(leaf.Vrf_output, r.Depth, PrefixTree{Leaf: &leaf})
 			} else if r.Result_type == NonInclusionParent {
-				tree.initializeAt(leaf.Vrf_output, r.Depth, PrefixTree{ Value: &[32]byte{} })
+				tree.initializeAt(leaf.Vrf_output, r.Depth, PrefixTree{Value: &[32]byte{}})
 			} else {
 				return nil, errors.New("illegal result type")
 			}
@@ -161,14 +163,14 @@ func (tree *PrefixTree) SetMissingSubtrees(ordered_values []NodeValue) ([]NodeVa
 }
 
 func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
-	hashContent = make([]byte, sha256.Size + 1)
+	hashContent = make([]byte, sha256.Size+1)
 	if tree == nil {
 		return hashContent, nil
 	} else if tree.Left == nil && tree.Right == nil {
-		if value, err := tree.ComputeHash(); err != nil {
+		if value /*@ @ @*/, err := tree.ComputeHash(); err != nil {
 			return nil, err
 		} else {
-			return append([]byte{ 0x01 }, value[:]...), nil
+			return append( /*@ perm(1/2), @*/ []byte{0x01}, value[:]...), nil
 		}
 	} else {
 		if leftContent, err := tree.Left.HashContent(); err != nil {
@@ -176,8 +178,8 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 		} else if rightContent, err := tree.Right.HashContent(); err != nil {
 			return nil, err
 		} else {
-			hashContent = append([]byte{ 0x02 }, leftContent...)
-			return append(hashContent, rightContent...), nil
+			hashContent = append( /*@ perm(1/2), @*/ []byte{0x02}, leftContent...)
+			return append( /*@ perm(1/2), @*/ hashContent, rightContent...), nil
 		}
 	}
 }
@@ -195,7 +197,7 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 			// TODO: We would have to include length, too, to be compliant with TLS
 			// encoding, but not so important right now because inputs are
 			// fixed-length and this may get changed in the future
-			value := sha256.Sum256(append(tree.Leaf.Vrf_output[:], tree.Leaf.Commitment[:]...))
+			value /*@ @ @*/ := sha256.Sum256(append( /*@ perm(1/2), @*/ tree.Leaf.Vrf_output[:], tree.Leaf.Commitment[:]...) /*@, perm(1/2) @*/)
 			tree.Value = &value
 			return value, nil
 		}
@@ -205,7 +207,7 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 		} else if rightContent, err := tree.Right.HashContent(); err != nil {
 			return [sha256.Size]byte{}, err
 		} else {
-			value := sha256.Sum256(append(leftContent, rightContent...))
+			value /*@ @ @*/ := sha256.Sum256(append( /*@ perm(1/2), @*/ leftContent, rightContent...) /*@, perm(1/2) @*/)
 			tree.Value = &value
 			return value, nil
 		}
