@@ -49,7 +49,7 @@ jobs:
     needs: build-gobra
     container:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
-    env:coursier/cache-action
+    env:
       MOD_NAME: github.com/felixlinker/keytrans-verification
       EXCLUDE_PKGS: "main"
     steps:
