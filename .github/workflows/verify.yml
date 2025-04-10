@@ -27,8 +27,29 @@ jobs:
           ref: ${{ env.GOBRA_REF }}
           submodules: 'recursive'
 
-      - name: Cache Dependencies
-        uses: coursier/cache-action@v6
+      - name: Set sbt cache variables
+        # Cache path is relative to the directory in which sbt is invoked
+        run: echo "SBT_OPTS=-Dsbt.global.base=sbt-cache/.sbtboot -Dsbt.boot.directory=sbt-cache/.boot -Dsbt.ivy.home=sbt-cache/.ivy" >> $GITHUB_ENV
+      - name: Cache sbt
+        uses: actions/cache@v4
+        with:
+          path: |
+            sbt-cache/.sbtboot
+            sbt-cache/.boot
+            sbt-cache/.ivy/cache
+            gobra/project/target
+            gobra/target
+            gobra/viperserver/project/target
+            gobra/viperserver/target
+            gobra/viperserver/silicon/project/target
+            gobra/viperserver/silicon/target
+            gobra/viperserver/silicon/silver/project/target
+            gobra/viperserver/silicon/silver/target
+            gobra/viperserver/carbon/project/target
+            gobra/viperserver/carbon/target
+            gobra/viperserver/carbon/silver/project/target
+            gobra/viperserver/carbon/silver/target
+          key: ${{ runner.os }}-sbt-no-precompiled-sources-${{ hashFiles('**/build.sbt') }}
 
       - name: Assemble Gobra
         working-directory: gobra
