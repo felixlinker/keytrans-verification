@@ -4,8 +4,5 @@
     "gobraSettings.includeDirs": [
         ".",
         ".verification"
-    ],
-    "[go]": {
-        "editor.formatOnSave": false,
-    }
+    ]
 }

@@ -57,16 +57,28 @@ type SearchResponse struct {
 	Value          proofs.UpdateValue // value associated with queried label
 }
 
+/*@
+pred (s SearchResponse) Inv() {
+	s.Full_tree_head.Inv() &&
+	(s.Version != nil ==> acc(s.Version)) &&
+	acc(s.Binary_ladder) && // `proofs.BinaryLadderStep` does not have an invariant as it's just a value
+	s.Search.Inv() &&
+	s.Inclusion.Inv() &&
+	acc(s.Opening) &&
+	s.Value.Inv()
+}
+@*/
+
 //@ requires noPerm < p
 //@ preserves st.Inv()
 //@ preserves acc(query.Inv(), p) && acc(resp.Inv(), p)
 //@ ensures err == nil ==> acc(res) && res.Inv()
-func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse) (*proofs.UpdateValue, error) {
+func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
-	if err := st.UpdateView(resp.Full_tree_head, resp.Search); err != nil {
+	if err := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/); err != nil {
 		//@ fold acc(resp.Inv(), p)
 		return nil, err
-		} else if resp.Version != nil {
+	} else if resp.Version != nil {
 		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("no version provided")
 	} else if len(resp.Search.Prefix_roots) != 0 {
@@ -80,11 +92,12 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse) (*pr
 	}
 
 	trees := make([]*proofs.PrefixTree, 0, len(resp.Search.Prefix_proofs))
-	for _, prf := range(resp.Search.Prefix_proofs) {
+	for i := 0; i < len(resp.Search.Prefix_proofs); i++ {
+		prf := resp.Search.Prefix_proofs[i]
 		if tree, err := prf.ToTree(resp.Binary_ladder); err != nil {
 			return nil, err
 		} else {
-			trees = append(trees, tree)
+			trees = append( /*@ perm(1/2), @*/ trees, tree)
 		}
 	}
 

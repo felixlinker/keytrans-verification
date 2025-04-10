@@ -1,3 +1,9 @@
 package sha256
 
+const BlockSize = 64
 const Size = 32
+const Size224 = 28
+
+requires noPerm < p
+preserves acc(data, p)
+func Sum256(data []byte, ghost p perm) [Size]byte
