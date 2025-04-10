@@ -28,7 +28,7 @@ jobs:
           submodules: 'recursive'
 
       - name: Cache Dependencies
-        uses: @v6
+        uses: coursier/cache-action@v6
 
       - name: Assemble Gobra
         working-directory: gobra
