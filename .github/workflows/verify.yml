@@ -14,7 +14,8 @@ on:
 jobs:
   build-gobra:
     runs-on: ubuntu-latest
-    GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
+    env:
+      GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
     steps:
       - name: Checkout Gobra
         uses: actions/checkout@v4
