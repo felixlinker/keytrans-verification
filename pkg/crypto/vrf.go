@@ -14,7 +14,7 @@ type VrfInput struct {
 
 /*@
 pred (input VrfInput) Inv() {
-	acc(input.label) && len(input.label) <= 255
+	acc(input.Label) && len(input.Label) <= 255
 }
 @*/
 

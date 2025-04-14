@@ -9,23 +9,16 @@ name: verify
 on:
   push: # run this workflow on every push
   pull_request: # run this workflow on every pull_request
+  workflow_dispatch: # allow to manually trigger this workflow
 
 jobs:
-  verify-packages:
+  build-gobra:
     runs-on: ubuntu-latest
     container:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
     env:
       GOBRA_REF: 8facab51220570ff88f72e71e794bcb336208e47
-      MOD_NAME: github.com/felixlinker/keytrans-verification
-      EXCLUDE_PKGS: "main"
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          path: keytrans-verification
-
       - name: Checkout Gobra
         uses: actions/checkout@v4
         with:
@@ -34,18 +27,104 @@ jobs:
           ref: ${{ env.GOBRA_REF }}
           submodules: 'recursive'
 
+      - name: Set sbt cache variables
+        # Cache path is relative to the directory in which sbt is invoked
+        run: echo "SBT_OPTS=-Dsbt.global.base=sbt-cache/.sbtboot -Dsbt.boot.directory=sbt-cache/.boot -Dsbt.ivy.home=sbt-cache/.ivy" >> $GITHUB_ENV
+      - name: Cache sbt
+        uses: actions/cache@v4
+        with:
+          path: |
+            sbt-cache/.sbtboot
+            sbt-cache/.boot
+            sbt-cache/.ivy/cache
+            gobra/project/target
+            gobra/target
+            gobra/viperserver/project/target
+            gobra/viperserver/target
+            gobra/viperserver/silicon/project/target
+            gobra/viperserver/silicon/target
+            gobra/viperserver/silicon/silver/project/target
+            gobra/viperserver/silicon/silver/target
+            gobra/viperserver/carbon/project/target
+            gobra/viperserver/carbon/target
+            gobra/viperserver/carbon/silver/project/target
+            gobra/viperserver/carbon/silver/target
+          key: ${{ runner.os }}-sbt-no-precompiled-sources-${{ hashFiles('**/build.sbt') }}
+
       - name: Assemble Gobra
         working-directory: gobra
         run: sbt assembly
+
+      - run: mv gobra/target/scala-2.13/gobra.jar gobra.jar
+
+      - name: Upload gobra.jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobra.jar
+          path: gobra.jar
+          retention-days: 2
+
+
+  type-check-packages:
+    runs-on: ubuntu-latest
+    needs: build-gobra
+    container:
+      image: gobraverifier/gobra-base:v6_z3_4.8.7
+    env:
+      MOD_NAME: github.com/felixlinker/keytrans-verification
+      EXCLUDE_PKGS: "main"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: keytrans-verification
+
+      - name: Download gobra.jar
+        uses: actions/download-artifact@v4
+        with:
+          name: gobra.jar
 
       - name: Create stats dir
         working-directory: keytrans-verification
         run: mkdir .gobra
 
-      - name: Verify files
+      - name: Type-check packages
         working-directory: keytrans-verification
         run: |
-          java -jar -Xss128m ../gobra/target/scala-2.13/gobra.jar \
+          java -jar -Xss128m ../gobra.jar \
+            --module ${{ env.MOD_NAME }} \
+            --recursive \
+            --include "." ".verification" \
+            --noVerify
+
+
+  verify-packages:
+    runs-on: ubuntu-latest
+    needs: build-gobra
+    container:
+      image: gobraverifier/gobra-base:v6_z3_4.8.7
+    env:
+      MOD_NAME: github.com/felixlinker/keytrans-verification
+      EXCLUDE_PKGS: "main"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: keytrans-verification
+
+      - name: Download gobra.jar
+        uses: actions/download-artifact@v4
+        with:
+          name: gobra.jar
+
+      - name: Create stats dir
+        working-directory: keytrans-verification
+        run: mkdir .gobra
+
+      - name: Verify packages
+        working-directory: keytrans-verification
+        run: |
+          java -jar -Xss128m ../gobra.jar \
             --module ${{ env.MOD_NAME }} \
             --hyperMode extended \
             --recursive \
