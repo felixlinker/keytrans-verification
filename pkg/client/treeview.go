@@ -169,39 +169,24 @@ pred (s *UserState) Inv() {
 
 //@ requires noPerm < p
 //@ preserves acc(timestamps, p)
-//@ ensures res ==> forall i, j int :: 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] < timestamps[j]
+//@ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
-	// The following if statement is not necessary and, also,
-	// triggers bug #898 (see https://github.com/viperproject/gobra/issues/898)
-	/*
-		if len(timestamps) == 0 {
-			return true
-		}
-	*/
+	if len(timestamps) == 0 {
+		return true
+	}
 
-	/* the following checks are insufficient:
 	tmp := timestamps[0]
-	for _, v := range timestamps[1:] {
+
+	//@ invariant 0 <= k && k <= len(timestamps)
+	//@ invariant acc(timestamps, p)
+	//@ invariant forall i int :: { timestamps[i] } 0 <= i && i < k ==> timestamps[i] <= tmp
+	//@ invariant forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < k ==> timestamps[i] <= timestamps[j]
+	for k := 0; k < len(timestamps); k++ {
+		v := timestamps[k]
 		if tmp > v {
 			return false
 		}
 		tmp = v
-	}
-	*/
-
-	//@ invariant 0 <= k && k <= len(timestamps)
-	//@ invariant acc(timestamps, p)
-	//@ invariant forall i, j int :: 0 <= i && i < k && i < j && j < len(timestamps) ==> timestamps[i] < timestamps[j]
-	for k := 0; k < len(timestamps); k++ {
-		//@ invariant k + 1 <= l && l <= len(timestamps)
-		//@ invariant acc(timestamps, p)
-		//@ invariant forall i, j int :: 0 <= i && i < k && i < j && j < len(timestamps) ==> timestamps[i] < timestamps[j]
-		//@ invariant forall j int :: k < j && j < l ==> timestamps[k] < timestamps[j]
-		for l := k + 1; l < len(timestamps); l++ {
-			if timestamps[k] >= timestamps[l] {
-				return false
-			}
-		}
 	}
 
 	return true
