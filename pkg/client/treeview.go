@@ -75,19 +75,37 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 
 //@ requires  noPerm < p
 //@ preserves acc(tree.Inv(), p)
-//@ ensures acc(path) && len(path) > 0
+//@ ensures   acc(path) && len(path) > 0
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	path = []uint64{}
 	t := tree
-	//@ invariant acc(t.Inv(), p)
-	//@ invariant acc(path, p)
+	//@ package acc(t.Inv(), p) --* acc(tree.Inv(), p)
+	// temporarily unfold the invariant to obtain the knowledge that t cannot be nil:
+	//@ assert unfolding acc(tree.Inv(), p) in t != nil
+
+	//@ invariant acc(path)
+	//@ invariant t != nil ==> acc(t.Inv(), p)
+	//@ invariant t != nil ==> acc(t.Inv(), p) --* acc(tree.Inv(), p)
+	//@ invariant t == nil ==> acc(tree.Inv(), p)
+	//@ invariant t == nil ==> len(path) > 0
 	for t != nil {
 		//@ unfold acc(t.Inv(), p)
 		path = append( /*@ p, @*/ path, t.Root)
+		oldT := t
+		_ = oldT
 		t = t.Right
-		//@ fold acc(t.Inv(), p)
+		/*@
+		ghost if t == nil {
+			fold acc(oldT.Inv(), p)
+			apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+		} else {
+			package acc(t.Inv(), p) --* acc(tree.Inv(), p) {
+				fold acc(oldT.Inv(), p)
+				apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+			}
+		}
+		@*/
 	}
-	//@ fold acc(tree.Inv(), p)
 	return
 }
 
