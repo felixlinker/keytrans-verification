@@ -4,5 +4,6 @@
     "gobraSettings.includeDirs": [
         ".",
         ".verification"
-    ]
+    ],
+    "gobraSettings.autoVerify": false
 }
