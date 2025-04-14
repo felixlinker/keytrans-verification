@@ -31,14 +31,13 @@ func RootNode(tree_size uint64) uint64 {
 	return power >> 1
 }
 
-//@ preserves tree.Inv()
+//@ preserves tree != nil ==> tree.Inv()
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
-	//@ unfold tree.Inv()
 	if tree == nil {
-		//@ fold tree.Inv()
 		return
 	}
 
+	//@ unfold tree.Inv()
 	tree.Root += by
 	tree.Left.OffSet(by)
 	tree.Right.OffSet(by)
@@ -80,12 +79,15 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	path = []uint64{}
 	t := tree
+	//@ invariant acc(t.Inv(), p)
+	//@ invariant acc(path, p)
 	for t != nil {
-		//@ unfold acc(tree.Inv(), p)
-		path = append( /*@ p, @*/ path, tree.Root)
+		//@ unfold acc(t.Inv(), p)
+		path = append( /*@ p, @*/ path, t.Root)
 		t = t.Right
-		//@ fold acc(tree.Inv(), p)
+		//@ fold acc(t.Inv(), p)
 	}
+	//@ fold acc(tree.Inv(), p)
 	return
 }
 

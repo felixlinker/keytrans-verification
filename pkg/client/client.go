@@ -29,9 +29,9 @@ pred (f FullTreeHead) Inv() {
 
 ghost
 decreases
-requires f.Inv()
+requires acc(f.Inv(), _)
 pure func (f FullTreeHead) Size() uint64 {
-	return unfolding f.Inv() in f.Tree_head.Tree_size
+	return unfolding acc(f.Inv(), _) in f.Tree_head.Tree_size
 }
 @*/
 
