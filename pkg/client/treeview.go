@@ -217,7 +217,7 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 	if st.Size == 0 {
-		st.Frontier_timestamps = newFrontier
+		st.Frontier_timestamps = prf.Timestamps
 	} else if pathToOldHead, err := newSearchTree.PathTo(st.Size - 1 /*@, 1/2 @*/); err != nil {
 		//@ fold st.Inv()
 		//@ fold acc(prf.Inv(), p)
@@ -237,6 +237,11 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		st.Frontier_timestamps = append( /*@ perm(p/2), @*/ st.Frontier_timestamps[:i], prf.Timestamps[i:]...)
 	}
 	//@ fold acc(prf.Inv(), p)
+
+	if len(newFrontier) != len(st.Frontier_timestamps) {
+		//@ fold st.Inv()
+		return errors.New("incorrect number of timestamps provided")
+	}
 
 	st.Size = new_head.Tree_head.Tree_size
 	//@ fold st.Inv()
