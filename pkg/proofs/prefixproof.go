@@ -75,6 +75,8 @@ func (tree *PrefixTree) initializeAt(vrf_output [32]byte, depth uint8, sub_tree 
 // Construct a prefix tree from a prefix proof and the provided binary ladder
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
+//@ preserves acc(prf.Inv(), _)
+//@ ensures tree != nil ==> acc(tree.Inv())
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
 	tree = &PrefixTree{nil, nil, nil, nil}
 	if len(fullLadder) < len(prf.Results) {

@@ -67,6 +67,13 @@ type PrefixProof struct {
 	Elements []NodeValue
 }
 
+/*@
+pred (p PrefixProof) Inv() {
+	acc(p.Results) &&
+	acc(p.Elements)
+}
+@*/
+
 type CombinedTreeProof struct {
 	Timestamps    []uint64
 	Prefix_proofs []PrefixProof
