@@ -29,9 +29,9 @@ pred (f FullTreeHead) Inv() {
 
 ghost
 decreases
-requires f.Inv()
+requires acc(f.Inv(), _)
 pure func (f FullTreeHead) Size() uint64 {
-	return unfolding f.Inv() in f.Tree_head.Tree_size
+	return unfolding acc(f.Inv(), _) in f.Tree_head.Tree_size
 }
 @*/
 
@@ -78,7 +78,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 	if err := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/); err != nil {
 		//@ fold acc(resp.Inv(), p)
 		return nil, err
-	} else if resp.Version != nil {
+	} else if resp.Version == nil {
 		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("no version provided")
 	} else if len(resp.Search.Prefix_roots) != 0 {
@@ -88,21 +88,30 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 
 	ladderIndices := proofs.FullBinaryLadderSteps(*resp.Version)
 	if len(resp.Binary_ladder) != len(ladderIndices) {
+		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("length of binary ladder does not match greatest version")
 	}
 
 	trees := make([]*proofs.PrefixTree, 0, len(resp.Search.Prefix_proofs))
+	//@ fold acc(resp.Inv(), p)
+
+	//@ invariant acc(resp.Inv(), p)
+	// invariant unfolding acc(resp.Search.Inv(), p/2) in 0 <= i && i <= len(resp.Search.Prefix_proofs)
+	//@ invariant 0 <= i && i <= len(resp.Search.Prefix_proofs)
+	//@ invariant acc(trees)
 	for i := 0; i < len(resp.Search.Prefix_proofs); i++ {
-		prf := resp.Search.Prefix_proofs[i]
+		//@ unfold acc(resp.Inv(), p)
+		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
 		if tree, err := prf.ToTree(resp.Binary_ladder); err != nil {
+			//@ fold acc(resp.Inv(), p)
 			return nil, err
 		} else {
 			trees = append( /*@ perm(1/2), @*/ trees, tree)
 		}
+		//@ fold acc(resp.Inv(), p)
 	}
 
 	// TODO: Verify proof of inclusion in all trees
 
-	//@ fold acc(resp.Inv(), p)
 	return nil, nil
 }
