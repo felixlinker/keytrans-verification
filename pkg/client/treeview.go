@@ -31,14 +31,13 @@ func RootNode(tree_size uint64) uint64 {
 	return power >> 1
 }
 
-//@ preserves tree.Inv()
+//@ preserves tree != nil ==> tree.Inv()
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
-	//@ unfold tree.Inv()
 	if tree == nil {
-		//@ fold tree.Inv()
 		return
 	}
 
+	//@ unfold tree.Inv()
 	tree.Root += by
 	tree.Left.OffSet(by)
 	tree.Right.OffSet(by)
@@ -75,16 +74,42 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 }
 
 //@ requires  noPerm < p
-//@ preserves acc(tree.Inv(), p)
-//@ ensures acc(path) && len(path) > 0
+//@ preserves tree != nil ==> acc(tree.Inv(), p)
+//@ ensures   acc(path)
+//@ ensures   tree != nil ==> len(path) > 0
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	path = []uint64{}
+
+	if tree == nil {
+		return
+	}
+
 	t := tree
+	//@ package acc(t.Inv(), p) --* acc(tree.Inv(), p)
+	// temporarily unfold the invariant to obtain the knowledge that t cannot be nil:
+	//@ assert unfolding acc(tree.Inv(), p) in t != nil
+
+	//@ invariant acc(path)
+	//@ invariant t != nil ==> acc(t.Inv(), p)
+	//@ invariant t != nil ==> acc(t.Inv(), p) --* acc(tree.Inv(), p)
+	//@ invariant t == nil ==> acc(tree.Inv(), p)
+	//@ invariant t == nil ==> len(path) > 0
 	for t != nil {
-		//@ unfold acc(tree.Inv(), p)
-		path = append( /*@ p, @*/ path, tree.Root)
+		//@ unfold acc(t.Inv(), p)
+		path = append( /*@ p, @*/ path, t.Root)
+		//@ ghost oldT := t
 		t = t.Right
-		//@ fold acc(tree.Inv(), p)
+		/*@
+		ghost if t == nil {
+			fold acc(oldT.Inv(), p)
+			apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+		} else {
+			package acc(t.Inv(), p) --* acc(tree.Inv(), p) {
+				fold acc(oldT.Inv(), p)
+				apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+			}
+		}
+		@*/
 	}
 	return
 }
@@ -195,6 +220,7 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 //@ requires  noPerm < p
 //@ preserves st.Inv()
 //@ preserves acc(new_head.Inv(), p)
+// since we take the timestamps from `prf`, we need full permissions to then
 //@ preserves acc(prf.Inv(), p)
 //@ ensures err == nil ==> unfolding st.Inv() in st.Size == new_head.Size()
 func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreeProof /*@, ghost p perm @*/) (err error) {
@@ -217,7 +243,10 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 	if st.Size == 0 {
-		st.Frontier_timestamps = newFrontier
+		// copy timestamps from `prf`:
+		timestamps := make([]uint64, len(prf.Timestamps))
+		copy(timestamps, prf.Timestamps /*@, p/2 @*/)
+		st.Frontier_timestamps = timestamps
 	} else if pathToOldHead, err := newSearchTree.PathTo(st.Size - 1 /*@, 1/2 @*/); err != nil {
 		//@ fold st.Inv()
 		//@ fold acc(prf.Inv(), p)
@@ -237,6 +266,12 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		st.Frontier_timestamps = append( /*@ perm(p/2), @*/ st.Frontier_timestamps[:i], prf.Timestamps[i:]...)
 	}
 	//@ fold acc(prf.Inv(), p)
+
+	if len(newFrontier) != len(st.Frontier_timestamps) {
+		//@ fold st.Inv()
+		// TODO: is it okay that we have already modified `st.Frontier_timestamps`?
+		return errors.New("incorrect number of timestamps provided")
+	}
 
 	st.Size = new_head.Tree_head.Tree_size
 	//@ fold st.Inv()
