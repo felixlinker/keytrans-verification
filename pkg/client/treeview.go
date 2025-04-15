@@ -24,11 +24,15 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 
 // Get the largest power of two smaller than tree_size
 func RootNode(tree_size uint64) uint64 {
+	if tree_size == 1 {
+		return 0
+	}
+
 	var power uint64 = 1
-	for power < tree_size {
+	for power-1 < tree_size {
 		power = power << 1
 	}
-	return power >> 1
+	return (power >> 1) - 1
 }
 
 //@ preserves tree != nil ==> tree.Inv()
