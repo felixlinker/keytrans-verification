@@ -97,8 +97,7 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 	for t != nil {
 		//@ unfold acc(t.Inv(), p)
 		path = append( /*@ p, @*/ path, t.Root)
-		oldT := t
-		_ = oldT
+		//@ ghost oldT := t
 		t = t.Right
 		/*@
 		ghost if t == nil {
