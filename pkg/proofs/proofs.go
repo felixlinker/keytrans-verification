@@ -94,7 +94,7 @@ pred (c CombinedTreeProof) Inv() {
 @*/
 
 type CompleteBinaryLadderStep struct {
-	Step   BinaryLadderStep
+	Step   PrefixLeaf
 	Result PrefixSearchResult
 }
 
@@ -111,7 +111,10 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 
 	for i, step := range sortedSteps {
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
-			Step:   step,
+			Step:   PrefixLeaf{
+				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
+				Commitment: step.Commitment,
+			},
 			Result: results[i],
 		})
 	}

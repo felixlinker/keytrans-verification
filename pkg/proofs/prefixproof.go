@@ -3,8 +3,6 @@ package proofs
 import (
 	"crypto/sha256"
 	"errors"
-
-	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
 
 /*@
@@ -72,6 +70,106 @@ func (tree *PrefixTree) initializeAt(vrf_output [32]byte, depth uint8, sub_tree 
 	}
 }
 
+func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNodes []NodeValue) (tree *PrefixTree, nextSteps []CompleteBinaryLadderStep, nextNodes []NodeValue, err error) {
+	tree = nil
+	nextSteps = steps
+	nextNodes = coPathNodes
+	err = nil
+
+	if len(steps) == 0 {
+		if len(coPathNodes) == 0 {
+			err = errors.New("not enough co-path nodes")
+			return
+		} else {
+			tree = &PrefixTree{ Value: &coPathNodes[0] }
+			nextNodes = coPathNodes[1:]
+			return
+		}
+	}
+
+	step := steps[0]
+
+	prefixMatches := false
+	for i := 0; i < len(prefix); i++ {
+		bit := 0x01 == step.Step.Vrf_output[i / 8] >> (i % 8)
+		prefixMatches = prefixMatches && bit == prefix[i]
+	}
+
+	if prefixMatches {
+		if int(step.Result.Depth) < len(prefix) {
+			nextDepth := len(prefix) + 1
+			nextBit := 0x01 == step.Step.Vrf_output[nextDepth / 8] >> (nextDepth % 8)
+			if nextBit {
+				// Go right
+				if len(coPathNodes) == 0 {
+					err = errors.New("not enough co-path nodes")
+					return
+				} else {
+					left := &PrefixTree{ Value: &coPathNodes[0] }
+					if right, recSteps, recNodes, e := ToTreeRecursive(append(prefix, true), steps, coPathNodes[1:]); e != nil {
+						err = e
+						return
+					} else {
+						tree = &PrefixTree{ Left: left, Right: right, }
+						nextSteps = recSteps
+						nextNodes = recNodes
+						return
+					}
+				}
+			} else {
+				// Go left
+				if left, recSteps, recNodes, e := ToTreeRecursive(append(prefix, false), steps, coPathNodes); e != nil {
+					err = e
+					return
+				} else if right, recSteps2, recNodes2, e := ToTreeRecursive(append(prefix, false), recSteps, recNodes); e != nil {
+					err = e
+					return
+				} else {
+					tree = &PrefixTree{ Left: left, Right: right }
+					nextSteps = recSteps2
+					nextNodes = recNodes2
+					return
+				}
+			}
+		} else if int(step.Result.Depth) == len(prefix) {
+			resultType := step.Result.Result_type
+			if resultType == Inclusion {
+				// TODO: Copy leaf
+				tree = &PrefixTree{ Leaf: &step.Step }
+				nextSteps = steps[1:]
+				return
+			} else if resultType == NonInclusionLeaf {
+				if step.Result.Leaf == nil {
+					err = errors.New("no leaf for inclusion proof given")
+					return
+				} else {
+					// TODO: copy leaf
+					tree = &PrefixTree{ Leaf: step.Result.Leaf }
+					nextSteps = steps[1:]
+					return
+				}
+			} else if resultType == NonInclusionParent {
+				tree = &PrefixTree{Value: &[32]byte{}}
+				nextSteps = steps[1:]
+				return
+			} else {
+				err = errors.New("invalid result type")
+				return
+			}
+		} else {
+			err = errors.New("prefix tree construction invariant violated")
+			return
+		}
+	} else if len(coPathNodes) == 0 {
+		err = errors.New("not enough co-path nodes")
+		return
+	} else {
+		tree = &PrefixTree{ Value: &coPathNodes[0] }
+		nextNodes = coPathNodes[1:]
+		return
+	}
+}
+
 // Construct a prefix tree from a prefix proof and the provided binary ladder
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
@@ -86,41 +184,8 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 		return nil, err
 	}
 
-	for i := 0; i < len(steps); i++ {
-		step := steps[i]
-		r := prf.Results[i]
-		if r.Result_type == NonInclusionLeaf {
-			if step.Result.Leaf == nil {
-				return nil, errors.New("missing leaf")
-			} else {
-				tree.initializeAt(step.Result.Leaf.Vrf_output, r.Depth, PrefixTree{
-					Leaf: step.Result.Leaf,
-				})
-			}
-		} else {
-			leaf /*@ @ @*/ := PrefixLeaf{
-				Vrf_output: crypto.VRF_proof_to_hash(step.Step.Proof),
-				Commitment: step.Step.Commitment,
-			}
-			if r.Result_type == Inclusion {
-				tree.initializeAt(leaf.Vrf_output, r.Depth, PrefixTree{Leaf: &leaf})
-			} else if r.Result_type == NonInclusionParent {
-				tree.initializeAt(leaf.Vrf_output, r.Depth, PrefixTree{Value: &[32]byte{}})
-			} else {
-				return nil, errors.New("illegal result type")
-			}
-		}
-	}
-
-	if remaining_values, err := tree.SetMissingSubtrees(prf.Elements); err != nil {
-		return nil, err
-	} else if len(remaining_values) > 0 {
-		return nil, errors.New("too many proof elements")
-	} else if _, err := tree.ComputeHash(); err != nil {
-		return nil, err
-	} else {
-		return tree, nil
-	}
+	tree, _, _, err = ToTreeRecursive([]bool{}, steps, prf.Elements)
+	return
 }
 
 // Set the hash values of unitialized subtrees, pulling them in left-to-right
