@@ -29,47 +29,6 @@ type PrefixTree struct {
 	Right *PrefixTree
 }
 
-// Get the left or right child of the given tree and initialize if necessary
-func (tree *PrefixTree) getChild(right bool) (sub_tree *PrefixTree) {
-	if right {
-		sub_tree = tree.Right
-		if sub_tree == nil {
-			sub_tree = &PrefixTree{}
-			tree.Right = sub_tree
-		}
-	} else {
-		sub_tree = tree.Left
-		if sub_tree == nil {
-			sub_tree = &PrefixTree{}
-			tree.Left = sub_tree
-		}
-	}
-	return sub_tree
-}
-
-// Insert the given prefix tree at the specified depth, following the provided
-// vrf_output.
-func (tree *PrefixTree) initializeAt(vrf_output [32]byte, depth uint8, sub_tree PrefixTree) {
-	node := tree
-	var i uint8
-	for i = 0; i < depth; i++ {
-		node = tree.getChild(vrf_output[i/8]>>(i%8) != 0)
-	}
-
-	if sub_tree.Value != nil {
-		node.Value = sub_tree.Value
-	}
-	if sub_tree.Leaf != nil {
-		node.Leaf = sub_tree.Leaf
-	}
-	if sub_tree.Left != nil {
-		node.Left = sub_tree.Left
-	}
-	if sub_tree.Right != nil {
-		node.Right = sub_tree.Right
-	}
-}
-
 func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNodes []NodeValue) (tree *PrefixTree, nextSteps []CompleteBinaryLadderStep, nextNodes []NodeValue, err error) {
 	tree = nil
 	nextSteps = steps
@@ -174,7 +133,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
-	tree = &PrefixTree{nil, nil, nil, nil}
+	tree = &PrefixTree{}
 	if len(fullLadder) < len(prf.Results) {
 		return nil, errors.New("too many results")
 	}
@@ -184,46 +143,11 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 		return nil, err
 	}
 
-	tree, _, _, err = ToTreeRecursive([]bool{}, steps, prf.Elements)
+	if tree, _, _, err = ToTreeRecursive([]bool{}, steps, prf.Elements); err != nil {
+		return
+	}
+	_, err = tree.ComputeHash()
 	return
-}
-
-// Set the hash values of unitialized subtrees, pulling them in left-to-right
-// DFS order from the provided, ordered_values. Raises an error if number of
-// ordered_values does not exactly match the required values.
-func (tree *PrefixTree) SetMissingSubtrees(ordered_values []NodeValue) ([]NodeValue, error) {
-	var err error
-	values := ordered_values
-
-	if tree == nil {
-		return ordered_values, nil
-	}
-
-	if tree.Left == nil {
-		if len(ordered_values) == 0 {
-			return nil, errors.New("too few node values")
-		}
-
-		left := tree.getChild(false) // initialize left child
-		left.Value = &values[0]
-		values = values[1:]
-	} else if values, err = tree.Left.SetMissingSubtrees(values); err != nil {
-		return nil, err
-	}
-
-	if tree.Right == nil {
-		if len(ordered_values) == 0 {
-			return nil, errors.New("too few node values")
-		}
-
-		right := tree.getChild(true) // initialize right child
-		right.Value = &values[0]
-		values = values[1:]
-	} else if values, err = tree.Right.SetMissingSubtrees(values); err != nil {
-		return nil, err
-	}
-
-	return values, nil
 }
 
 func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
