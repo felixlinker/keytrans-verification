@@ -24,11 +24,15 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 
 // Get the largest power of two smaller than tree_size
 func RootNode(tree_size uint64) uint64 {
+	if tree_size == 1 {
+		return 0
+	}
+
 	var power uint64 = 1
-	for power < tree_size {
+	for power-1 < tree_size {
 		power = power << 1
 	}
-	return power >> 1
+	return (power >> 1) - 1
 }
 
 //@ preserves tree != nil ==> tree.Inv()
@@ -188,7 +192,8 @@ pred (s *UserState) Inv() {
 	acc(s) &&
 	acc(s.Full_subtrees) &&
 	// NodeValue is a fixed-size array and, thus, does not require further permissions
-	acc(s.Frontier_timestamps)
+	acc(s.Frontier_timestamps) &&
+	(s.Size == 0 ==> len(s.Full_subtrees) == 0)
 }
 @*/
 
