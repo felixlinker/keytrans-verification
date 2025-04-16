@@ -192,7 +192,8 @@ pred (s *UserState) Inv() {
 	acc(s) &&
 	acc(s.Full_subtrees) &&
 	// NodeValue is a fixed-size array and, thus, does not require further permissions
-	acc(s.Frontier_timestamps)
+	acc(s.Frontier_timestamps) &&
+	(s.Size == 0 ==> len(s.Full_subtrees) == 0)
 }
 @*/
 
