@@ -69,7 +69,7 @@ type PrefixSearchResult struct {
 }
 
 /*@
-pred (p PrefixSearchResults) Inv() {
+pred (p PrefixSearchResult) Inv() {
 	p.Result_type == NonInclusionLeaf ==> p.Leaf.Inv()
 }
 @*/
