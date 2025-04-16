@@ -91,14 +91,14 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 
 	prefixMatches := false
 	for i := 0; i < len(prefix); i++ {
-		bit := 0x01 == step.Step.Vrf_output[i / 8] >> (i % 8)
+		bit := step.Step.Vrf_output[i / 8] >> (i % 8) == 0x01
 		prefixMatches = prefixMatches && bit == prefix[i]
 	}
 
 	if prefixMatches {
 		if int(step.Result.Depth) < len(prefix) {
 			nextDepth := len(prefix) + 1
-			nextBit := 0x01 == step.Step.Vrf_output[nextDepth / 8] >> (nextDepth % 8)
+			nextBit := step.Step.Vrf_output[nextDepth / 8] >> (nextDepth % 8) == 0x01
 			if nextBit {
 				// Go right
 				if len(coPathNodes) == 0 {
@@ -106,7 +106,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					return
 				} else {
 					left := &PrefixTree{ Value: &coPathNodes[0] }
-					if right, recSteps, recNodes, e := ToTreeRecursive(append(prefix, true), steps, coPathNodes[1:]); e != nil {
+					if right, recSteps, recNodes, e := ToTreeRecursive(append(/*@ perm(1/2), @*/ prefix, true), steps, coPathNodes[1:]); e != nil {
 						err = e
 						return
 					} else {
@@ -118,10 +118,10 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 				}
 			} else {
 				// Go left
-				if left, recSteps, recNodes, e := ToTreeRecursive(append(prefix, false), steps, coPathNodes); e != nil {
+				if left, recSteps, recNodes, e := ToTreeRecursive(append(/*@ perm(1/2), @*/ prefix, false), steps, coPathNodes); e != nil {
 					err = e
 					return
-				} else if right, recSteps2, recNodes2, e := ToTreeRecursive(append(prefix, false), recSteps, recNodes); e != nil {
+				} else if right, recSteps2, recNodes2, e := ToTreeRecursive(append(/*@ perm(1/2), @*/ prefix, false), recSteps, recNodes); e != nil {
 					err = e
 					return
 				} else {
