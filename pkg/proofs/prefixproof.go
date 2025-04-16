@@ -76,7 +76,7 @@ func (tree *PrefixTree) initializeAt(vrf_output [32]byte, depth uint8, sub_tree 
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
-	tree = &PrefixTree{nil, nil, nil, nil}
+	tree = &PrefixTree{}
 	if len(fullLadder) < len(prf.Results) {
 		return nil, errors.New("too many results")
 	}

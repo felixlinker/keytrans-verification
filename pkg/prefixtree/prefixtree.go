@@ -16,7 +16,7 @@ type Node struct {
 const InexistentSubtreeHash = -1
 
 /*@
-type BitConversion domain {
+ghost type BitConversion domain {
     func GetBits(uint64) seq[bool]
     func GetInt(seq[bool]) uint64
 
@@ -81,7 +81,7 @@ func test() {
 }
 
 /*@
-type Hashing domain {
+ghost type Hashing domain {
     // type 0
     func hashKeyValue(uint64, int) int
     func invKeyValue1(int) uint64

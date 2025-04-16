@@ -3,19 +3,19 @@ package commitment
 // @ requires low(hash)
 // @ ensures  res ==> low(value)
 func verify(hash int, value int) (res bool) {
-    res = (hash == computeHash(value))
-    return
+	res = (hash == computeHash(value))
+	return
 }
 
 // @ requires low(hash)
 // @ ensures  res ==> low(value)
 func verifyWithBranching(hash int, value int) (res bool) {
-    // the following if statement fails because the condition is not-low
-    // however, this limitation could be lifted by a more complicated encoding
-    if hash != computeHash(value) {
-        return false
-    }
-    return true
+	// the following if statement fails because the condition is not-low
+	// however, this limitation could be lifted by a more complicated encoding
+	if hash != computeHash(value) {
+		return false
+	}
+	return true
 }
 
 // the following postcondition specifies that the Go function `computeHash` behaves like the
@@ -24,7 +24,7 @@ func verifyWithBranching(hash int, value int) (res bool) {
 func computeHash(input int) (res int)
 
 /* @
-type HashFunction domain {
+ghost type HashFunction domain {
     func hashFn(int) int
     func invFn(int) int
 
