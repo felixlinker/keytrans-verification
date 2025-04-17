@@ -46,7 +46,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 		}
 	}
 
-	step := steps[0]
+	step /*@@@*/ := steps[0]
 
 	prefixMatches := false
 	for i := 0; i < len(prefix); i++ {
@@ -94,8 +94,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 			resultType := step.Result.Result_type
 			if resultType == Inclusion {
 				// TODO: Copy leaf
-				leaf /*@@@*/ := step.Step
-				tree = &PrefixTree{ Leaf: &leaf }
+				tree = &PrefixTree{ Leaf: &step.Step }
 				nextSteps = steps[1:]
 				return
 			} else if resultType == NonInclusionLeaf {
