@@ -201,7 +201,7 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 }
 
 // Recursively compute all hashes of a prefix tree.
-//@ ensures err != nil ==> tree.Value != nil && hash == tree.Value
+//@ ensures err != nil ==> tree.Value != nil && len(*tree.Value) == len(hash) && forall i int :: { (*tree.Value)[i] == hash[i] } i < len(hash)
 func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 	if tree == nil {
 		return [sha256.Size]byte{}, errors.New("cannot hash empty node")
