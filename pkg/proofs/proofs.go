@@ -41,6 +41,7 @@ pred (i InclusionProof) Inv() {
 }
 @*/
 
+// Values for PrefixSearchResult.Result_type
 const (
 	Reserved           = 0
 	Inclusion          = 1
@@ -70,6 +71,7 @@ type PrefixSearchResult struct {
 
 /*@
 pred (p PrefixSearchResult) Inv() {
+	(p.Result_type == Inclusion || p.Result_type == NonInclusionParent || p.Result_type == NonInclusionLeaf) &&
 	p.Result_type == NonInclusionLeaf ==> p.Leaf.Inv()
 }
 @*/
