@@ -6,13 +6,22 @@ import (
 )
 
 /*@
-pred (t PrefixTree) Inv() {
+pred (t *PrefixTree) Inv() {
+	acc(t) && (t != nil ==> t.InvRec())
+}
+@*/
+
+/*@
+pred (t PrefixTree) InvRec() {
 	acc(t.Value) && acc(t.Leaf) && acc(t.Left) && acc(t.Right) &&
-	(t.Value != nil || t.Leaf != nil || t.Left != nil || t.Right != nil) &&
-	((t.Leaf != nil) ==> (t.Left == nil && t.Right == nil)) &&
-	((t.Left != nil || t.Right != nil) ==> t.Leaf == nil) &&
-	(t.Left != nil ==> t.Left.Inv()) &&
-	(t.Right != nil ==> t.Right.Inv())
+	// One of value, leaf, or both children must be defined
+	(t.Value != nil || t.Leaf != nil || (t.Left != nil && t.Right != nil)) &&
+	// If there's one children, there must be two
+	(t.Left != nil) == (t.Right != nil) &&
+	// Node is either a leaf or has children
+	(t.Leaf != nil) != (t.Left != nil && t.Right != nil) &&
+	// If a node's value is defined, its children's values must be defined
+	((t.Value != nil && t.Left != nil && t.Right != nil) ==> (t.Left.Value != nil && t.Right.Value != nil))
 }
 @*/
 
@@ -29,12 +38,19 @@ type PrefixTree struct {
 	Right *PrefixTree
 }
 
+// Creates a prefix tree recursively from a list of binary ladder steps and
+// nodes that give all copaths. The function assumes that steps is sorted
+// ascending by steps.Step.Vrf_output and that coPathNodes is sorted ascending
+// too. prefix will be initially empty and reflects the current position in the
+// prefix tree.
 func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNodes []NodeValue) (tree *PrefixTree, nextSteps []CompleteBinaryLadderStep, nextNodes []NodeValue, err error) {
 	tree = nil
 	nextSteps = steps
 	nextNodes = coPathNodes
 	err = nil
 
+	// If there are no more steps to insert into the prefix tree, insert a copath
+	// node at the current subtree.
 	if len(steps) == 0 {
 		if len(coPathNodes) == 0 {
 			err = errors.New("not enough co-path nodes")
@@ -55,7 +71,10 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 	}
 
 	if prefixMatches {
-		if int(step.Result.Depth) < len(prefix) {
+		// The current prefix is a prefix of step.Step.Vrf_output.
+		if int(step.Result.Depth) < len(prefix) { // assume one-based depth; https://github.com/ietf-wg-keytrans/draft-protocol/issues/37
+			// The server tells us that this depth does suffice to identify the
+			// vrf output. Insert the result in one of its children.
 			nextDepth := len(prefix) + 1
 			nextBit := step.Step.Vrf_output[nextDepth / 8] >> (nextDepth % 8) == 0x01
 			if nextBit {
@@ -64,6 +83,8 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					err = errors.New("not enough co-path nodes")
 					return
 				} else {
+					// As we must recurse right, the left child must be provided as a co
+					// path node.
 					left := &PrefixTree{ Value: &coPathNodes[0] }
 					if right, recSteps, recNodes, e := ToTreeRecursive(append(/*@ perm(1/2), @*/ prefix, true), steps, coPathNodes[1:]); e != nil {
 						err = e
@@ -76,7 +97,9 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					}
 				}
 			} else {
-				// Go left
+				// Go left. Continue with the algorithm recursively to the right
+				// afterwards. Either, the next step may be inserted there or it is
+				// provided as a co path node.
 				if left, recSteps, recNodes, e := ToTreeRecursive(append(/*@ perm(1/2), @*/ prefix, false), steps, coPathNodes); e != nil {
 					err = e
 					return
@@ -91,6 +114,8 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 				}
 			}
 		} else if int(step.Result.Depth) == len(prefix) {
+			// We are at the right depth to insert the search result. Insert it based
+			// on the type of result.
 			resultType := step.Result.Result_type
 			if resultType == Inclusion {
 				// TODO: Copy leaf
