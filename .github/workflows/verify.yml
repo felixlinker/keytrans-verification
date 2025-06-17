@@ -17,7 +17,7 @@ jobs:
     container:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
     env:
-      GOBRA_REF: 151a1852991acd9966db402b9e4819b1bbe9b1c0
+      GOBRA_REF: 31c7f4ad2696dfbd22953f4031d04b0a3d6f5a44
     steps:
       - name: Checkout Gobra
         uses: actions/checkout@v4
@@ -93,7 +93,7 @@ jobs:
         run: |
           java -jar -Xss128m ../gobra.jar \
             --module ${{ env.MOD_NAME }} \
-             --hyperMode extended \
+            --hyperMode extended \
             --recursive \
             --include "." ".verification" \
             --noVerify
@@ -122,7 +122,7 @@ jobs:
         working-directory: keytrans-verification
         run: mkdir .gobra
 
-      - name: Verify packages
+      - name: Verify packages (with hyperMode)
         working-directory: keytrans-verification
         run: |
           java -jar -Xss128m ../gobra.jar \
@@ -130,7 +130,17 @@ jobs:
             --hyperMode extended \
             --recursive \
             --include "." ".verification" \
-            --excludePackages ${{ env.EXCLUDE_PKGS }}
+            --excludePackages ${{ env.EXCLUDE_PKGS }} "client"
+
+      - name: Verify packages (without hyperMode)
+        working-directory: keytrans-verification
+        run: |
+          java -jar -Xss128m ../gobra.jar \
+            --module ${{ env.MOD_NAME }} \
+            --hyperMode off \
+            --recursive \
+            --include "." ".verification" \
+            --includePackages "client"
 
       - name: Upload Gobra statistics
         if: ${{ always() }}

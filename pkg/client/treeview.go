@@ -77,87 +77,63 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 	return
 }
 
+// Currently, magic wands do not get correctly processed by the SIF plugin
+// //@ requires  noPerm < p
+// //@ preserves tree != nil ==> acc(tree.Inv(), p)
+// //@ ensures   acc(path)
+// //@ ensures   tree != nil ==> len(path) > 0
+// func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
+// 	path = []uint64{}
+
+// 	if tree == nil {
+// 		return
+// 	}
+
+// 	t := tree
+// 	//@ package acc(t.Inv(), p) --* acc(tree.Inv(), p)
+// 	// temporarily unfold the invariant to obtain the knowledge that t cannot be nil:
+// 	//@ assert unfolding acc(tree.Inv(), p) in t != nil
+
+// 	//@ invariant acc(path)
+// 	//@ invariant t != nil ==> acc(t.Inv(), p)
+// 	//@ invariant t != nil ==> acc(t.Inv(), p) --* acc(tree.Inv(), p)
+// 	//@ invariant t == nil ==> acc(tree.Inv(), p)
+// 	//@ invariant t == nil ==> len(path) > 0
+// 	for t != nil {
+// 		//@ unfold acc(t.Inv(), p)
+// 		path = append( /*@ p, @*/ path, t.Root)
+// 		//@ ghost oldT := t
+// 		t = t.Right
+// 		/*@
+// 		ghost if t == nil {
+// 			fold acc(oldT.Inv(), p)
+// 			apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+// 		} else {
+// 			package acc(t.Inv(), p) --* acc(tree.Inv(), p) {
+// 				fold acc(oldT.Inv(), p)
+// 				apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+// 			}
+// 		}
+// 		@*/
+// 	}
+// 	return
+// }
 //@ requires  noPerm < p
 //@ preserves tree != nil ==> acc(tree.Inv(), p)
 //@ ensures   acc(path)
 //@ ensures   tree != nil ==> len(path) > 0
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
-	path = []uint64{}
-
 	if tree == nil {
 		return
 	}
 
-	t := tree
-	//@ package acc(t.Inv(), p) --* acc(tree.Inv(), p)
-	// temporarily unfold the invariant to obtain the knowledge that t cannot be nil:
-	//@ assert unfolding acc(tree.Inv(), p) in t != nil
-
-	//@ invariant acc(path)
-	//@ invariant t != nil ==> acc(t.Inv(), p)
-	//@ invariant t != nil ==> acc(t.Inv(), p) --* acc(tree.Inv(), p)
-	//@ invariant t == nil ==> acc(tree.Inv(), p)
-	//@ invariant t == nil ==> len(path) > 0
-	for t != nil {
-		//@ unfold acc(t.Inv(), p)
-		path = append( /*@ p, @*/ path, t.Root)
-		//@ ghost oldT := t
-		t = t.Right
-		/*@
-		ghost if t == nil {
-			fold acc(oldT.Inv(), p)
-			apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
-		} else {
-			package acc(t.Inv(), p) --* acc(tree.Inv(), p) {
-				fold acc(oldT.Inv(), p)
-				apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
-			}
-		}
-		@*/
-	}
+	//@ unfold acc(tree.Inv(), p)
+	path = []uint64{tree.Root}
+	subtreePath := tree.Right.FrontierNodes( /*@ p @*/ )
+	path = append( /*@ p, @*/ path, subtreePath...)
+	//@ fold acc(tree.Inv(), p)
 	return
 }
-
-// Currently, magic wands do not get correctly processed by the SIF plugin
-// //@ requires  noPerm < p
-// //@ preserves tree != nil ==> acc(tree.Inv(), p)
-// //@ ensures acc(path) && (tree != nil ==> len(path) > 0)
-// func (tree *ImplicitBinarySearchTree) FrontierNodesLoop(/*@ ghost p perm @*/) (path []uint64) {
-// 	path = []uint64{}
-
-// 	tmpTree := tree
-
-// 	/*@
-// 	ghost if tree != nil {
-// 		package acc(tmpTree.Inv(), p) --* acc(tree.Inv(), p)
-// 	}
-// 	@*/
-
-// 	//@ invariant acc(path)
-// 	//@ invariant tree != nil && tmpTree == nil ==> acc(tree.Inv(), p)
-// 	//@ invariant tmpTree != nil ==> acc(tmpTree.Inv(), p)
-// 	//@ invariant tmpTree != nil ==> acc(tmpTree.Inv(), p) --* acc(tree.Inv(), p)
-// 	//@ invariant tmpTree != tree ==> len(path) > 0
-// 	for tmpTree != nil {
-// 		//@ unfold acc(tmpTree.Inv(), p)
-// 		path = append(/*@ perm(1/2), @*/ path, tmpTree.Root)
-// 		oldTmpTree := tmpTree
-// 		_ = oldTmpTree
-// 		tmpTree = tmpTree.Right
-// 		/*@
-// 		ghost if tmpTree == nil {
-// 			fold acc(oldTmpTree.Inv(), p)
-// 			apply acc(oldTmpTree.Inv(), p) --* acc(tree.Inv(), p)
-// 		} else {
-// 			package acc(tmpTree.Inv(), p) --* acc(tree.Inv(), p) {
-// 				fold acc(oldTmpTree.Inv(), p)
-// 				apply acc(oldTmpTree.Inv(), p) --* acc(tree.Inv(), p)
-// 			}
-// 		}
-// 		@*/
-// 	}
-// 	return path
-// }
 
 //@ ensures tree_size != 0 ==> tree != nil
 //@ ensures tree != nil ==> tree.Inv()
