@@ -122,16 +122,6 @@ jobs:
         working-directory: keytrans-verification
         run: mkdir .gobra
 
-      - name: Verify packages (with hyperMode)
-        working-directory: keytrans-verification
-        run: |
-          java -jar -Xss128m ../gobra.jar \
-            --module ${{ env.MOD_NAME }} \
-            --hyperMode extended \
-            --recursive \
-            --include "." ".verification" \
-            --excludePackages ${{ env.EXCLUDE_PKGS }} "client"
-
       - name: Verify packages (without hyperMode)
         working-directory: keytrans-verification
         run: |
@@ -141,6 +131,16 @@ jobs:
             --recursive \
             --include "." ".verification" \
             --includePackages "client"
+
+      - name: Verify packages (with hyperMode)
+        working-directory: keytrans-verification
+        run: |
+          java -jar -Xss128m ../gobra.jar \
+            --module ${{ env.MOD_NAME }} \
+            --hyperMode extended \
+            --recursive \
+            --include "." ".verification" \
+            --excludePackages ${{ env.EXCLUDE_PKGS }} "client"
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
