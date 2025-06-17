@@ -41,6 +41,7 @@ pred (i InclusionProof) Inv() {
 }
 @*/
 
+// Values for PrefixSearchResult.Result_type
 const (
 	Reserved           = 0
 	Inclusion          = 1
@@ -70,6 +71,7 @@ type PrefixSearchResult struct {
 
 /*@
 pred (p PrefixSearchResult) Inv() {
+	(p.Result_type == Inclusion || p.Result_type == NonInclusionParent || p.Result_type == NonInclusionLeaf) &&
 	p.Result_type == NonInclusionLeaf ==> p.Leaf.Inv()
 }
 @*/
@@ -94,7 +96,7 @@ pred (c CombinedTreeProof) Inv() {
 @*/
 
 type CompleteBinaryLadderStep struct {
-	Step   BinaryLadderStep
+	Step   PrefixLeaf
 	Result PrefixSearchResult
 }
 
@@ -111,7 +113,10 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 
 	for i, step := range sortedSteps {
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
-			Step:   step,
+			Step:   PrefixLeaf{
+				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
+				Commitment: step.Commitment,
+			},
 			Result: results[i],
 		})
 	}
