@@ -129,8 +129,7 @@ jobs:
             --module ${{ env.MOD_NAME }} \
             --hyperMode off \
             --recursive \
-            --include "." ".verification" \
-            --includePackages "client"
+            --include "." ".verification"
 
       - name: Verify packages (with hyperMode)
         working-directory: keytrans-verification
@@ -140,7 +139,7 @@ jobs:
             --hyperMode extended \
             --recursive \
             --include "." ".verification" \
-            --excludePackages ${{ env.EXCLUDE_PKGS }} "client"
+            --excludePackages ${{ env.EXCLUDE_PKGS }}
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
