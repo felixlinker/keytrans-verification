@@ -7,19 +7,14 @@ import (
 
 /*@
 pred (t *PrefixTree) Inv() {
-	acc(t, _) && (t != nil ==> acc(t.InvRec(), 1))
-}
-
-pred (t *PrefixTree) InvRec() {
     t != nil ==> (
-        acc(&t.Value, _) && acc(&t.Leaf, _) && acc(&t.Left, _) && acc(&t.Right, _) &&
+        acc(&t.Value) && acc(&t.Leaf) && acc(&t.Left) && acc(&t.Right) &&
         (t.Left == nil  ==> t.Right == nil) &&
         (t.Right == nil ==> t.Left == nil) &&
-        (t.Value != nil ==> t.Leaf == nil && t.Left == nil && t.Right == nil && acc(t.Value, _)) &&
-        (t.Leaf  != nil ==> t.Value == nil && t.Left == nil && t.Right == nil && acc(t.Leaf, _) &&
-                             acc(&(t.Leaf).Vrf_output, _) && acc(&(t.Leaf).Commitment, _)) &&
-        (t.Left  != nil ==> t.Value == nil && t.Leaf == nil && acc(t.Left.Inv(), 1)) &&
-        (t.Right != nil ==> t.Value == nil && t.Leaf == nil && acc(t.Right.Inv(), 1)))
+        (t.Value != nil ==> t.Leaf == nil && t.Left == nil && t.Right == nil && acc(t.Value)) &&
+        (t.Leaf  != nil ==> t.Value == nil && t.Left == nil && t.Right == nil && acc(t.Leaf)) &&
+        (t.Left  != nil ==> t.Value == nil && t.Leaf == nil && acc(t.Left.Inv())) &&
+        (t.Right != nil ==> t.Value == nil && t.Leaf == nil && acc(t.Right.Inv())))
 }
 @*/
 
@@ -28,7 +23,7 @@ pred (t *PrefixTree) InvRec() {
 // @ decreases
 // @ pure
 func (t *PrefixTree) GetValue() *[sha256.Size]byte {
-	return /*@ unfolding acc(t.Inv(), _) in unfolding acc(t.InvRec(), _) in @*/ t.Value
+	return /*@ unfolding acc(t.Inv(), 1/2) in @*/ t.Value
 }
 
 // @ requires t != nil
@@ -37,7 +32,7 @@ func (t *PrefixTree) GetValue() *[sha256.Size]byte {
 // @ decreases
 // @ pure
 func (t *PrefixTree) GetValueArray() [sha256.Size]byte {
-	return /*@ unfolding acc(t.Inv(), _) in unfolding acc(t.InvRec(), _) in @*/ *t.Value
+	return /*@ unfolding acc(t.Inv(), 1/2) in @*/ *t.Value
 }
 
 // Recursive prefix tree data structure
@@ -61,10 +56,12 @@ type PrefixTree struct {
 // TODO(cfm): Are any of these pre/post-conditions invariants?
 // @ requires forall i int :: { &prefix[i] } 0 <= i && i < len(prefix) ==> acc(&prefix[i], 1/2)
 // @ requires forall i int :: { steps[i] } 0 <= i && i < len(steps) ==> acc(&steps[i], 1/2)
+// @ requires forall i int :: { &steps[i] } 0 <= i && i < len(steps) ==> acc((&steps[i]).Inv(), 1/2)
 // @ requires forall i int :: { coPathNodes[i] } 0 <= i && i < len(coPathNodes) ==> acc(&coPathNodes[i], _)
 // @ ensures err == nil ==> tree != nil && acc(tree.Inv())
 // @ ensures err == nil ==> forall i, j int :: { &nextSteps[i], &nextSteps[j] } 0 <= i && i < len(nextSteps) && 0 <= j && j < len(nextSteps) && i != j ==> &nextSteps[i] != &nextSteps[j]
 // @ ensures err == nil ==> forall i int :: { &nextSteps[i] } 0 <= i && i < len(nextSteps) ==> acc(&nextSteps[i], 1/2)
+// @ ensures err == nil ==> forall i int :: { &nextSteps[i] } 0 <= i && i < len(nextSteps) ==> acc((&nextSteps[i]).Inv(), 1/2)
 // @ ensures err == nil ==> forall i int :: { &nextNodes[i] } 0 <= i && i < len(nextNodes) ==> acc(&nextNodes[i], _)
 // @ ensures err == nil ==> forall i, j int :: { &nextNodes[i], &nextNodes[j] } 0 <= i && i < len(nextNodes) && 0 <= j && j < len(nextNodes) && i != j ==> &nextNodes[i] != &nextNodes[j]
 func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNodes []NodeValue) (tree *PrefixTree, nextSteps []CompleteBinaryLadderStep, nextNodes []NodeValue, err error) {
@@ -84,7 +81,6 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 			val /* @@@ */ := coPathNodes[0]
 			tree = &PrefixTree{Value: &val}
 			//@ assert tree != nil && tree.Value != nil && tree.Leaf == nil && tree.Left == nil && tree.Right == nil
-			//@ fold tree.InvRec()
 			//@ fold tree.Inv()
 			//@ assert forall i, j int :: { &nextSteps[i], &nextSteps[j] } 0 <= i && i < len(nextSteps) && 0 <= j && j < len(nextSteps) && i != j ==> &nextSteps[i] != &nextSteps[j]
 			nextNodes = coPathNodes[1:]
@@ -138,7 +134,6 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					valLeft /* @@@ */ := coPathNodes[0]
 					left := &PrefixTree{Value: &valLeft}
 					//@ assert left != nil && left.Value != nil && left.Leaf == nil && left.Left == nil && left.Right == nil
-					//@ fold left.InvRec()
 					//@ fold left.Inv()
 					tail := coPathNodes[1:]
 					//@ assert forall i, j int :: { &tail[i], &tail[j] } 0 <= i && i < len(tail) && 0 <= j && j < len(tail) && i != j ==> &tail[i] != &tail[j]
@@ -152,7 +147,6 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					} else {
 						tree = &PrefixTree{Left: left, Right: right}
 						//@ assert tree != nil && tree.Value == nil && tree.Leaf == nil && tree.Left != nil && tree.Right != nil
-						//@ fold tree.InvRec()
 						//@ fold tree.Inv()
 						nextSteps = recSteps
 						//@ assert forall i, j int :: 0 <= i && i < len(nextSteps) && 0 <= j && j < len(nextSteps) && i != j ==> &nextSteps[i] != &nextSteps[j]
@@ -180,7 +174,6 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					} else {
 						tree = &PrefixTree{Left: left, Right: right}
 						//@ assert tree != nil && tree.Value == nil && tree.Leaf == nil && tree.Left != nil && tree.Right != nil
-						//@ fold tree.InvRec()
 						//@ fold tree.Inv()
 						nextSteps = recSteps2
 						//@ assert forall i, j int :: 0 <= i && i < len(nextSteps) && 0 <= j && j < len(nextSteps) && i != j ==> &nextSteps[i] != &nextSteps[j]
@@ -194,10 +187,12 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 			// on the type of result.
 			resultType := step.Result.Result_type
 			if resultType == Inclusion {
-				leaf /* @@@ */ := step.Step
-				tree = &PrefixTree{Leaf: &leaf}
-				//@ assert tree != nil && tree.Leaf != nil && tree.Value == nil && tree.Left == nil && tree.Right == nil
-				//@ fold tree.InvRec()
+				leafp /* @@@ */ := new(PrefixLeaf)
+				leafp.Vrf_output = step.Step.Vrf_output
+				leafp.Commitment = step.Step.Commitment
+				tree = &PrefixTree{Leaf: leafp}
+				//@ assert tree != nil && tree.Value == nil && tree.Left == nil && tree.Right == nil
+				//@ assert acc(leafp) && acc(&tree.Leaf) && tree.Leaf == leafp
 				//@ fold tree.Inv()
 				nextSteps = steps[1:]
 				//@ assert forall i int :: { &nextSteps[i] } 0 <= i && i < len(nextSteps) ==> &nextSteps[i] == &steps[i+1]
@@ -209,10 +204,15 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					err = errors.New("no leaf for inclusion proof given")
 					return
 				} else {
-					leaf /* @@@ */ := step.Result.Leaf
-					tree = &PrefixTree{Leaf: leaf}
+					leafp /* @@@ */ := new(PrefixLeaf)
+					//@ unfold acc((&steps[0]).Inv(), 1/2)
+					//@ assert acc(&(steps[0].Result.Leaf).Vrf_output, 1/2) && acc(&(steps[0].Result.Leaf).Commitment, 1/2)
+					leafp.Vrf_output = steps[0].Result.Leaf.Vrf_output
+					leafp.Commitment = steps[0].Result.Leaf.Commitment
+					//@ fold acc((&steps[0]).Inv(), 1/2)
+					tree = &PrefixTree{Leaf: leafp}
 					//@ assert tree != nil && tree.Leaf != nil && tree.Value == nil && tree.Left == nil && tree.Right == nil
-					//@ fold tree.InvRec()
+					//@ assert acc(leafp) && acc(&tree.Leaf) && tree.Leaf == leafp
 					//@ fold tree.Inv()
 					nextSteps = steps[1:]
 					//@ assert forall i int :: { &nextSteps[i] } 0 <= i && i < len(nextSteps) ==> &nextSteps[i] == &steps[i+1]
@@ -223,7 +223,6 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 			} else if resultType == NonInclusionParent {
 				tree = &PrefixTree{Value: &[32]byte{}}
 				//@ assert tree != nil && tree.Value != nil && tree.Leaf == nil && tree.Left == nil && tree.Right == nil
-				//@ fold tree.InvRec()
 				//@ fold tree.Inv()
 				nextSteps = steps[1:]
 				//@ assert forall i int :: { &nextSteps[i] } 0 <= i && i < len(nextSteps) ==> &nextSteps[i] == &steps[i+1]
@@ -245,7 +244,6 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 		val /* @@@ */ := coPathNodes[0]
 		tree = &PrefixTree{Value: &val}
 		//@ assert tree != nil && tree.Value != nil && tree.Leaf == nil && tree.Left == nil && tree.Right == nil
-		//@ fold tree.InvRec()
 		//@ fold tree.Inv()
 		//@ assert forall i, j int :: { &nextSteps[i], &nextSteps[j] } 0 <= i && i < len(nextSteps) && 0 <= j && j < len(nextSteps) && i != j ==> &nextSteps[i] != &nextSteps[j]
 		nextNodes = coPathNodes[1:]
@@ -280,6 +278,7 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 	//@ unfold acc(prf.Inv(), 1/2)
 	//@ assert forall i int :: { &prf.Elements[i] } 0 <= i && i < len(prf.Elements) ==> acc(&prf.Elements[i], _)
 	//@ assert forall i, j int :: { &prf.Elements[i], &prf.Elements[j] } 0 <= i && i < len(prf.Elements) && 0 <= j && j < len(prf.Elements) && i != j ==> &prf.Elements[i] != &prf.Elements[j]
+	//@ assert forall i int :: { steps[i] } 0 <= i && i < len(steps) ==> acc(&steps[i], 1/2)
 	if tree, _, _, err = ToTreeRecursive([]bool{}, steps, prf.Elements); err != nil {
 		//@ fold acc(prf.Inv(), 1/2)
 		return
@@ -297,7 +296,7 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 	hashContent = make([]byte, sha256.Size+1)
 	if tree == nil {
 		return hashContent, nil
-	} else if /*@ unfolding acc(tree.Inv(), _) in unfolding acc(tree.InvRec(), _) in @*/ tree.Left == nil && tree.Right == nil {
+	} else if /*@ unfolding acc(tree.Inv(), 1/2) in @*/ tree.Left == nil && tree.Right == nil {
 		if value /*@ @ @*/, err := tree.ComputeHash(); err != nil {
 			return nil, err
 		} else {
@@ -305,17 +304,13 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 		}
 	} else {
 		//@ unfold acc(tree.Inv(), 1/2)
-		//@ unfold acc(tree.InvRec(), 1/2)
 		if leftContent, err := tree.Left.HashContent(); err != nil {
-			//@ fold acc(tree.InvRec(), 1/2)
 			//@ fold acc(tree.Inv(), 1/2)
 			return nil, err
 		} else if rightContent, err := tree.Right.HashContent(); err != nil {
-			//@ fold acc(tree.InvRec(), 1/2)
 			//@ fold acc(tree.Inv(), 1/2)
 			return nil, err
 		} else {
-			//@ fold acc(tree.InvRec(), 1/2)
 			//@ fold acc(tree.Inv(), 1/2)
 			buf := make([]byte, 1+len(leftContent)+len(rightContent))
 			buf[0] = 0x02
@@ -332,23 +327,21 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 	if tree == nil {
 		return [sha256.Size]byte{}, errors.New("cannot hash empty node")
-	} else if /*@ unfolding acc(tree.Inv(), _) in unfolding acc(tree.InvRec(), _) in @*/ tree.Value != nil {
-		return /*@ unfolding acc(tree.Inv(), _) in unfolding acc(tree.InvRec(), _) in @*/ *tree.Value, nil
-	} else if /*@ unfolding acc(tree.Inv(), _) in unfolding acc(tree.InvRec(), _) in @*/ tree.Left == nil && tree.Right == nil {
-		if /*@ unfolding acc(tree.Inv(), _) in unfolding acc(tree.InvRec(), _) in @*/ tree.Leaf == nil {
+	} else if /*@ unfolding acc(tree.Inv(), 1/2) in @*/ tree.Value != nil {
+		return /*@ unfolding acc(tree.Inv(), 1/2) in @*/ *tree.Value, nil
+	} else if /*@ unfolding acc(tree.Inv(), 1/2) in @*/ tree.Left == nil && tree.Right == nil {
+		if /*@ unfolding acc(tree.Inv(), 1/2) in @*/ tree.Leaf == nil {
 			return [sha256.Size]byte{}, errors.New("neither leaf nor value given for empty node")
 		} else {
 			// TODO: We would have to include length, too, to be compliant with TLS
 			// encoding, but not so important right now because inputs are
 			// fixed-length and this may get changed in the future
 			//@ unfold acc(tree.Inv(), 1/2)
-			//@ unfold acc(tree.InvRec(), 1/2)
 			buf := make([]byte, len(tree.Leaf.Vrf_output)+len(tree.Leaf.Commitment))
 			_ = copy(buf, tree.Leaf.Vrf_output[:] /*@ , perm(1/2) @*/)
 			_ = copy(buf[len(tree.Leaf.Vrf_output):], tree.Leaf.Commitment[:] /*@ , perm(1/2) @*/)
 			value /*@ @ @*/ := sha256.Sum256(buf /*@ , perm(1/2) @*/)
 			tree.Value = &value
-			//@ fold acc(tree.InvRec(), 1/2)
 			//@ fold acc(tree.Inv(), 1/2)
 			return value, nil
 		}

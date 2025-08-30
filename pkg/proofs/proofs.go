@@ -73,8 +73,8 @@ type PrefixSearchResult struct {
 
 /*@
 pred (p PrefixSearchResult) Inv() {
-	(p.Result_type == Inclusion || p.Result_type == NonInclusionParent || p.Result_type == NonInclusionLeaf) &&
-	p.Result_type == NonInclusionLeaf ==> p.Leaf.Inv()
+    (p.Result_type == Inclusion || p.Result_type == NonInclusionParent || p.Result_type == NonInclusionLeaf) &&
+    (p.Result_type == NonInclusionLeaf ==> acc(p.Leaf) && acc(&(p.Leaf).Vrf_output) && acc(&(p.Leaf).Commitment))
 }
 @*/
 
@@ -115,16 +115,19 @@ type CompleteBinaryLadderStep struct {
 
 /*@
 pred (s *CompleteBinaryLadderStep) Inv() {
-    acc(s, _) &&
-		acc(&s.Step, _) &&
-			acc((&s.Step).Inv(), _) &&
-		acc(&s.Result, _) &&
-			acc((&s.Result).Inv(), _)
+    acc(s) &&
+        acc(&s.Step) &&
+            acc((&s.Step).Inv()) &&
+        acc(&s.Result) &&
+            acc((&s.Result).Inv()) &&
+        (s.Result.Result_type == NonInclusionLeaf ==> acc(s.Result.Leaf) && acc(&(s.Result.Leaf).Vrf_output) && acc(&(s.Result.Leaf).Commitment))
 }
 @*/
 
 // @ requires forall i int :: { steps[i] } 0 <= i && i < len(steps) ==> acc(&steps[i], 1/2)
 // @ ensures forall i int :: { completeSteps[i] } 0 <= i && i < len(completeSteps) ==> acc(&completeSteps[i]) && acc(completeSteps[i].Inv())
+// @ ensures forall i int :: { &completeSteps[i] } 0 <= i && i < len(completeSteps) ==> acc(&completeSteps[i], 1/2)
+// @ ensures forall i int :: { &completeSteps[i] } 0 <= i && i < len(completeSteps) ==> acc((&completeSteps[i]).Inv(), 1/2)
 func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
 	completeSteps = make([]CompleteBinaryLadderStep, 0, len(results))
 	if len(steps) < len(results) {
