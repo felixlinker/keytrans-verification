@@ -18,3 +18,4 @@ func Uint32(x uint32) (res []byte) {
 	binary.BigEndian.AppendUint32(buf, x)
 	return buf
 }
+

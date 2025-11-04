@@ -40,6 +40,7 @@ func (t *PrefixTree) GetValueArray() [sha256.Size]byte {
 	return /*@ unfolding acc(t.Inv(), _) in unfolding acc(t.InvRec(), _) in @*/ *t.Value
 }
 
+
 // Recursive prefix tree data structure
 type PrefixTree struct {
 	// Hash value of this node; must be computed if nil

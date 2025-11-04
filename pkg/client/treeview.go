@@ -35,7 +35,7 @@ func RootNode(tree_size uint64) uint64 {
 	return (power >> 1) - 1
 }
 
-//@ preserves tree != nil ==> tree.Inv()
+// @ preserves tree != nil ==> tree.Inv()
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	if tree == nil {
 		return
@@ -50,9 +50,9 @@ func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	return
 }
 
-//@ requires  noPerm < p
-//@ preserves acc(tree.Inv(), p)
-//@ ensures   err == nil ==> acc(path)
+// @ requires  noPerm < p
+// @ preserves acc(tree.Inv(), p)
+// @ ensures   err == nil ==> acc(path)
 func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(tree.Inv(), p)
 	if tree.Root == node {
@@ -94,34 +94,35 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 // 	// temporarily unfold the invariant to obtain the knowledge that t cannot be nil:
 // 	//@ assert unfolding acc(tree.Inv(), p) in t != nil
 
-// 	//@ invariant acc(path)
-// 	//@ invariant t != nil ==> acc(t.Inv(), p)
-// 	//@ invariant t != nil ==> acc(t.Inv(), p) --* acc(tree.Inv(), p)
-// 	//@ invariant t == nil ==> acc(tree.Inv(), p)
-// 	//@ invariant t == nil ==> len(path) > 0
-// 	for t != nil {
-// 		//@ unfold acc(t.Inv(), p)
-// 		path = append( /*@ p, @*/ path, t.Root)
-// 		//@ ghost oldT := t
-// 		t = t.Right
-// 		/*@
-// 		ghost if t == nil {
-// 			fold acc(oldT.Inv(), p)
-// 			apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
-// 		} else {
-// 			package acc(t.Inv(), p) --* acc(tree.Inv(), p) {
-// 				fold acc(oldT.Inv(), p)
-// 				apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
-// 			}
-// 		}
-// 		@*/
-// 	}
-// 	return
-// }
-//@ requires  noPerm < p
-//@ preserves tree != nil ==> acc(tree.Inv(), p)
-//@ ensures   acc(path)
-//@ ensures   tree != nil ==> len(path) > 0
+//		//@ invariant acc(path)
+//		//@ invariant t != nil ==> acc(t.Inv(), p)
+//		//@ invariant t != nil ==> acc(t.Inv(), p) --* acc(tree.Inv(), p)
+//		//@ invariant t == nil ==> acc(tree.Inv(), p)
+//		//@ invariant t == nil ==> len(path) > 0
+//		for t != nil {
+//			//@ unfold acc(t.Inv(), p)
+//			path = append( /*@ p, @*/ path, t.Root)
+//			//@ ghost oldT := t
+//			t = t.Right
+//			/*@
+//			ghost if t == nil {
+//				fold acc(oldT.Inv(), p)
+//				apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+//			} else {
+//				package acc(t.Inv(), p) --* acc(tree.Inv(), p) {
+//					fold acc(oldT.Inv(), p)
+//					apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
+//				}
+//			}
+//			@*/
+//		}
+//		return
+//	}
+//
+// @ requires  noPerm < p
+// @ preserves tree != nil ==> acc(tree.Inv(), p)
+// @ ensures   acc(path)
+// @ ensures   tree != nil ==> len(path) > 0
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	if tree == nil {
 		return
@@ -135,8 +136,8 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 	return
 }
 
-//@ ensures tree_size != 0 ==> tree != nil
-//@ ensures tree != nil ==> tree.Inv()
+// @ ensures tree_size != 0 ==> tree != nil
+// @ ensures tree != nil ==> tree.Inv()
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	root := RootNode(tree_size)
 	if tree_size == 0 {
@@ -173,9 +174,9 @@ pred (s *UserState) Inv() {
 }
 @*/
 
-//@ requires noPerm < p
-//@ preserves acc(timestamps, p)
-//@ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
+// @ requires noPerm < p
+// @ preserves acc(timestamps, p)
+// @ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	if len(timestamps) == 0 {
 		return true
@@ -198,12 +199,12 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	return true
 }
 
-//@ requires  noPerm < p
-//@ preserves st.Inv()
-//@ preserves acc(new_head.Inv(), p)
+// @ requires  noPerm < p
+// @ preserves st.Inv()
+// @ preserves acc(new_head.Inv(), p)
 // since we take the timestamps from `prf`, we need full permissions to then
-//@ preserves acc(prf.Inv(), p)
-//@ ensures err == nil ==> unfolding st.Inv() in st.Size == new_head.Size()
+// @ preserves acc(prf.Inv(), p)
+// @ ensures err == nil ==> unfolding st.Inv() in st.Size == new_head.Size()
 func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreeProof /*@, ghost p perm @*/) (err error) {
 	//@ unfold acc(prf.Inv(), p)
 	if !checkIncreasing(prf.Timestamps /*@, p/2 @*/) {

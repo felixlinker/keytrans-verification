@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
@@ -69,10 +70,10 @@ pred (s SearchResponse) Inv() {
 }
 @*/
 
-//@ requires noPerm < p
-//@ preserves st.Inv()
-//@ preserves acc(query.Inv(), p) && acc(resp.Inv(), p)
-//@ ensures err == nil ==> acc(res) && res.Inv()
+// @ requires noPerm < p
+// @ preserves st.Inv()
+// @ preserves acc(query.Inv(), p) && acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(res) && res.Inv()
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	if err := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/); err != nil {
@@ -112,6 +113,55 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 	}
 
 	// TODO: Verify proof of inclusion in all trees
+
+	return nil, nil
+}
+
+func (st *UserState) CreateInclusionLadder(targetVersion *uint32, vrfs proofs.VRFProof) (ladder proofs.Ladder) {
+	Ladd := proofs.Ladder{
+		Inclusions:    []proofs.VRFInput{},
+		NonInclusions: []proofs.VRFInput{},
+	}
+
+	for labelVersion, value := range vrfs.Mapping {
+		labelVersionKey := labelVersion.ToVRFInput()
+		if value {
+			Ladd.Inclusions = append(Ladd.Inclusions, labelVersionKey)
+		} else {
+			Ladd.NonInclusions = append(Ladd.NonInclusions, labelVersionKey)
+		}
+	}
+	return ladder
+}
+
+func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse) (res *proofs.UpdateValue, err error) {
+	t := resp.Version
+	search_tree := MkImplicitBinarySearchTree(st.Size)
+	frontiers := search_tree.FrontierNodes()
+
+	terminalLogEntry := -1
+
+	for _, frontier := range frontiers {
+		prefixtree_proof := resp.Inclusion.VRFProofs[frontier]
+		ladder := st.CreateInclusionLadder(t, prefixtree_proof)
+		LtGtOrEq := ladder.CompareToTheGreatest(query.Label, t)
+		if LtGtOrEq == 1 {
+			return nil, errors.New("not the greatest version as expected")
+		}
+		if LtGtOrEq == 0 && terminalLogEntry == -1 {
+			terminalLogEntry = int(frontier)
+		}
+
+		if frontier == st.Size-1 {
+			if !ladder.TerminateWithinGreatest(query.Label, t) {
+				return nil, errors.New("t is not the greatest version as expecte ")
+			}
+		}
+	}
+
+	// TODO: Contact monitoring mode
+
+	fmt.Println("Version:", t)
 
 	return nil, nil
 }

@@ -31,8 +31,27 @@ type BinaryLadderStep struct {
 	Proof      [sha256.Size]byte
 	Commitment [sha256.Size]byte
 }
+type VRFInput struct {
+	Label   []byte
+	Version int
+}
+
+type Ladder struct {
+	Inclusions    []VRFInput
+	NonInclusions []VRFInput
+}
+
+type VRFInputKey struct {
+	Label   string //From Label converted to String, used for VRFProof mapping.
+	Version int
+}
+
+type VRFProof struct {
+	Mapping map[VRFInputKey]bool
+}
 
 type InclusionProof struct {
+	VRFProofs []VRFProof // A list of mappings from label-version to the boolean, true => inclusion, false => inclusion
 }
 
 /*@
@@ -100,7 +119,7 @@ type CompleteBinaryLadderStep struct {
 	Result PrefixSearchResult
 }
 
-//@ trusted
+// @ trusted
 func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
 	completeSteps = make([]CompleteBinaryLadderStep, 0, len(results))
 	if len(steps) < len(results) {
@@ -113,7 +132,7 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 
 	for i, step := range sortedSteps {
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
-			Step:   PrefixLeaf{
+			Step: PrefixLeaf{
 				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
 				Commitment: step.Commitment,
 			},
@@ -124,8 +143,8 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 	return completeSteps, nil
 }
 
-//@ trusted
-//@ preserves acc(sortedSteps)
+// @ trusted
+// @ preserves acc(sortedSteps)
 func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
 	slices.SortFunc(sortedSteps, func(a, b BinaryLadderStep) int {
 		hashA := crypto.VRF_proof_to_hash(a.Proof)
@@ -133,4 +152,78 @@ func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
 		return bytes.Compare(hashA[:], hashB[:])
 	})
 	return
+}
+
+func (v VRFInput) ToVRFInputKey() VRFInputKey {
+	return VRFInputKey{Label: string(v.Label), Version: v.Version}
+}
+
+func (v VRFInputKey) ToVRFInput() VRFInput {
+	return VRFInput{Label: []byte(v.Label), Version: v.Version}
+}
+
+func (ladder Ladder) hasInclusion(v VRFInput) bool {
+	for _, inclusion := range ladder.Inclusions {
+		if bytes.Equal(inclusion.Label, v.Label) {
+			return true
+		}
+	}
+	return false
+}
+
+func (ladder Ladder) hasNonInclusion(v VRFInput) bool {
+	for _, nonInclusion := range ladder.NonInclusions {
+		if bytes.Equal(nonInclusion.Label, v.Label) {
+			return true
+		}
+	}
+	return false
+}
+
+func (ladder Ladder) TerminateWithinGreatest(label []byte, targetVersion *uint32) bool {
+	expected := FullBinaryLadderSteps(*targetVersion)
+
+	for _, v := range expected {
+		lad := VRFInput{
+			Label:   label,
+			Version: int(v),
+		}
+		if v <= *targetVersion && !(ladder.hasInclusion(lad)) {
+			return false
+		}
+		if v > *targetVersion && !(ladder.hasNonInclusion(lad)) {
+			return false
+		}
+	}
+	return true
+}
+
+func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint32) (res int) { //-1, 0, 1, -2
+
+	for _, v := range ladder.Inclusions {
+		if v.Version > int(*targetVersion) && bytes.Equal(v.Label, label) {
+			return 1 // > t
+		}
+	}
+	for _, v := range ladder.NonInclusions {
+		if v.Version < int(*targetVersion) && bytes.Equal(v.Label, label) {
+			return -1 // < t
+		}
+	}
+
+	expected := FullBinaryLadderSteps(*targetVersion)
+
+	for _, v := range expected {
+		currentLabelVersion := VRFInput{
+			Label:   label,
+			Version: int(v),
+		}
+		if v <= *targetVersion && !(ladder.hasInclusion(currentLabelVersion)) {
+			return -2
+		}
+		if v > *targetVersion && !(ladder.hasNonInclusion(currentLabelVersion)) {
+			return -2
+		}
+	}
+	return 0 // = t
 }
