@@ -4,6 +4,28 @@ import (
 	"testing"
 )
 
+func TestTStar(t *testing.T) {
+	tests := []struct {
+		t1   uint32
+		t2   uint32
+		want uint32
+	}{
+		{t1: 0, t2: 15, want: 1},
+		{t1: 0, t2: 1, want: 1},
+		{t1: 8, t2: 9, want: 9},
+		{t1: 8, t2: 14, want: 11},
+		{t1: 9, t2: 10, want: 10},
+		{t1: 8, t2: 16, want: 15},
+	}
+
+	for _, tc := range tests {
+		got := TStar(tc.t1, tc.t2)
+		if got != tc.want {
+			t.Errorf("TStar(%d, %d) = %d; want %d", tc.t1, tc.t2, got, tc.want)
+		}
+	}
+}
+
 func TestFullBinaryLadderSteps(t *testing.T) {
 	tests := []struct {
 		target uint32
