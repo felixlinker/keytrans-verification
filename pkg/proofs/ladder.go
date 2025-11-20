@@ -22,10 +22,10 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 
 	//@ invariant acc(r)
-	for ((x_out - x_in) / 2) > 0 {
-		next := x_in + ((x_out - x_in) / 2) - 1
+	for x_in+1 < x_out {
+		next := x_in + (x_out-x_in)/2
 		r = append( /*@ perm(1/2), @*/ r, next)
-		if i <= target {
+		if next <= target {
 			x_in = next
 		} else {
 			x_out = next
