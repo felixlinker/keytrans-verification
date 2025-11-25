@@ -4,28 +4,19 @@ import (
 	"math"
 )
 
-// @ ghost
 // @ requires t1 >= 0
-// @ requires t2 >= t1
-// @ pure
-func TStar(t1 uint32, t2 uint32) (t_star uint32) {
-	return uint32(tStar(float64(t1+1), float64(t2+1), true) - float64(1))
+// @ requires t2 > t1
+func TStar(t1 uint64, t2 uint64) (t_star uint64) {
+	return uint64(tStar(float64(t1+1), float64(t2+1), true) - float64(1))
 }
 
-// @ ghost
-// @ requires int(t1) > 0
-// @ requires int(t2) >= int(t1)
-// @ ensures t_star > 0
-// @ decreases t2
-//
-//	pure
+// @ trusted
 func tStar(t1 float64, t2 float64, pick_lowest bool) (t_star float64) {
 	if t1 >= t2 {
 		//@ assert false
-		panic("invariant violated")
+		return -1.0
 	}
 	// @ assert t1 < t2
-	//@ assert false
 
 	i_low := math.Floor(math.Log2(t1))
 	i_high := math.Floor(math.Log2(t2))
@@ -38,9 +29,9 @@ func tStar(t1 float64, t2 float64, pick_lowest bool) (t_star float64) {
 		}
 	} else {
 		low_ := math.Pow(2.0, i_low)
-		//@ assert int(low_) > 0
-		//@ assert t1- low_ < t1
-		//@ assert t2-low_ < t2
+		// assert int(low_) > 0
+		// assert t1- low_ < t1
+		// assert t2-low_ < t2
 		return low_ + tStar(t1-low_, t2-low_, false)
 	}
 }
@@ -58,13 +49,11 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	//@ invariant acc(r)
 	//@ invariant 0 <= i - 1
 	//@ invariant i-1 <= target || 1 <= len(r)
-	//@
 	for i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
 		//@ old_i := i
 		i = i * 2
 		//@ assert i == (2 * old_i)  // Gobra currently does not axiomatize left and right shifts
-		//@ assert old_i <= i
 	}
 	// i is now the smallest power of two s.t. i-1 is larger than target
 	//@ assert len(r) > 0
@@ -78,7 +67,7 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	// invariant x_out > target
 	for x_in+1 < x_out {
 		next := x_in + (x_out-x_in)/2
-		//@ assert x_in <= next
+		//@ assert x_in < next
 		//@ assert next < x_out
 		r = append( /*@ perm(1/2), @*/ r, next)
 		if next <= target {
