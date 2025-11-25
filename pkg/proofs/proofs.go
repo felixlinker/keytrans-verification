@@ -154,14 +154,19 @@ func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
 	return
 }
 
+// @ trusted
 func (v VRFInput) ToVRFInputKey() VRFInputKey {
 	return VRFInputKey{Label: string(v.Label), Version: v.Version}
 }
 
+// @ trusted
 func (v VRFInputKey) ToVRFInput() VRFInput {
 	return VRFInput{Label: []byte(v.Label), Version: v.Version}
 }
 
+// @ trusted
+// @ preserves acc(ladder, 1/2)
+// @ preserves acc(v, 1/2)
 func (ladder Ladder) hasInclusion(v VRFInput) bool {
 	for _, inclusion := range ladder.Inclusions {
 		if bytes.Equal(inclusion.Label, v.Label) {
@@ -171,6 +176,7 @@ func (ladder Ladder) hasInclusion(v VRFInput) bool {
 	return false
 }
 
+// @ trusted
 func (ladder Ladder) hasNonInclusion(v VRFInput) bool {
 	for _, nonInclusion := range ladder.NonInclusions {
 		if bytes.Equal(nonInclusion.Label, v.Label) {
@@ -180,6 +186,8 @@ func (ladder Ladder) hasNonInclusion(v VRFInput) bool {
 	return false
 }
 
+// @ trusted
+// @ requires acc(label)
 func (ladder Ladder) TerminateWithinGreatest(label []byte, targetVersion *uint32) bool {
 	expected := FullBinaryLadderSteps(*targetVersion)
 
@@ -198,16 +206,18 @@ func (ladder Ladder) TerminateWithinGreatest(label []byte, targetVersion *uint32
 	return true
 }
 
-func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint32) (res int) { //-1, 0, 1, -2
+// ensures exists v :: int v > int(*targetVersion) ==> res == 1 && err == nil
+// ensures exists v :: int v < int(*targetVersion) ==> res == -1 && err == nil
+func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint32) (res int, err error) { //-1, 0, 1, -2
 
 	for _, v := range ladder.Inclusions {
 		if v.Version > int(*targetVersion) && bytes.Equal(v.Label, label) {
-			return 1 // > t
+			return 1, nil // > t
 		}
 	}
 	for _, v := range ladder.NonInclusions {
 		if v.Version < int(*targetVersion) && bytes.Equal(v.Label, label) {
-			return -1 // < t
+			return -1, nil // < t
 		}
 	}
 
@@ -219,11 +229,11 @@ func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint32) (
 			Version: int(v),
 		}
 		if v <= *targetVersion && !(ladder.hasInclusion(currentLabelVersion)) {
-			return -2
+			return -2, errors.New("Server error: information missing") //Error
 		}
 		if v > *targetVersion && !(ladder.hasNonInclusion(currentLabelVersion)) {
-			return -2
+			return -2, errors.New("Server error: information missing") //Error
 		}
 	}
-	return 0 // = t
+	return 0, nil // = t
 }

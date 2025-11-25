@@ -134,27 +134,76 @@ func (st *UserState) CreateInclusionLadder(targetVersion *uint32, vrfs proofs.VR
 	return ladder
 }
 
+type PT interface {
+	// Returns non-nil if we can prove that the prefix tree contains a key for the
+	// label and version pair provided. Returns nil if we can prove that the
+	// prefix tree does not contain a key for the label and version pair provided.
+	// Returns error in any other case.
+	GetCommitment(Label []byte, Version uint32) ([]byte, error)
+}
+
+type BLOutputs = []bool
+
+// @ trusted
+// @ preserves acc(PT)
+// @ preserves acc(label)
+func CheckGreatest(prefixTree PT, label []byte, t uint32) (int, error) {
+	steps := proofs.FullBinaryLadderSteps(t)
+
+	for _, step := range steps {
+		if commitment, err := prefixTree.GetCommitment(label, step); err != nil {
+			return 0, err
+		} else {
+			incl := commitment != nil
+			if !incl && step <= t {
+				return 1, nil
+			} else if incl && t < step {
+				return -1, nil
+			} else if incl && step <= t {
+				continue
+			} else if !incl && t < step {
+				continue
+			}
+		}
+	}
+
+	return 0, nil
+}
+
+// Show: forall root, root': root == root' ==> VerifyLatestKey(root) == VerifyLatestKey(root')
+// ensures forall query resp resp' Searchresponse resp.full_Tree_head == resp'.full_Tree_head ==> VerifyLatestKey(query, resp)== VerifyLatestKey(query, resp) // root version matching
+// How do I make these line by line invariants? I don't think there is anything I can do with gobra tho?? How about making a function?
+
+// Access to the structs. We only need read priviledge with query
+//@ requires acc(st, _)
+//@ requires acc(resp, _)
+//@ requires acc(query, _)
+//@ pure
 func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse) (res *proofs.UpdateValue, err error) {
 	t := resp.Version
+	
 	search_tree := MkImplicitBinarySearchTree(st.Size)
 	frontiers := search_tree.FrontierNodes()
-
 	terminalLogEntry := -1
+
 
 	for _, frontier := range frontiers {
 		prefixtree_proof := resp.Inclusion.VRFProofs[frontier]
 		ladder := st.CreateInclusionLadder(t, prefixtree_proof)
-		LtGtOrEq := ladder.CompareToTheGreatest(query.Label, t)
-		if LtGtOrEq == 1 {
-			return nil, errors.New("not the greatest version as expected")
-		}
-		if LtGtOrEq == 0 && terminalLogEntry == -1 {
-			terminalLogEntry = int(frontier)
-		}
+		if LtGtOrEq, err := ladder.CompareToTheGreatest(query.Label, t); err != nil {
+			return nil, err
+		} else {
+			if LtGtOrEq == 1 {
+				return nil, errors.New("not the greatest version as expected")
+			}
+			if LtGtOrEq == 0 && terminalLogEntry == -1 {
+				terminalLogEntry = int(frontier)
+			}
 
-		if frontier == st.Size-1 {
-			if !ladder.TerminateWithinGreatest(query.Label, t) {
-				return nil, errors.New("t is not the greatest version as expecte ")
+			if frontier == st.Size-1 {
+				if LtGtOrEq != 0 {
+					return nil, errors.New("t is not the greatest version as expected")
+				}
 			}
 		}
 	}
