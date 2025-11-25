@@ -6,7 +6,7 @@ import (
 
 // @ ghost
 // @ requires t1 >= 0
-// @ requires t2 > t1
+// @ requires t2 >= t1
 // @ pure
 func TStar(t1 uint32, t2 uint32) (t_star uint32) {
 	return uint32(tStar(float64(t1+1), float64(t2+1), true) - float64(1))
@@ -14,10 +14,11 @@ func TStar(t1 uint32, t2 uint32) (t_star uint32) {
 
 // @ ghost
 // @ requires int(t1) > 0
-// @ requires int(t2) > int(t1)
-// @ requires false
+// @ requires int(t2) >= int(t1)
+// @ ensures t_star > 0
 // @ decreases t2
-// @ pure
+//
+//	pure
 func tStar(t1 float64, t2 float64, pick_lowest bool) (t_star float64) {
 	if t1 >= t2 {
 		//@ assert false
@@ -46,8 +47,9 @@ func tStar(t1 float64, t2 float64, pick_lowest bool) (t_star float64) {
 
 // @ preserves acc(r)
 // @ requires target >=0
-// @ ensures forall t1 uint32 :: t1 <= target ==> TStar(t1,target) elem r
-// @ ensures forall t2 uint32 :: t2 > target ==> TStar(target, t2) elem r
+//
+//	ensures forall t1 uint32 :: t1 <= target ==> TStar(t1,target) elem r
+//	ensures forall t2 uint32 :: t2 > target ==> TStar(target, t2) elem r
 func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	//@ assume 0 <= target // see https://github.com/viperproject/gobra/issues/192
 	r = make([]uint32, 0)
@@ -56,6 +58,7 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	//@ invariant acc(r)
 	//@ invariant 0 <= i - 1
 	//@ invariant i-1 <= target || 1 <= len(r)
+	//@
 	for i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
 		//@ old_i := i
@@ -86,4 +89,3 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	}
 	return r
 }
-
