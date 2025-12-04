@@ -213,9 +213,12 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	return r
 }
 
-// should be the same as the recursion of the binary ladder before
+// should be the same as the recursion of the binary ladder before, tested with small testcases
+
+// @ ensures acc(r)
 func FullBinaryLadderSteps_recurse(target uint64) (r []uint64) {
 	r = make([]uint64, 0)
+	//@ assert acc(r)
 	var i uint64 = 1
 
 	r, x_in, x_out := ExponentialJump(target, r, i)
@@ -225,27 +228,33 @@ func FullBinaryLadderSteps_recurse(target uint64) (r []uint64) {
 	return res
 }
 
+// @ requires acc(r)
+// @ ensures acc(res)
 func ExponentialJump(target uint64, r []uint64, i uint64) (res []uint64, x_in uint64, x_out uint64) {
 	if i-1 <= target {
-		r = append(r, i-1)
+		//@ assert acc(r)
+		r = append( /*@ perm(1/2), @*/ r, i-1)
 		return ExponentialJump(target, r, 2*i)
 	}
 
 	if len(r) > 0 {
 		x_in = r[len(r)-1]
 		x_out = i - 1
-		r = append(r, i-1)
+		//@ assert acc(r)
+		r = append( /*@ perm(1/2), @*/ r, i-1)
 		return r, x_in, x_out
 	}
 	return r, 0, i - 1
 }
 
+// @ requires acc(r)
+// @ ensures acc(res)
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64) (res []uint64) {
 	if x_in+1 >= x_out {
 		return r
 	}
 	next := x_in + (x_out-x_in)/2
-	r = append(r, next)
+	r = append( /*@ perm(1/2), @*/ r, next)
 
 	if next <= target {
 		return BinarySearchStep(target, r, next, x_out)
