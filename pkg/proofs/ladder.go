@@ -7,6 +7,7 @@ ghost
 requires n > 0
 ensures r >= 0
 ensures n >= 1 ==> IntPow2(r) <= n && IntPow2(r+1) > n && r < n
+ensures n == 1 ==> r == 0
 decreases n
 pure
 func Log2Floor_pure(n uint64) (r uint64) {
@@ -22,29 +23,49 @@ ghost
 requires exp >= 0
 ensures r > 0
 ensures r == (exp == 0 ? 1 : 2 * IntPow2(exp - 1))
+// ensures forall e uint64 ::  exp < e ==> r < IntPow2(e)
 decreases exp
 pure
 func IntPow2(exp uint64) (r uint64) {
   return exp == 0 ? 1 : 2 * IntPow2(exp - 1)
 }
 
+ghost
+requires exp1 >= 0
+requires exp1 < exp2
+ensures IntPow2(exp1) < IntPow2(exp2)
+decreases exp2
+pure
+func IntPow2Lemma(exp1 uint64, exp2 uint64) (r bool){
+	return exp2 == exp1 + 1 ? true : (IntPow2Lemma(exp1, exp2-1))
+}
+
+@*/
+
+/*@
+ghost
+decreases
+pure
+func max(v1 uint64, v2 uint64) (r uint64){
+	return v1 > v2? v1 : v2
+}
 @*/
 
 /*@
 ghost
 requires t1 > 0
-requires t2 >= t1
-ensures r >= 0
-ensures t1 <= r && r <= t2
-decreases t1
+requires t2 > t1
+ensures r >= 1
+ensures t1 < r // && r <= t2
+decreases t1,t2
 pure
 func tStar_pure(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
     return let i_low := Log2Floor_pure(t1) in
            let i_high := Log2Floor_pure(t2) in
            let low_ := IntPow2(i_low) in
            i_high > i_low ?
-             (pick_lowest ? IntPow2(i_low + 1) : IntPow2(i_high)) :
-             low_ + tStar_pure(t1 - low_, t2 - low_, false)
+            (pick_lowest ? IntPow2(i_low + 1) : let apply_lemma := IntPow2Lemma(i_low+1, i_high+1) in IntPow2(i_high)) :
+            low_ + tStar_pure(max(t1 - low_,1), max(t2 - low_,2), false)
 }
 
 @*/
@@ -53,7 +74,6 @@ func tStar_pure(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
 // @ ensures r >= 0
 // @ ensures IntPow2(r) <= base
 // @ ensures base < IntPow2(r+1)
-// @ ensures r >= 0
 // @ decreases
 func Log2Floor(base uint64) (r uint64) {
 	var i uint64 = 1
@@ -191,4 +211,45 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 		}
 	}
 	return r
+}
+
+// should be the same as the recursion of the binary ladder before
+func FullBinaryLadderSteps_recurse(target uint64) (r []uint64) {
+	r = make([]uint64, 0)
+	var i uint64 = 1
+
+	r, x_in, x_out := ExponentialJump(target, r, i)
+
+	res := BinarySearchStep(target, r, x_in, x_out)
+
+	return res
+}
+
+func ExponentialJump(target uint64, r []uint64, i uint64) (res []uint64, x_in uint64, x_out uint64) {
+	if i-1 <= target {
+		r = append(r, i-1)
+		return ExponentialJump(target, r, 2*i)
+	}
+
+	if len(r) > 0 {
+		x_in = r[len(r)-1]
+		x_out = i - 1
+		r = append(r, i-1)
+		return r, x_in, x_out
+	}
+	return r, 0, i - 1
+}
+
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64) (res []uint64) {
+	if x_in+1 >= x_out {
+		return r
+	}
+	next := x_in + (x_out-x_in)/2
+	r = append(r, next)
+
+	if next <= target {
+		return BinarySearchStep(target, r, next, x_out)
+	} else {
+		return BinarySearchStep(target, r, x_in, next)
+	}
 }
