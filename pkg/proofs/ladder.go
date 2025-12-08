@@ -13,6 +13,7 @@ pure
 func Log2Floor_pure(n uint64) (r uint64) {
     return n <= 1 ? 0 : 1 + Log2Floor_pure(n / 2)
 }
+
 @*/
 
 // Don't think we can do with <= 1 due to correctness, but let's see what will happen lol
@@ -22,13 +23,12 @@ func Log2Floor_pure(n uint64) (r uint64) {
 ghost
 requires exp >= 0
 ensures r > 0
-ensures r == (exp == 0 ? 1 : 2 * IntPow2(exp - 1))
-// ensures forall e uint64 ::  exp < e ==> r < IntPow2(e)
 decreases exp
 pure
 func IntPow2(exp uint64) (r uint64) {
   return exp == 0 ? 1 : 2 * IntPow2(exp - 1)
 }
+
 
 ghost
 requires exp1 >= 0
@@ -170,10 +170,7 @@ func TStar_combined(t1 uint64, t2 uint64, pick_lowest bool, shift_interval bool)
 
 // @ requires target >=0
 // @ ensures acc(r)
-//
-//	ensures forall t1 uint32 :: t1 <= target ==> TStar(t1,target) elem r
-//	ensures forall t2 uint32 :: t2 > target ==> TStar(target, t2) elem r
-func FullBinaryLadderSteps(target uint32) (r []uint32) {
+func FullBinaryLadderSteps(target uint32 /*@, ghost idx uint64 @*/) (r []uint32) {
 	//@ assume 0 <= target // see https://github.com/viperproject/gobra/issues/192
 	r = make([]uint32, 0)
 	var i uint32 = 1
@@ -197,12 +194,8 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 
 	//@ invariant acc(r)
-	// invariant x_in <= target
-	// invariant x_out > target
 	for x_in+1 < x_out {
 		next := x_in + (x_out-x_in)/2
-		// assert x_in < next
-		// assert next < x_out
 		r = append( /*@ perm(1/2), @*/ r, next)
 		if next <= target {
 			x_in = next
@@ -213,55 +206,111 @@ func FullBinaryLadderSteps(target uint32) (r []uint32) {
 	return r
 }
 
-// should be the same as the recursion of the binary ladder before, tested with small testcases
+/*@
 
+
+// maybe = 0 as well as test, but we have TStar pure, so adapt it and it would be smooth
+ghost
+ensures res > 0
+decreases
+pure
+func GetInt() (res uint64)
+
+@*/
+
+// Show the following case
+// ensure target < t2 ==> tStar_pure(target, t2 ) in non-incl
+// ensure t2 < target ==> tStar_pure(t2,target) in incl
+// @ requires target > 0
+// @ requires t2 > 0
 // @ ensures acc(r)
-// @ requires target >= 0
-func FullBinaryLadderSteps_recurse(target uint64) (r []uint64) {
+func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64, incl []uint64, non_incl []uint64 /*@, ghost t_star uint64@*/) {
 	r = make([]uint64, 0)
+	incl = make([]uint64, 0)
+	non_incl = make([]uint64, 0)
 	var i uint64 = 1
+	//@ assert t2 > 0
+	//@ t1 := target
+	/*
+		ghost
+		if t2 < target{
+			t_star = tStar_pure(t2+1,target+1, true)-1
+		} else if t2 > target{
+			t_star = tStar_pure(target+1, t2+1, true)-1
+		}
+	*/
+	r, x_in, x_out, incl, non_incl := ExponentialJump(target, r, i, incl, non_incl)
+	//@ old_x_out := x_out  // This is the first element that is not in the target!
+	//@ assume t1 < t2
 
-	//@ assert i - 1 >= 0
-	//@ assert i - 1 <= target
-	r, x_in, x_out := ExponentialJump(target, r, i)
+	//@ assume t1 > t2
 
-	res := BinarySearchStep(target, r, x_in, x_out)
+	res, incl, non_incl := BinarySearchStep(target, r, x_in, x_out, incl, non_incl)
 
-	return res
+	return res, incl, non_incl /*@, t_star@*/
 }
 
 // @ requires acc(r)
+// @ requires acc(incl)
+// @ requires acc(non_incl)
+// @ ensures acc(included)
+// @ ensures acc(non_included)
 // @ ensures acc(res)
 // @ preserves i-1 >= 0
 // @ preserves i-1 <= target || 1 <= len(r)
-func ExponentialJump(target uint64, r []uint64, i uint64) (res []uint64, x_in uint64, x_out uint64) {
+func ExponentialJump(target uint64, r []uint64, i uint64, incl []uint64, non_incl []uint64) (res []uint64, x_in uint64, x_out uint64, included []uint64, non_included []uint64) {
 	if i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
-		return ExponentialJump(target, r, 2*i)
+		incl = append( /*@ perm(1/2), @*/ incl, i-1)
+		return ExponentialJump(target, r, 2*i, incl, non_incl)
 	}
+	x_out = i - 1
 
 	if len(r) > 0 {
 		x_in = r[len(r)-1]
-		x_out = i - 1
-
 		r = append( /*@ perm(1/2), @*/ r, i-1)
-		return r, x_in, x_out
+		non_incl = append( /*@ perm(1/2), @*/ non_incl, i-1)
+		return r, x_in, x_out, incl, non_incl
 	}
-	return r, 0, i - 1
+	non_incl = append( /*@ perm(1/2), @*/ non_incl, x_out)
+	return r, 0, x_out, incl, non_incl
 }
 
 // @ requires acc(r)
+// @ requires acc(incl)
+// @ requires acc(non_incl)
+// @ ensures acc(included)
+// @ ensures acc(non_included)
 // @ ensures acc(res)
-func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64) (res []uint64) {
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64, incl []uint64, non_incl []uint64) (res []uint64, included []uint64, non_included []uint64) {
 	if x_in+1 >= x_out {
-		return r
+		return r, incl, non_incl
 	}
 	next := x_in + (x_out-x_in)/2
 	r = append( /*@ perm(1/2), @*/ r, next)
 
 	if next <= target {
-		return BinarySearchStep(target, r, next, x_out)
+		incl = append( /*@ perm(1/2), @*/ incl, next)
+		return BinarySearchStep(target, r, next, x_out, incl, non_incl)
 	} else {
-		return BinarySearchStep(target, r, x_in, next)
+		non_incl = append( /*@ perm(1/2), @*/ non_incl, next)
+		return BinarySearchStep(target, r, x_in, next, incl, non_incl)
 	}
+}
+
+// @ requires target > 0
+func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64, incl []uint64, non_incl []uint64) {
+
+	//@ t2 := GetInt()
+
+	//@ assume t2 != target && t2 > 0
+
+	res, incl, non_incl /*@, t_star12@*/ := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
+
+	//TODO: What should we do now?
+
+	// assume forall t2 uint64 :: t2 < target ==> tStar_pure(t2, target, true) elem incl
+	// assume forall t2 uint64 :: target < t2 ==> tStar_pure(target, t2, true) elem non_incl
+
+	return res, incl, non_incl
 }
