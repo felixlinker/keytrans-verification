@@ -64,7 +64,7 @@ func tStar_pure(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
            let i_high := Log2Floor_pure(t2) in
            let low_ := IntPow2(i_low) in
            i_high > i_low ?
-            (pick_lowest ? IntPow2(i_low + 1) : let apply_lemma := IntPow2Lemma(i_low+1, i_high+1) in IntPow2(i_high)) :
+           pick_lowest ? IntPow2(i_low + 1) : let apply_lemma := IntPow2Lemma(i_low+1, i_high+1) in IntPow2(i_high) :
             low_ + tStar_pure(max(t1 - low_,1), max(t2 - low_,2), false)
 }
 
@@ -218,9 +218,10 @@ func GetInt() (res uint64)
 
 @*/
 
-// Show the following case
-// ensure target < t2 ==> tStar_pure(target, t2 ) in non-incl
-// ensure t2 < target ==> tStar_pure(t2,target) in incl
+// ensure target < t2 ==> tStar_pure(target, t2, true ) == non-incl[idx]
+//
+//	ensure t2 < target ==> tStar_pure(t2,target, true)== incl[idx]
+//
 // @ requires target > 0
 // @ requires t2 > 0
 // @ ensures acc(r)
@@ -231,22 +232,31 @@ func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []u
 	var i uint64 = 1
 	//@ assert t2 > 0
 	//@ t1 := target
-	/*
-		ghost
-		if t2 < target{
-			t_star = tStar_pure(t2+1,target+1, true)-1
-		} else if t2 > target{
-			t_star = tStar_pure(target+1, t2+1, true)-1
-		}
-	*/
+	//@ assume target < t2
+
+	//Find the index and the t_star from the array
+	//@ var found uint64
+	//@ var idx uint64 = 0
+
+	//@ t_star := tStar_pure(target+1, t2+1, true) - 1
+
 	r, x_in, x_out, incl, non_incl := ExponentialJump(target, r, i, incl, non_incl)
-	//@ old_x_out := x_out  // This is the first element that is not in the target!
-	//@ assume t1 < t2
+	// If t2 is a very large value, then tStar_pure is definitely this value, i.e. the greatest power of 2^i
+	// The only way is to assign found to x_out and we're done
 
-	//@ assume t1 > t2
+	/*@
+		ghost
+		if t2 >= x_out{
+			found = x_out
+		}
+	@*/
 
-	res, incl, non_incl := BinarySearchStep(target, r, x_in, x_out, incl, non_incl)
-
+	// Else, we need to investigate more into the BinarySearchStep
+	// We need to check the value of t2, and find the number smaller equal than t2 of the non-incl
+	res, incl, non_incl /*@, found_, idx_, t2_ @*/ := BinarySearchStep(target, r, x_in, x_out, incl, non_incl /*@, found, idx, t2@*/)
+	//The end goal
+	//@	assert t_star == found_
+	//@ assert t_star == non_incl[idx_]
 	return res, incl, non_incl /*@, t_star@*/
 }
 
@@ -282,19 +292,20 @@ func ExponentialJump(target uint64, r []uint64, i uint64, incl []uint64, non_inc
 // @ ensures acc(included)
 // @ ensures acc(non_included)
 // @ ensures acc(res)
-func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64, incl []uint64, non_incl []uint64) (res []uint64, included []uint64, non_included []uint64) {
+// @ ensures t2 == t2_
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64, incl []uint64, non_incl []uint64 /*@, ghost idx uint64, ghost found uint64, ghost t2 uint64@*/) (res []uint64, included []uint64, non_included []uint64 /*@, ghost index uint64, ghost found_element uint64, ghost t2_ uint64@*/) {
 	if x_in+1 >= x_out {
-		return r, incl, non_incl
+		return r, incl, non_incl /*@, idx, found, t2@*/
 	}
 	next := x_in + (x_out-x_in)/2
 	r = append( /*@ perm(1/2), @*/ r, next)
 
 	if next <= target {
 		incl = append( /*@ perm(1/2), @*/ incl, next)
-		return BinarySearchStep(target, r, next, x_out, incl, non_incl)
+		return BinarySearchStep(target, r, next, x_out, incl, non_incl /*@, found, idx, t2@*/)
 	} else {
 		non_incl = append( /*@ perm(1/2), @*/ non_incl, next)
-		return BinarySearchStep(target, r, x_in, next, incl, non_incl)
+		return BinarySearchStep(target, r, x_in, next, incl, non_incl /*@, found, idx,t2@*/)
 	}
 }
 
@@ -307,10 +318,7 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64, incl []uint64, no
 
 	res, incl, non_incl /*@, t_star12@*/ := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
 
-	//TODO: What should we do now?
-
 	// assume forall t2 uint64 :: t2 < target ==> tStar_pure(t2, target, true) elem incl
 	// assume forall t2 uint64 :: target < t2 ==> tStar_pure(target, t2, true) elem non_incl
-
 	return res, incl, non_incl
 }
