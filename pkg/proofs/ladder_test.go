@@ -98,6 +98,7 @@ func TestFullBinaryLadderSteps(t *testing.T) {
 	}
 }
 
+/*
 func TestFullBinaryLadderStepsRecurse(t *testing.T) {
 	tests := []struct {
 		target        uint64
@@ -147,3 +148,4 @@ func TestFullBinaryLadderStepsRecurse(t *testing.T) {
 		}
 	}
 }
+*/

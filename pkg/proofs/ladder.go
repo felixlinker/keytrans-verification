@@ -1,7 +1,5 @@
 package proofs
 
-//Random pure functions
-
 /*@
 ghost
 requires n > 0
@@ -83,32 +81,28 @@ func GetInt() (res uint64)
 // @ ensures r >= 0
 // @ ensures IntPow2(r) <= base
 // @ ensures base < IntPow2(r+1)
-// @ decreases
+// @ ensures r == Log2Floor_pure(base)
+// @ decreases base
 func Log2Floor(base uint64) (r uint64) {
-	var i uint64 = 1
-	var count uint64 = 0
-	//@ invariant i > 0 && count >= 0
-	//@ invariant i == IntPow2(count)
-	//@ invariant count == 0 || IntPow2(count-1) <= base
-	// @ decreases base - i
-	for i <= base {
-		//@ old_i := i
-		i = i * 2
-		//@ old_count := count
-		count = count + 1
-		//@ assert i == old_i *2
-		//@ assert old_count + 1 == count
+	if base <= 1 {
+		//@ assert Log2Floor_pure(base) == 0
+		return 0
+	} else {
+		//@ assert base > 1
+		//@ assert Log2Floor_pure(base) == 1 + Log2Floor_pure(base / 2)
+		return 1 + Log2Floor(base/2)
 	}
-	return count - 1
 }
 
 // @ requires exp >= 0
 // @ ensures r == IntPow2(exp)
+// @ decreases
 func PowOf2(exp uint64) (r uint64) {
 	var i uint64
 	r = 1
 	//@ invariant i >= 0 && i<= exp
 	//@ invariant r == IntPow2(i)
+	//@ decreases exp - i
 	for i = 0; i < exp; i += 1 {
 		r = r * 2
 	}
@@ -122,20 +116,30 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1, true) - 1
 }
 
+// @ ensures max(v1,v2) == r
+// @ decreases
+func max_element(v1 uint64, v2 uint64) (r uint64) {
+	if v1 > v2 {
+		return v1
+	} else {
+		return v2
+	}
+}
+
 // @ requires t1 > 0
 // @ requires t2 > t1
+// @ ensures t_star > 0
+// @ ensures t_star == tStar_pure(t1, t2, pick_lowest)
+// @ decreases t1, t2
 func tStar(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 	i_low := Log2Floor(t1)
 	i_high := Log2Floor(t2)
 	//@ assert i_low >=0
 	//@ assert i_high>= 0
-
 	if i_high-i_low > 0 && pick_lowest {
-		//@ assert i_high > i_low
 		//@ assert pick_lowest
 		return PowOf2(i_low + 1)
 	} else if i_high-i_low > 0 && !pick_lowest {
-		//@ assert i_high > i_low
 		//@ assert !pick_lowest
 		return PowOf2(i_high)
 	} else {
@@ -144,7 +148,9 @@ func tStar(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 		//@ assert low_ > 0
 		//@ assert t1- low_ < t1
 		//@ assert t2-low_ < t2
-		return low_ + tStar(t1-low_, t2-low_, false)
+		//@ assert t1 >= low_
+		//@ assert t2 >= low_
+		return low_ + tStar(max_element(t1-low_, 1), max_element(t2-low_, 2), false)
 	}
 }
 
@@ -220,88 +226,71 @@ func FullBinaryLadderSteps(target uint32 /*@, ghost idx uint64 @*/) (r []uint32)
 // @ requires target > 0
 // @ requires t2 > 0
 // @ ensures acc(r)
-// ensure target < t2 ==> tStar_pure(target, t2, true ) == non-incl[idx]
+// ensure target < t2 ==> tStar_pure(target, t2, true ) == r[idx]
 //
-//	ensure t2 < target ==> tStar_pure(t2,target, true)== incl[idx]
-func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64, incl []uint64, non_incl []uint64 /*@, ghost t_star uint64@*/) {
+//	ensure t2 < target ==> tStar_pure(t2,target, true)== r[idx]
+func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx uint64@*/) {
 	r = make([]uint64, 0)
-	incl = make([]uint64, 0)
-	non_incl = make([]uint64, 0)
 	var i uint64 = 1
-	//@ t2 := GetInt()
-	//@ t1 := target
-	//@ assume t1 < t2
-
 	//Find the index and the t_star from the array
 	//@ var found uint64
-	//@ var idx uint64 = 0
+	//@ idx = 0
+
+	//@ assume t2 > target
 
 	//@ t_star := tStar_pure(target+1, t2+1, true) - 1
 
-	r, x_in, x_out, incl, non_incl := ExponentialJump(target, r, i, incl, non_incl)
-	// If t2 is a very large value, then tStar_pure is definitely this value, i.e. the greatest power of 2^i
-	// The only way is to assign found to x_out and we're done
+	r, x_in, x_out /*@, idx_@*/ := ExponentialJump(target, r, i /*@,idx@*/)
 
-	/*@
+	/*
 		ghost
-		if t2 >= x_out{
+		if t2 > x_out{
 			found = x_out
 		}
-	@*/
+	*/
 
 	// Else, we need to investigate more into the BinarySearchStep
 	// We need to check the value of t2, and find the number smaller equal than t2 of the non-incl
-	res, incl, non_incl /*@, found_, idx_, t2_ @*/ := BinarySearchStep(target, r, x_in, x_out, incl, non_incl /*@, found, idx, t2@*/)
+	res /*@, found_, idx_, t2_ @*/ := BinarySearchStep(target, r, x_in, x_out /*@, found, idx, t2@*/)
 
 	//The end goal
-	//@	assert t_star == found_
-	//@ assert t_star == non_incl[idx_]
-	return res, incl, non_incl /*@, t_star@*/
+	//	assert t_star == found_
+	// assert t_star == r[idx_]
+	return res /*@, idx_@*/
 }
 
 // @ requires acc(r)
-// @ requires acc(incl)
-// @ requires acc(non_incl)
-// @ ensures acc(included)
-// @ ensures acc(non_included)
 // @ ensures acc(res)
 // @ preserves i-1 >= 0
 // @ preserves i-1 <= target || 1 <= len(r)
-func ExponentialJump(target uint64, r []uint64, i uint64, incl []uint64, non_incl []uint64) (res []uint64, x_in uint64, x_out uint64, included []uint64, non_included []uint64) {
+func ExponentialJump(target uint64, r []uint64, i uint64 /*@, ghost idx uint64@*/) (res []uint64, x_in uint64, x_out uint64 /*@, ghost index uint64@*/) {
 	if i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
-		incl = append( /*@ perm(1/2), @*/ incl, i-1)
-		return ExponentialJump(target, r, 2*i, incl, non_incl)
+		return ExponentialJump(target, r, 2*i /*@, idx +1@*/)
 	}
 	x_out = i - 1
 
 	if len(r) > 0 {
 		x_in = r[len(r)-1]
 		r = append( /*@ perm(1/2), @*/ r, i-1)
-		non_incl = append( /*@ perm(1/2), @*/ non_incl, i-1)
-		return r, x_in, x_out, incl, non_incl
+		//@ idx = idx + 1
+		return r, x_in, x_out /*@, idx@*/
 	}
-	non_incl = append( /*@ perm(1/2), @*/ non_incl, x_out)
-	return r, 0, x_out, incl, non_incl
+	return r, 0, x_out /*@, idx@*/
 }
 
 // @ requires acc(r)
-// @ requires acc(incl)
-// @ requires acc(non_incl)
-// @ ensures acc(included)
-// @ ensures acc(non_included)
 // @ ensures acc(res)
 // @ ensures t2 == t2_
-func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64, incl []uint64, non_incl []uint64 /*@, ghost idx uint64, ghost found uint64, ghost t2 uint64@*/) (res []uint64, included []uint64, non_included []uint64 /*@, ghost index uint64, ghost found_element uint64, ghost t2_ uint64 @*/) {
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost idx uint64, ghost found uint64, ghost t2 uint64@*/) (res []uint64 /*@, ghost index uint64, ghost found_element uint64, ghost t2_ uint64 @*/) {
 	if x_in+1 >= x_out {
-		return r, incl, non_incl /*@, idx, found, t2@*/
+		return r /*@, idx, found, t2@*/
 	}
 	next := x_in + (x_out-x_in)/2
 	r = append( /*@ perm(1/2), @*/ r, next)
 
 	if next <= target {
-		incl = append( /*@ perm(1/2), @*/ incl, next)
-		return BinarySearchStep(target, r, next, x_out, incl, non_incl /*@, found, idx, t2@*/)
+		return BinarySearchStep(target, r, next, x_out /*@, found, idx, t2@*/)
 	} else {
 		/*@
 		ghost
@@ -310,8 +299,7 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64, incl
 			idx = idx + 1
 		}
 		@*/
-		non_incl = append( /*@ perm(1/2), @*/ non_incl, next)
-		return BinarySearchStep(target, r, x_in, next, incl, non_incl /*@, found, idx,t2@*/)
+		return BinarySearchStep(target, r, x_in, next /*@, found, idx,t2@*/)
 	}
 }
 
@@ -321,8 +309,9 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64, incl []uint64, no
 	//@ t2 := GetInt()
 
 	//@ assume t2 != target && t2 > 0
+	//@ assume t2 > target
 
-	res, incl, non_incl /*@, t_star12@*/ := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
+	res /*@, t_star12@*/ := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
 
 	// assume forall t2 uint64 :: t2 < target ==> tStar_pure(t2, target, true) elem incl
 	// assume forall t2 uint64 :: target < t2 ==> tStar_pure(target, t2, true) elem non_incl

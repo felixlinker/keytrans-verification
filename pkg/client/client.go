@@ -172,7 +172,7 @@ func CheckGreatest(prefixTree PT, label []byte, t uint32) (int, error) {
 
 // Show: forall root, root': root == root' ==> VerifyLatestKey(root) == VerifyLatestKey(root')
 // ensures forall query resp resp' Searchresponse resp.full_Tree_head == resp'.full_Tree_head ==> VerifyLatestKey(query, resp)== VerifyLatestKey(query, resp) // root version matching
-// How do I make these line by line invariants? I don't think there is anything I can do with gobra tho?? How about making a function?
+// How do I make these line by line invariants? I don't think there is anything I can do with gobra tho?? How about making a function
 
 // Access to the structs. We only need read priviledge with query
 //@ requires acc(st, _)
