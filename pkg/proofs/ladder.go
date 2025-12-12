@@ -1,6 +1,9 @@
 package proofs
 
+// ===========================================================================
+// ===========================================================================
 /*@
+//Log2Floor function
 ghost
 requires n > 0
 ensures r >= 0
@@ -9,15 +12,36 @@ ensures n == 1 ==> r == 0
 decreases n
 pure
 func Log2Floor_pure(n uint64) (r uint64) {
-    return n <= 1 ? 0 : 1 + Log2Floor_pure(n / 2)
+    return n < 2 ? 0 : 1 + Log2Floor_pure(n / 2)
 }
 
-@*/
 
-// Don't think we can do with <= 1 due to correctness, but let's see what will happen lol
+ghost
+requires n>0
+ensures IntPow2(Log2Floor_pure(n)+1) > n
+ensures IntPow2(Log2Floor_pure(n)) <=n
+decreases n
+pure
+func Log2FloorUpperBound(n uint64) uint64{
+	return n < 2 ? 0:  Log2FloorUpperBound(n/2) + IntPow2Positive(Log2Floor_pure(n/2)+1)
+}
+
+
+ghost
+requires n > 0
+ensures IntPow2(Log2Floor_pure(n)) <= n
+ensures n < IntPow2(Log2Floor_pure(n) + 1)
+decreases
+pure func Log2FloorBounds(n uint64) uint64 {
+    return Log2FloorUpperBound(n)
+}
+
+
+@*/
+// ==================================================================================
+// =============================IntPow2==============================================
 
 /*@
-
 ghost
 requires exp >= 0
 ensures r > 0
@@ -34,38 +58,104 @@ requires exp1 < exp2
 ensures IntPow2(exp1) < IntPow2(exp2)
 decreases exp2
 pure
-func IntPow2Lemma(exp1 uint64, exp2 uint64) (r bool){
-	return exp2 == exp1 + 1 ? true : (IntPow2Lemma(exp1, exp2-1))
+func IntPow2IncLemma(exp1 uint64, exp2 uint64) (r bool){
+	return exp2 == exp1 + 1 ? true : (IntPow2IncLemma(exp1, exp2-1))
 }
 
-@*/
 
-/*@
 ghost
+requires n>= 0
+ensures IntPow2(n) >= 1
+decreases n
+pure
+func IntPow2Positive(n uint64) uint64{
+	return n==0 ? 1 : IntPow2Positive(n-1)
+}
+
+ghost
+requires n >= 0
+ensures IntPow2(n) <= IntPow2(n+1)
+decreases n
+pure
+func IntPow2LeqSucc(n uint64) uint64{
+	return IntPow2Positive(n)
+}
+
+ghost
+requires a >= 0
+requires b >= 0
+requires a <= b
+ensures IntPow2(a) <= IntPow2(b)
+decreases b - a
+pure
+func IntPow2Monotonic(a uint64, b uint64) uint64{
+	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2LeqSucc(b - 1)
+}
+
+
+ghost
+requires i_low >= 0
+requires i_high >= 0
+requires i_high > i_low
+ensures IntPow2(i_low +1) <= IntPow2(i_high)
 decreases
 pure
-func max(v1 uint64, v2 uint64) (r uint64){
-	return v1 > v2? v1 : v2
+func IntPow2GapLemma(i_low uint64, i_high uint64) uint64{
+	return IntPow2Monotonic(i_low+1, i_high)
 }
-@*/
 
+@*/
+// ==================================================================================
+// ============================================================================
+
+// ==================================================================================
+// ====================================================================================
 /*@
+
+ghost
+requires t1 >= 0
+requires t2 > t1
+ensures t1 < r
+ensures r <= t2
+decreases
+pure
+func TStar_pure(t1 uint64, t2 uint64) (r uint64){
+	return tStar_pure(t1 +1, t2+1, true)- 1
+}
+
+@*/
+// =============================Core Lemma==============================================
+//Here, we need to tell Gobra that IntPow2(i_low +1) <= IntPow2(i_high)
+// We need to consider the case if t1 == low_, i.e. low_ is a power of 2
+//Here, we need to consider the case if low_ is a power of 2. If yes, then we cannot recurse due to the issue of Log2Floor is expecting a value > 0. So we need to handle that case manually.
+/*@
+
 ghost
 requires t1 > 0
 requires t2 > t1
 ensures r >= 1
-ensures t1 < r // && r <= t2
+ensures t1 < r && r<=t2
 decreases t1,t2
 pure
 func tStar_pure(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
     return let i_low := Log2Floor_pure(t1) in
            let i_high := Log2Floor_pure(t2) in
            let low_ := IntPow2(i_low) in
+		   let bound_t1 := Log2FloorBounds(t1) in
+		   let bound_t2 := Log2FloorBounds(t2) in
+		   let i_low_positive := IntPow2Positive(i_low) in
            i_high > i_low ?
-           pick_lowest ? IntPow2(i_low + 1) : let apply_lemma := IntPow2Lemma(i_low+1, i_high+1) in IntPow2(i_high) :
-            low_ + tStar_pure(max(t1 - low_,1), max(t2 - low_,2), false)
-}
+           		(pick_lowest ?
+					let apply_gap := IntPow2GapLemma(i_low, i_high) in
+						IntPow2(i_low + 1) :
+					let apply_gap := IntPow2GapLemma(i_low, i_high) in
+						IntPow2(i_high)) :
+				(t1 == low_ ?
+					let apply_bounds := Log2FloorBounds(t2 - low_) in
+					low_ + IntPow2(Log2Floor_pure(t2-low_)):
+					low_ + tStar_pure(t1 - low_,t2 - low_, false))
 
+}
 @*/
 
 /*@
@@ -109,48 +199,39 @@ func PowOf2(exp uint64) (r uint64) {
 	return r
 }
 
+// TStar returns a value r such that t1 < r <= t2
 // @ requires t1 >= 0
 // @ requires t2 > t1
-// @ ensures t_star >= 0
+// @ trusted
 func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1, true) - 1
 }
 
-// @ ensures max(v1,v2) == r
-// @ decreases
-func max_element(v1 uint64, v2 uint64) (r uint64) {
-	if v1 > v2 {
-		return v1
-	} else {
-		return v2
-	}
-}
-
-// @ requires t1 > 0
-// @ requires t2 > t1
-// @ ensures t_star > 0
-// @ ensures t_star == tStar_pure(t1, t2, pick_lowest)
-// @ decreases t1, t2
+// @ trusted
 func tStar(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 	i_low := Log2Floor(t1)
 	i_high := Log2Floor(t2)
-	//@ assert i_low >=0
-	//@ assert i_high>= 0
-	if i_high-i_low > 0 && pick_lowest {
-		//@ assert pick_lowest
-		return PowOf2(i_low + 1)
-	} else if i_high-i_low > 0 && !pick_lowest {
-		//@ assert !pick_lowest
-		return PowOf2(i_high)
+
+	if i_high > i_low {
+		if pick_lowest {
+			return PowOf2(i_low + 1)
+		} else {
+			return PowOf2(i_high)
+		}
 	} else {
-		//@ assert i_high <= i_low
+		// i_high == i_low (same log bucket)
 		low_ := PowOf2(i_low)
-		//@ assert low_ > 0
-		//@ assert t1- low_ < t1
-		//@ assert t2-low_ < t2
-		//@ assert t1 >= low_
-		//@ assert t2 >= low_
-		return low_ + tStar(max_element(t1-low_, 1), max_element(t2-low_, 2), false)
+
+		if t1 == low_ {
+			// t1 is exactly a power of 2, so t1 - low_ = 0
+			// In float version: log2(0) = -Inf, so i_high - i_low > 0 is always true
+			// Since pick_lowest = false in recursion, it returns 2^i_high
+			// where i_high = floor(log2(t2 - low_))
+			return low_ + PowOf2(Log2Floor(t2-low_))
+		}
+
+		// t1 > low_, safe to recurse normally
+		return low_ + tStar(t1-low_, t2-low_, false)
 	}
 }
 
@@ -160,27 +241,24 @@ func TStar_combined(t1 uint64, t2 uint64, pick_lowest bool, shift_interval bool)
 		//@ assert shift_interval
 		return TStar_combined(t1+1, t2+1, true, false) - 1
 	} else {
-		//@ assert !shift_interval
 		i_low := Log2Floor(t1)
 		i_high := Log2Floor(t2)
-		//@ assert i_low >=0
-		//@ assert i_high>= 0
 
-		if i_high-i_low > 0 && pick_lowest {
-			//@ assert i_high > i_low
-			//@ assert pick_lowest
-			return PowOf2(i_low + 1)
-		} else if i_high-i_low > 0 && !pick_lowest {
-			//@ assert i_high > i_low
-			//@ assert !pick_lowest
-			return PowOf2(i_high)
+		if i_high > i_low {
+			if pick_lowest {
+				return PowOf2(i_low + 1)
+			} else {
+				return PowOf2(i_high)
+			}
 		} else {
-			//@ assert i_high <= i_low
 			low_ := PowOf2(i_low)
-			//@ assert low_ > 0
-			//@ assert t1- low_ < t1
-			//@ assert t2-low_ < t2
-			return low_ + TStar_combined(t1-low_, t2-low_, false, false)
+
+			if t1 == low_ {
+				return low_ + PowOf2(Log2Floor(t2-low_))
+			}
+
+			// t1 > low_, safe to recurse normally
+			return low_ + tStar(t1-low_, t2-low_, false)
 		}
 	}
 }
@@ -226,46 +304,58 @@ func FullBinaryLadderSteps(target uint32 /*@, ghost idx uint64 @*/) (r []uint32)
 // @ requires target > 0
 // @ requires t2 > 0
 // @ ensures acc(r)
-// ensure target < t2 ==> tStar_pure(target, t2, true ) == r[idx]
 //
-//	ensure t2 < target ==> tStar_pure(t2,target, true)== r[idx]
+// ensures target < t2 ==> tStar_pure(target+1, t2+1, true )-1 == r[idx]
 func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx uint64@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
 	//Find the index and the t_star from the array
 	//@ var found uint64
 	//@ idx = 0
+	//@ var continue_searching bool = true
 
 	//@ assume t2 > target
 
-	//@ t_star := tStar_pure(target+1, t2+1, true) - 1
+	// t_star := tStar_pure(target+1, t2+1, true) - 1
 
 	r, x_in, x_out /*@, idx_@*/ := ExponentialJump(target, r, i /*@,idx@*/)
 
-	/*
+	/*@
 		ghost
-		if t2 > x_out{
-			found = x_out
+		if t2 >= x_out{
+			found := x_out
+			idx := idx_
+			continue_searching := false
 		}
-	*/
+	@*/
 
-	// Else, we need to investigate more into the BinarySearchStep
-	// We need to check the value of t2, and find the number smaller equal than t2 of the non-incl
-	res /*@, found_, idx_, t2_ @*/ := BinarySearchStep(target, r, x_in, x_out /*@, found, idx, t2@*/)
+	res /*@, found_, idx_, t2_ @*/ := BinarySearchStep(target, r, x_in, x_out /*@, found, idx, t2, continue_searching @*/)
+	/*@
+	ghost
+	if continue_searching {
+		found := found_
+		idx:= idx_
+		continue_searching := false
+	}
+	@*/
 
 	//The end goal
-	//	assert t_star == found_
-	// assert t_star == r[idx_]
-	return res /*@, idx_@*/
+	//	assert t_star == found
+	// assert t_star == r[idx]
+	return res /*@, idx@*/
 }
 
 // @ requires acc(r)
+// @ requires target >= 0
 // @ ensures acc(res)
 // @ preserves i-1 >= 0
 // @ preserves i-1 <= target || 1 <= len(r)
+// @ ensures x_out > target
 func ExponentialJump(target uint64, r []uint64, i uint64 /*@, ghost idx uint64@*/) (res []uint64, x_in uint64, x_out uint64 /*@, ghost index uint64@*/) {
 	if i-1 <= target {
+
 		r = append( /*@ perm(1/2), @*/ r, i-1)
+		//@ idx = idx + 1
 		return ExponentialJump(target, r, 2*i /*@, idx +1@*/)
 	}
 	x_out = i - 1
@@ -282,24 +372,23 @@ func ExponentialJump(target uint64, r []uint64, i uint64 /*@, ghost idx uint64@*
 // @ requires acc(r)
 // @ ensures acc(res)
 // @ ensures t2 == t2_
-func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost idx uint64, ghost found uint64, ghost t2 uint64@*/) (res []uint64 /*@, ghost index uint64, ghost found_element uint64, ghost t2_ uint64 @*/) {
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost idx uint64, ghost found uint64, ghost t2 uint64, ghost continue_searching bool@*/) (res []uint64 /*@, ghost index uint64, ghost found_element uint64, ghost t2_ uint64 @*/) {
 	if x_in+1 >= x_out {
 		return r /*@, idx, found, t2@*/
 	}
 	next := x_in + (x_out-x_in)/2
 	r = append( /*@ perm(1/2), @*/ r, next)
-
-	if next <= target {
-		return BinarySearchStep(target, r, next, x_out /*@, found, idx, t2@*/)
-	} else {
-		/*@
+	/*@
 		ghost
-		if t2 <= next{
+		if t2 <= next && continue_searching{
 			found = next
 			idx = idx + 1
 		}
-		@*/
-		return BinarySearchStep(target, r, x_in, next /*@, found, idx,t2@*/)
+	@*/
+	if next <= target {
+		return BinarySearchStep(target, r, next, x_out /*@, found, idx, t2, continue_searching@*/)
+	} else {
+		return BinarySearchStep(target, r, x_in, next /*@, found, idx,t2,continue_searching@*/)
 	}
 }
 
@@ -311,9 +400,9 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64, incl []uint64, no
 	//@ assume t2 != target && t2 > 0
 	//@ assume t2 > target
 
-	res /*@, t_star12@*/ := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
+	res /*@, idx1@*/ := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
 
-	// assume forall t2 uint64 :: t2 < target ==> tStar_pure(t2, target, true) elem incl
-	// assume forall t2 uint64 :: target < t2 ==> tStar_pure(target, t2, true) elem non_incl
+	// assume forall t2 uint64 :: t2 < target ==> tStar_pure(t2, target, true) elem r
+	// assume forall t2 uint64 :: target < t2 ==> tStar_pure(target, t2, true) elem r
 	return res, incl, non_incl
 }

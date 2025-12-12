@@ -64,7 +64,7 @@ func TestTStar_combined(t *testing.T) {
 	for _, tc := range tests {
 		got := TStar_combined(tc.t1, tc.t2, false, true)
 		if got != tc.want {
-			t.Errorf("TStar(%d, %d) = %d; want %d", tc.t1, tc.t2, got, tc.want)
+			t.Errorf("TStar_combined(%d, %d) = %d; want %d", tc.t1, tc.t2, got, tc.want)
 		}
 	}
 }
