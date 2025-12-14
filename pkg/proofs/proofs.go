@@ -188,7 +188,7 @@ func (ladder Ladder) hasNonInclusion(v VRFInput) bool {
 
 // @ trusted
 // @ requires acc(label)
-func (ladder Ladder) TerminateWithinGreatest(label []byte, targetVersion *uint32) bool {
+func (ladder Ladder) TerminateWithinGreatest(label []byte, targetVersion *uint64) bool {
 	expected := FullBinaryLadderSteps(*targetVersion)
 
 	for _, v := range expected {
@@ -208,7 +208,7 @@ func (ladder Ladder) TerminateWithinGreatest(label []byte, targetVersion *uint32
 
 // ensures exists v :: int v > int(*targetVersion) ==> res == 1 && err == nil
 // ensures exists v :: int v < int(*targetVersion) ==> res == -1 && err == nil
-func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint32) (res int, err error) { //-1, 0, 1, -2
+func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint64) (res int, err error) { //-1, 0, 1, -2
 
 	for _, v := range ladder.Inclusions {
 		if v.Version > int(*targetVersion) && bytes.Equal(v.Label, label) {

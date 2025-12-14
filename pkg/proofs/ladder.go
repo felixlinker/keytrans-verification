@@ -301,32 +301,30 @@ func findExpLevel(target uint64) (r uint64){
 
 ghost
 requires target >= 0
-requires k == findExpLevel(target)
-requires k > 0
-ensures target >= expJumpElement(k-1)
+ensures target >= (findExpLevel(target)>0 ? expJumpElement(findExpLevel(target)-1):0)
 decreases
 pure
-func TargetGeqXin(target uint64, k uint64) uint64 {
-	return let target_1_bounded := Log2FloorBounds(target+1) in
-		let k_pos := IntPow2Positive(k-1) in
+func TargetGeqXin(target uint64) uint64 {
+	return let k := findExpLevel(target) in
+		let target_1_bounded := Log2FloorBounds(target+1) in
+		let k_pos := (k > 0 ? IntPow2Positive(k-1):0) in
 		0
 }
 
 
 // Lemma: When t2 and target in the same bucket, t2 < x_out
-
-
 ghost
 requires target >= 0
 requires t2 > target
 requires Log2Floor_pure(t2+1) == Log2Floor_pure(target+1)
-requires k == findExpLevel(target)
-ensures t2 < expJumpElement(k)
+ensures t2 < expJumpElement(findExpLevel(target))
 decreases
 pure
-func T2LtXout_Upper(target uint64, t2 uint64, k uint64) uint64 {
+func T2LtXout_Upper(target uint64, t2 uint64) uint64 {
 	return let bound_t2_1 := Log2FloorBounds(t2+1) in
+		let k := findExpLevel(target) in
 		let k_pow := IntPow2Positive(k) in
+		let positive_k := IntPow2Positive(k) in
 		0
 }
 
@@ -395,6 +393,8 @@ decreases
 pure
 func TStar_IsExpJumpElement_WhenGap_Upper(target uint64, t2 uint64) uint64
 
+
+
 ghost
 requires t2 > 0
 requires t2 < target
@@ -404,17 +404,42 @@ pure
 func TStar_IsExpJumpElement_WhenGap_Lower(target uint64, t2 uint64) uint64
 
 
-
+ghost
+requires t2 >= 0
+requires t2 > target
+decreases
+pure
 func TStar_InLadder_Upper_Gap(target uint64, t2 uint64) uint64
 
+ghost
+requires target >= 0
+requires t2 > target
+requires Log2Floor_pure(t2+1) == Log2Floor_pure(target+1)
+decreases
+pure
+func TStar_inBinarySearchPortion_Upper(target uint64, t2 uint64) uint64{
+	return let apply_geq := TargetGeqXin(target) in
+	let apply_upper := T2LtXout_Upper(target, t2) in
+	0
+}
 
 
-
-func TStar_InLadder_Upper_SameBucket(target uint64, t2 uint64) uint64
+ghost
+requires target >= 0
+requires t2 >= 0
+requires t2 > target
+requires Log2Floor_pure(t2+1) == Log2Floor_pure(target+1)
+decreases
+pure
+func TStar_InLadder_Upper_SameBucket(target uint64, t2 uint64) uint64{
+	return let apply_binary_portion := TStar_inBinarySearchPortion_Upper(target, t2) in
+	0
+}
 
 @*/
 // ==============================================================================================
 /*@
+//TODO: Add lemma
 // Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target < t2
 ghost
 requires target > 0
@@ -426,6 +451,7 @@ pure
 func TStar_InLadder_Lower(target uint64, t2 uint64) uint64
 
 // Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target > t2
+
 ghost
 requires target > 0
 requires t2 >= 0
@@ -433,11 +459,16 @@ requires t2 > target
 ensures isInLadder(TStar_pure(target, t2), target)
 decreases
 pure
-func TStar_InLadder_Upper(target uint64, t2 uint64) uint64
+func TStar_InLadder_Upper(target uint64, t2 uint64) uint64{
+	return Log2Floor_pure(t2+1) > Log2Floor_pure(target + 1) ?
+		TStar_InLadder_Upper_Gap(target, t2) :
+		let apply_eq_nogap := Log2FloorEqWhenNotGap_Upper(target,t2) in
+		TStar_InLadder_Upper_SameBucket(target, t2)
+}
 
 @*/
 
-// ======================================Main Theorem============================================
+// ======================================Core Lemma============================================
 
 // @ requires target > 0
 // @ requires t2 > 0
@@ -493,30 +524,6 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
 	@*/
 
 	return res
-}
-
-// @ requires acc(r)
-// @ requires target >= 0
-// @ ensures acc(res)
-// @ preserves i-1 >= 0
-// @ preserves i-1 <= target || 1 <= len(r)
-// @ ensures x_out > target
-func ExponentialJump(target uint64, r []uint64, i uint64 /*@, ghost idx uint64@*/) (res []uint64, x_in uint64, x_out uint64 /*@, ghost index uint64@*/) {
-	if i-1 <= target {
-
-		r = append( /*@ perm(1/2), @*/ r, i-1)
-		//@ idx = idx + 1
-		return ExponentialJump(target, r, 2*i /*@, idx +1@*/)
-	}
-	x_out = i - 1
-
-	if len(r) > 0 {
-		x_in = r[len(r)-1]
-		r = append( /*@ perm(1/2), @*/ r, i-1)
-		//@ idx = idx + 1
-		return r, x_in, x_out /*@, idx@*/
-	}
-	return r, 0, x_out /*@, idx@*/
 }
 
 // @ requires acc(r)
