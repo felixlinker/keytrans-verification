@@ -395,10 +395,19 @@ decreases
 pure
 func TStar_IsExpJumpElement_WhenGap_Upper(target uint64, t2 uint64) uint64
 
-
+ghost
+requires t2 > 0
+requires t2 < target
+requires Log2Floor_pure(t2 +1) < Log2Floor_pure(target + 1)
+decreases
+pure
 func TStar_IsExpJumpElement_WhenGap_Lower(target uint64, t2 uint64) uint64
 
+
+
 func TStar_InLadder_Upper_Gap(target uint64, t2 uint64) uint64
+
+
 
 
 func TStar_InLadder_Upper_SameBucket(target uint64, t2 uint64) uint64
@@ -414,21 +423,17 @@ requires t2 < target
 //ensures isInLadder(TStar_pure(t2,target), target)
 decreases
 pure
-func TStar_InLadder_Lower(target uint64, t2 uint64) uint64{
-	return 0
-}
+func TStar_InLadder_Lower(target uint64, t2 uint64) uint64
 
 // Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target > t2
 ghost
 requires target > 0
 requires t2 >= 0
 requires t2 > target
-//ensures isInLadder(TStar_pure(t2,target), target)
+ensures isInLadder(TStar_pure(target, t2), target)
 decreases
 pure
-func TStar_InLadder_Upper(target uint64, t2 uint64) uint64{
-	return 0
-}
+func TStar_InLadder_Upper(target uint64, t2 uint64) uint64
 
 @*/
 
@@ -437,41 +442,47 @@ func TStar_InLadder_Upper(target uint64, t2 uint64) uint64{
 // @ requires target > 0
 // @ requires t2 > 0
 // @ ensures acc(r)
-// @ ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
-// @ ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
-func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx uint64@*/) {
+//
+// ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
+//
+// ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
+func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
-	//Find the index and the t_star from the array
-	//@ var found uint64
-	//@ idx = 0
-	//@ var continue_searching bool = true
+	// Denotes the length of the array r.
+	// @ ghost var k uint64 = 0
 
-	r, x_in, x_out /*@, idx_@*/ := ExponentialJump(target, r, i /*@,idx@*/)
-
-	/*@
-		ghost
-		if t2 >= x_out{
-			found := x_out
-			idx := idx_
-			continue_searching := false
-		}
-	@*/
-
-	res /*@, found_, idx_, t2_ @*/ := BinarySearchStep(target, r, x_in, x_out /*@, found, idx, t2, continue_searching @*/)
-	/*@
-	ghost
-	if continue_searching {
-		found := found_
-		idx:= idx_
-		continue_searching := false
+	//@ invariant acc(r)
+	//@ invariant 0 <= i - 1
+	//@ invariant i-1 <= target || 1 <= len(r)
+	//@ invariant i >= 1
+	//@ invariant k >= 0
+	//@ invariant i == IntPow2(k)
+	// @ invariant len(r) == int(k)
+	//@ invariant forall j int :: 0 <= j && j < len(r) ==> r[j] == expJumpElement(uint64(j))
+	for i-1 <= target {
+		r = append( /*@ perm(1/2), @*/ r, i-1)
+		i = i * 2
+		// @ k = k+1
+		//@ assert i-1 == expJumpElement(k)
 	}
-	@*/
+	// i is now the smallest power of two s.t. i-1 is larger than target
+	//@ assert len(r) > 0
+	var x_in uint64 = 0
+	if len(r) > 0 {
+		x_in = r[len(r)-1]
+		//@ assert x_in == expJumpElement(k-1)
+	}
 
-	//The end goal
-	//	assert t_star == found
-	// assert t_star == r[idx]
-	return res /*@, idx@*/
+	//@ assert expJumpElement(k) > expJumpElement(k-1)
+
+	x_out := i - 1
+	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
+	//@ assert x_out > x_in
+	//@ assert x_out >= x_in
+	res := BinarySearchStep(target, r, x_in, x_out)
+
+	return res
 }
 
 // @ requires acc(r)
@@ -500,24 +511,16 @@ func ExponentialJump(target uint64, r []uint64, i uint64 /*@, ghost idx uint64@*
 
 // @ requires acc(r)
 // @ ensures acc(res)
-// @ ensures t2 == t2_
-func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost idx uint64, ghost found uint64, ghost t2 uint64, ghost continue_searching bool@*/) (res []uint64 /*@, ghost index uint64, ghost found_element uint64, ghost t2_ uint64 @*/) {
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64) (res []uint64) {
 	if x_in+1 >= x_out {
-		return r /*@, idx, found, t2@*/
+		return r
 	}
 	next := x_in + (x_out-x_in)/2
 	r = append( /*@ perm(1/2), @*/ r, next)
-	/*@
-		ghost
-		if t2 <= next && continue_searching{
-			found = next
-			idx = idx + 1
-		}
-	@*/
 	if next <= target {
-		return BinarySearchStep(target, r, next, x_out /*@, found, idx, t2, continue_searching@*/)
+		return BinarySearchStep(target, r, next, x_out)
 	} else {
-		return BinarySearchStep(target, r, x_in, next /*@, found, idx,t2,continue_searching@*/)
+		return BinarySearchStep(target, r, x_in, next)
 	}
 }
 
@@ -530,27 +533,26 @@ func GetInt() (res uint64)
 @*/
 
 // @ requires target > 0
-func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64, incl []uint64, non_incl []uint64) {
+func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64) {
 
 	//@ t2 := GetInt()
 
 	//@ assume t2 != target && t2 > 0
 	//@ assume t2 > target
 
-	res /*@, idx1@*/ := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
+	res := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
 
 	// assume forall t2 uint64 :: t2 < target ==> tStar_pure(t2, target, true) elem r
 	// assume forall t2 uint64 :: target < t2 ==> tStar_pure(target, t2, true) elem r
-	return res, incl, non_incl
+	return res
 }
 
-// ==============================================================================================
 // ==============================================================================================
 // ==============================================================================================
 
 // @ requires target >=0
 // @ ensures acc(r)
-func FullBinaryLadderSteps(target uint64 /*@, ghost idx uint64 @*/) (r []uint64) {
+func FullBinaryLadderSteps_iterative(target uint64 /*@, ghost idx uint64 @*/) (r []uint64) {
 	//@ assume 0 <= target // see https://github.com/viperproject/gobra/issues/192
 	r = make([]uint64, 0)
 	var i uint64 = 1
