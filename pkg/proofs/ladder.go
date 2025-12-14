@@ -420,7 +420,7 @@ ghost
 requires target > 0
 requires t2 >= 0
 requires t2 < target
-//ensures isInLadder(TStar_pure(t2,target), target)
+ensures isInLadder(TStar_pure(t2,target), target)
 decreases
 pure
 func TStar_InLadder_Lower(target uint64, t2 uint64) uint64
@@ -441,11 +441,10 @@ func TStar_InLadder_Upper(target uint64, t2 uint64) uint64
 
 // @ requires target > 0
 // @ requires t2 > 0
+// @ requires target != t2
 // @ ensures acc(r)
-//
-// ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
-//
-// ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
+// @ ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
+// @ ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
 func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -482,6 +481,18 @@ func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []u
 	//@ assert x_out >= x_in
 	res := BinarySearchStep(target, r, x_in, x_out)
 
+	// Main core theorem to PROVE postcondition >.<
+
+	/*@
+	ghost
+	if t2 > target{
+		apply_core_Upper := TStar_InLadder_Upper(target, t2)
+	} else{
+		apply_core_Lower := TStar_InLadder_Lower(target, t2)
+	}
+
+	@*/
+
 	return res
 }
 
@@ -510,7 +521,9 @@ func ExponentialJump(target uint64, r []uint64, i uint64 /*@, ghost idx uint64@*
 }
 
 // @ requires acc(r)
+// @ requires x_in <= x_out
 // @ ensures acc(res)
+// @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64) (res []uint64) {
 	if x_in+1 >= x_out {
 		return r
