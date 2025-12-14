@@ -264,7 +264,7 @@ func tStar(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 }
 
 // ==================================================================================
-// ====================================ExponentialJump Phase==============================================
+// ====================================ExponentialJump Phase=========================
 /*@
 // Function: Computer 2ˆk - 1
 
@@ -332,7 +332,7 @@ func T2LtXout_Upper(target uint64, t2 uint64, k uint64) uint64 {
 
 
 
-//Lemma: Constraint the range of tStar is in the range of [x_in, x_out]
+//Lemma: Constraint the range of tStar is in the range of (x_in, x_out]
 
 ghost
 requires target >= 0
@@ -348,6 +348,8 @@ func isInBinarySearchPortion(v uint64, target uint64) (r bool){
 			  let x_in := (k > 0 ? expJumpElement(k-1) : 0) in
 				v > x_in && v < x_out
 }
+
+
 
 @*/
 // ==============================================================================================
@@ -366,10 +368,45 @@ func isInLadder(v uint64, target uint64) (r bool){
 		(exists j uint64 :: j >= 0 && j <= k && v == expJumpElement(j)) ||
 		isInBinarySearchPortion(v, target)
 }
+@*/
+
+// ==============================================================================================
+/*@
+ghost
+requires t1 > 0
+requires t2 > t1
+requires Log2Floor_pure(t2) > Log2Floor_pure(t1)
+ensures tStar_pure(t1,t2,true) == IntPow2(Log2Floor_pure(t1)+1)
+decreases
+pure
+func tStar_WhenGap_ReturnNextPow2(t1 uint64, t2 uint64) uint64{
+	return 0
+}
 
 
 
-// Core Lemma: Shows that the tStar is detected when running FBLS(target)
+ghost
+requires target >= 0
+requires t2 > target
+requires Log2Floor_pure(t2 +1)> Log2Floor_pure(target + 1)
+ensures TStar_pure(target,t2) == expJumpElement(Log2Floor_pure(target +1)+1)
+ensures TStar_pure(target,t2) == expJumpElement(findExpLevel(target))
+decreases
+pure
+func TStar_IsExpJumpElement_WhenGap_Upper(target uint64, t2 uint64) uint64
+
+
+func TStar_IsExpJumpElement_WhenGap_Lower(target uint64, t2 uint64) uint64
+
+func TStar_InLadder_Upper_Gap(target uint64, t2 uint64) uint64
+
+
+func TStar_InLadder_Upper_SameBucket(target uint64, t2 uint64) uint64
+
+@*/
+// ==============================================================================================
+/*@
+// Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target < t2
 ghost
 requires target > 0
 requires t2 >= 0
@@ -381,6 +418,18 @@ func TStar_InLadder_Lower(target uint64, t2 uint64) uint64{
 	return 0
 }
 
+// Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target > t2
+ghost
+requires target > 0
+requires t2 >= 0
+requires t2 > target
+//ensures isInLadder(TStar_pure(t2,target), target)
+decreases
+pure
+func TStar_InLadder_Upper(target uint64, t2 uint64) uint64{
+	return 0
+}
+
 @*/
 
 // ======================================Main Theorem============================================
@@ -388,7 +437,8 @@ func TStar_InLadder_Lower(target uint64, t2 uint64) uint64{
 // @ requires target > 0
 // @ requires t2 > 0
 // @ ensures acc(r)
-// ensures target < t2 ==> tStar_pure(target+1, t2+1, true )-1 == r[idx]
+// @ ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
+// @ ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
 func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx uint64@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -396,10 +446,6 @@ func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []u
 	//@ var found uint64
 	//@ idx = 0
 	//@ var continue_searching bool = true
-
-	//@ assume t2 > target
-
-	// t_star := tStar_pure(target+1, t2+1, true) - 1
 
 	r, x_in, x_out /*@, idx_@*/ := ExponentialJump(target, r, i /*@,idx@*/)
 
@@ -504,15 +550,18 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64, incl []uint64, no
 
 // @ requires target >=0
 // @ ensures acc(r)
-func FullBinaryLadderSteps(target uint32 /*@, ghost idx uint64 @*/) (r []uint32) {
+func FullBinaryLadderSteps(target uint64 /*@, ghost idx uint64 @*/) (r []uint64) {
 	//@ assume 0 <= target // see https://github.com/viperproject/gobra/issues/192
-	r = make([]uint32, 0)
-	var i uint32 = 1
-	// @ k := 0
+	r = make([]uint64, 0)
+	var i uint64 = 1
+	// @ ghost var k uint64 = 0
 
 	//@ invariant acc(r)
 	//@ invariant 0 <= i - 1
 	//@ invariant i-1 <= target || 1 <= len(r)
+	//@ invariant i >= 1
+	//@ invariant k >= 0
+	//@ invariant i == IntPow2(k)
 	for i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
 		//@ old_i := i
