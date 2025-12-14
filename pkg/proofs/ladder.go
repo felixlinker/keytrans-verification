@@ -445,7 +445,7 @@ func TStar_InLadder_Upper(target uint64, t2 uint64) uint64
 // @ ensures acc(r)
 // @ ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
 // @ ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
-func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
+func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
 	// Denotes the length of the array r.
@@ -477,7 +477,6 @@ func FullBinaryLadderSteps_recurse(target uint64 /*@, ghost t2 uint64@*/) (r []u
 
 	x_out := i - 1
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
-	//@ assert x_out > x_in
 	//@ assert x_out >= x_in
 	res := BinarySearchStep(target, r, x_in, x_out)
 
@@ -546,18 +545,22 @@ func GetInt() (res uint64)
 @*/
 
 // @ requires target > 0
-func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64) {
+// @ ensures forall t2 uint64 :: t2 < target && t2 >=0 ==> isInLadder(TStar_pure(t2, target), target)
+// @ ensures forall t2 uint64 :: target < t2 && target >= 0 ==> isInLadder(TStar_pure(target, t2), target)
+func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64) {
 
 	//@ t2 := GetInt()
 
-	//@ assume t2 != target && t2 > 0
+	//@ assume t2 != target
 	//@ assume t2 > target
+	res := FullBinaryLadderSteps(target /*@, t2 @*/)
 
-	res := FullBinaryLadderSteps_recurse(target /*@, t2 @*/)
+	//@ assert isInLadder(TStar_pure(target, t2), target)
 
-	// assume forall t2 uint64 :: t2 < target ==> tStar_pure(t2, target, true) elem r
-	// assume forall t2 uint64 :: target < t2 ==> tStar_pure(target, t2, true) elem r
-	return res
+	//@ assume t2 < target
+	res2 := FullBinaryLadderSteps(target /*@, t2 @*/)
+	// @ assert isInLadder(TStar_pure(t2, target), target)
+	return res, res2
 }
 
 // ==============================================================================================
