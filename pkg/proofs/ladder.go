@@ -100,19 +100,6 @@ func IntPow2(exp uint64) (r uint64) {
 }
 
 
-// Lemma: Monotonicity of the power function: x > y ==> 2^{x} > 2^{y}
-
-ghost
-requires exp1 >= 0
-requires exp1 < exp2
-ensures IntPow2(exp1) < IntPow2(exp2)
-decreases exp2
-pure
-func IntPow2IncLemma(exp1 uint64, exp2 uint64) (r bool){
-	return exp2 == exp1 + 1 ? true : (IntPow2IncLemma(exp1, exp2-1))
-}
-
-
 // Lemma: Power of 2 always positive
 
 ghost
@@ -315,7 +302,7 @@ func findExpLevel(target uint64) (r uint64){
 
 ghost
 requires target >= 0
-ensures target >= (findExpLevel(target)>0 ? expJumpElement(findExpLevel(target)-1):0)
+ensures target >= (let k := findExpLevel(target) in k >0 ? expJumpElement(k-1):0)
 decreases
 pure
 func TargetGeqXin(target uint64) uint64 {
@@ -348,10 +335,6 @@ func T2LtXout_Upper(target uint64, t2 uint64) uint64 {
 
 ghost
 requires target >= 0
-ensures r == (let k := findExpLevel(target) in
-			  let x_out := expJumpElement(k) in
-			  let x_in := (k > 0 ? expJumpElement(k-1) : 0) in
-				v > x_in && v < x_out)
 decreases
 pure
 func isInBinarySearchPortion(v uint64, target uint64) (r bool){
@@ -361,13 +344,15 @@ func isInBinarySearchPortion(v uint64, target uint64) (r bool){
 				v > x_in && v < x_out
 }
 
-
-
 @*/
 // ==============================================================================================
 
 /*@
 //Core Lemma: Shows that k is in the search binary ladder r
+//An element is in ladder if it's either
+//1. An expJumpElement (from the exponential jump phase) OR
+//2. An element hit in the binary searching phase (we call it binary search portion here)
+
 ghost
 requires target >= 0
 ensures r == (let k := findExpLevel(target) in
@@ -380,21 +365,22 @@ func isInLadder(v uint64, target uint64) (r bool){
 		(exists j uint64 :: j >= 0 && j <= k && v == expJumpElement(j)) ||
 		isInBinarySearchPortion(v, target)
 }
+@*/
 
+// ==============================================================================================
+/*@
+//Lemma: Recursively check if v == expJumpElement(j) for some j in [0,k]
 
 ghost
 requires k >= 0
 decreases k
 pure
 func isExpJumpElementUpToK(v uint64, k uint64) bool{
-	return v == expJumpElement(k) || (k > 0 &&  isExpJumpElementUpToK(v, k-1))
+	return v == expJumpElement(k) || (k > 0 && isExpJumpElementUpToK(v, k-1))
 }
 
+//Lemma: If there is a gap, then return the next power of 2.
 
-@*/
-
-// ==============================================================================================
-/*@
 ghost
 requires t1 > 0
 requires t2 > t1
@@ -406,6 +392,8 @@ func tStar_WhenGap_ReturnNextPow2(t1 uint64, t2 uint64) uint64{
 	return 0
 }
 
+//Lemma: If v == expJumpElement(j) and j <= k, then isExpJumpElementUpToK(v,k) holds
+// Provides explicit witness for the recursive predicate
 
 ghost
 requires k>= 0
@@ -420,20 +408,8 @@ func expJumpElementInRange(v uint64, k uint64, j uint64) uint64{
 }
 
 
-ghost
-requires target >= 0
-requires t2 > target
-requires Log2Floor_pure(t2 +1)> Log2Floor_pure(target + 1)
-ensures TStar_pure(target,t2) == expJumpElement(Log2Floor_pure(target +1)+1)
-ensures TStar_pure(target,t2) == expJumpElement(findExpLevel(target))
-decreases
-pure
-func TStar_IsExpJumpElement_WhenGap_Upper(target uint64, t2 uint64) uint64 {
-		return let apply_gap_pow := tStar_WhenGap_ReturnNextPow2(target + 1, t2 +1) in
-		let res_pos := IntPow2Positive(Log2Floor_pure(t2+1)+1) in
-		0
-}
 
+//Lemma LOWER: In the gap case, TStar returns expJumpElement(j) where j == Log2Floor(t2 +1)+1
 
 ghost
 requires target > 0
@@ -451,6 +427,7 @@ func TStar_IsExpJumpElement_WhenGap_Lower(target uint64, t2 uint64) uint64{
 
 
 
+//Lemma UPPER: TStar returns expJumpElement(k), which is in the ladder
 
 ghost
 requires target >= 0
@@ -468,6 +445,7 @@ func TStar_InLadder_Upper_Gap(target uint64, t2 uint64) uint64{
 }
 
 
+//Lemma LOWER: TStar returns expJumpElement(j), j <= k
 
 ghost
 requires t2 >= 0
@@ -486,7 +464,7 @@ func TStar_InLadder_Lower_Gap(target uint64, t2 uint64) uint64{
 }
 
 
-
+//Lemma UPPER: Shows TStar is in the range of [x_in, x_out] (binary search portion)
 
 ghost
 requires target >= 0
@@ -499,6 +477,9 @@ func TStar_inBinarySearchPortion_Upper(target uint64, t2 uint64) uint64{
 	let apply_upper := T2LtXout_Upper(target, t2) in
 	0
 }
+
+
+//Lemma LOWER: Shows TStar is in the range of [x_in, x_out] (binary search portion)
 
 
 ghost
@@ -517,6 +498,8 @@ func T2GeqXin_Lower(target uint64, t2 uint64) uint64{
 }
 
 
+//Lemma: Proves target < x_out (derived from the findExpLevel postcondition)
+
 ghost
 decreases
 requires target >= 0
@@ -527,7 +510,7 @@ func TargetLtXout(target uint64) uint64{
 }
 
 
-
+// Lemma LOWER: TStar is in the binary search portion
 ghost
 requires target >= 0
 requires t2 >= 0
@@ -542,6 +525,7 @@ func TStar_inBinarySearchPortion_Lower(target uint64, t2 uint64) uint64{
 }
 
 
+// Lemma LOWER: TStar is in the binary search portion
 
 ghost
 requires target >= 0
@@ -555,6 +539,8 @@ func TStar_InLadder_Lower_SameBucket(target uint64, t2 uint64) uint64{
 		0
 }
 
+
+//Lemma UPPER: TStar is in the binary search portion
 
 ghost
 requires target >= 0
@@ -572,6 +558,8 @@ func TStar_InLadder_Upper_SameBucket(target uint64, t2 uint64) uint64{
 // ==============================================================================================
 /*@
 // Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target < t2
+// For any t2 < target, TStar(t2, target) is in the ladder
+
 ghost
 requires target > 0
 requires t2 >= 0
@@ -586,7 +574,8 @@ func TStar_InLadder_Lower(target uint64, t2 uint64) uint64{
 		TStar_InLadder_Lower_SameBucket(target, t2)
 }
 
-// Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target > t2
+// Core Lemma 2: Shows that the tStar is detected when running FBLS(target), target > t2
+// For any t2 > target, TStar(t2, target) is in the ladder
 
 ghost
 requires target > 0
@@ -619,9 +608,6 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
 	//@ ghost var k uint64 = 0
 
 	//@ invariant acc(r)
-	//@ invariant 0 <= i - 1
-	//@ invariant i-1 <= target || 1 <= len(r)
-	//@ invariant i >= 1
 	//@ invariant k >= 0
 	//@ invariant i == IntPow2(k)
 	// @ invariant len(r) == int(k)
@@ -633,18 +619,15 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
 		//@ assert i-1 == expJumpElement(k)
 	}
 	// i is now the smallest power of two s.t. i-1 is larger than target
-	//@ assert len(r) > 0
+
 	var x_in uint64 = 0
 	if len(r) > 0 {
 		x_in = r[len(r)-1]
 		//@ assert x_in == expJumpElement(k-1)
 	}
 
-	//@ assert expJumpElement(k) > expJumpElement(k-1)
-
 	x_out := i - 1
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
-	//@ assert x_out >= x_in
 	res := BinarySearchStep(target, r, x_in, x_out)
 
 	// Main core theorem to PROVE postcondition >.<
@@ -708,6 +691,8 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64) {
 
 // ==============================================================================================
 // ==============================================================================================
+
+//Use it as a reference, we don't need this algorithm anymore
 
 // @ requires target >=0
 // @ ensures acc(r)

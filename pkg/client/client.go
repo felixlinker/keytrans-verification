@@ -2,7 +2,6 @@ package client
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
@@ -172,20 +171,19 @@ func CheckGreatest(prefixTree PT, label []byte, t uint32) (int, error) {
 
 // Show: forall root, root': root == root' ==> VerifyLatestKey(root) == VerifyLatestKey(root')
 // ensures forall query resp resp' Searchresponse resp.full_Tree_head == resp'.full_Tree_head ==> VerifyLatestKey(query, resp)== VerifyLatestKey(query, resp) // root version matching
-// How do I make these line by line invariants? I don't think there is anything I can do with gobra tho?? How about making a function
 
 // Access to the structs. We only need read priviledge with query
-//@ requires acc(st, _)
-//@ requires acc(resp, _)
-//@ requires acc(query, _)
-//@ pure
+
+// @ requires acc(st)
+// @ requires acc(resp)
+// @ requires acc(query)
+// @ pure
 func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse) (res *proofs.UpdateValue, err error) {
 	t := resp.Version
-	
+
 	search_tree := MkImplicitBinarySearchTree(st.Size)
 	frontiers := search_tree.FrontierNodes()
 	terminalLogEntry := -1
-
 
 	for _, frontier := range frontiers {
 		prefixtree_proof := resp.Inclusion.VRFProofs[frontier]
@@ -209,8 +207,6 @@ func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse) (
 	}
 
 	// TODO: Contact monitoring mode
-
-	fmt.Println("Version:", t)
 
 	return nil, nil
 }
