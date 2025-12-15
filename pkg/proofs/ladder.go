@@ -1,6 +1,6 @@
 package proofs
 
-// ===========================================================================
+// ===========================================================================================
 // =====================================Log2Floor Lemmas======================================
 /*@
 // Function: Computes Log2Floor(n)
@@ -56,7 +56,7 @@ func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 		Log2FloorMonotonic(a/2,b/2)))
 }
 
-//Lemma: When there is no gap, i.e. the log2Floor are equal, establish equality
+//Lemma: When there is no gap, i.e. the log2Floor are equal, establish equality (triangle inequality)
 
 ghost
 requires target >= 0
@@ -68,6 +68,20 @@ pure
 func Log2FloorEqWhenNotGap_Upper(target uint64, t2 uint64) uint64{
 	return Log2FloorMonotonic(target + 1, t2 + 1)
 }
+
+//Lemma: When there is no gap, i.e. the log2Floor are equal, establish equality (triangle inequality)
+ghost
+requires target > 0
+requires t2 >= 0
+requires t2 < target
+requires Log2Floor_pure(t2 + 1) >=  Log2Floor_pure(target + 1)
+ensures Log2Floor_pure(t2 + 1) == Log2Floor_pure(target + 1)
+decreases
+pure
+func Log2FloorEqWhenNotGap_Lower(target uint64, t2 uint64) uint64{
+	return Log2FloorMonotonic(t2 + 1, target + 1)
+}
+
 
 
 @*/
@@ -366,6 +380,17 @@ func isInLadder(v uint64, target uint64) (r bool){
 		(exists j uint64 :: j >= 0 && j <= k && v == expJumpElement(j)) ||
 		isInBinarySearchPortion(v, target)
 }
+
+
+ghost
+requires k >= 0
+decreases k
+pure
+func isExpJumpElementUpToK(v uint64, k uint64) bool{
+	return v == expJumpElement(k) || (k > 0 &&  isExpJumpElementUpToK(v, k-1))
+}
+
+
 @*/
 
 // ==============================================================================================
@@ -382,6 +407,18 @@ func tStar_WhenGap_ReturnNextPow2(t1 uint64, t2 uint64) uint64{
 }
 
 
+ghost
+requires k>= 0
+requires j >= 0
+requires j<= k
+requires v == expJumpElement(j)
+ensures isExpJumpElementUpToK(v,k)
+decreases k - j
+pure
+func expJumpElementInRange(v uint64, k uint64, j uint64) uint64{
+	return j == k ? 0 : expJumpElementInRange(v,k-1, j)
+}
+
 
 ghost
 requires target >= 0
@@ -391,25 +428,65 @@ ensures TStar_pure(target,t2) == expJumpElement(Log2Floor_pure(target +1)+1)
 ensures TStar_pure(target,t2) == expJumpElement(findExpLevel(target))
 decreases
 pure
-func TStar_IsExpJumpElement_WhenGap_Upper(target uint64, t2 uint64) uint64
+func TStar_IsExpJumpElement_WhenGap_Upper(target uint64, t2 uint64) uint64 {
+		return let apply_gap_pow := tStar_WhenGap_ReturnNextPow2(target + 1, t2 +1) in
+		let res_pos := IntPow2Positive(Log2Floor_pure(t2+1)+1) in
+		0
+}
+
+
+ghost
+requires target > 0
+requires t2 >= 0
+requires t2 < target
+requires Log2Floor_pure(t2 +1) < Log2Floor_pure(target + 1)
+ensures TStar_pure(t2,target) == expJumpElement(Log2Floor_pure(t2 + 1) + 1)
+decreases
+pure
+func TStar_IsExpJumpElement_WhenGap_Lower(target uint64, t2 uint64) uint64{
+	return let apply_gap_pow := tStar_WhenGap_ReturnNextPow2(t2 + 1, target +1) in
+		let res_pos := IntPow2Positive(Log2Floor_pure(target+1)+1) in
+		0
+}
+
 
 
 
 ghost
+requires target >= 0
 requires t2 > 0
-requires t2 < target
-requires Log2Floor_pure(t2 +1) < Log2Floor_pure(target + 1)
+requires t2 > target
+requires Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)
+ensures TStar_pure(target, t2) == (let k := findExpLevel(target) in expJumpElement(k))
 decreases
 pure
-func TStar_IsExpJumpElement_WhenGap_Lower(target uint64, t2 uint64) uint64
+func TStar_InLadder_Upper_Gap(target uint64, t2 uint64) uint64{
+	return let apply_gap_pow := tStar_WhenGap_ReturnNextPow2(target + 1, t2 +1) in
+	let res_pos := IntPow2Positive(Log2Floor_pure(t2+1)+1) in
+	0
+
+}
+
 
 
 ghost
 requires t2 >= 0
-requires t2 > target
+requires t2 < target
+requires Log2Floor_pure(target + 1) > Log2Floor_pure(t2 +1)
+ensures isInLadder(TStar_pure(t2,target), target)
 decreases
 pure
-func TStar_InLadder_Upper_Gap(target uint64, t2 uint64) uint64
+func TStar_InLadder_Lower_Gap(target uint64, t2 uint64) uint64{
+	return let j:= Log2Floor_pure(t2+1) +1 in
+	let k := findExpLevel(target) in
+	let lemma_monotonicity := Log2FloorMonotonic(t2 + 1, target + 1) in
+	let lemma_gap_lower := TStar_IsExpJumpElement_WhenGap_Lower(target, t2) in
+	let exp_in_range := expJumpElementInRange(TStar_pure(t2, target), k , j) in
+	0
+}
+
+
+
 
 ghost
 requires target >= 0
@@ -421,6 +498,61 @@ func TStar_inBinarySearchPortion_Upper(target uint64, t2 uint64) uint64{
 	return let apply_geq := TargetGeqXin(target) in
 	let apply_upper := T2LtXout_Upper(target, t2) in
 	0
+}
+
+
+ghost
+requires target > 0
+requires t2 >=0
+requires t2 < target
+requires Log2Floor_pure(t2+1) == Log2Floor_pure(target+1)
+ensures t2 >= let k := findExpLevel(target) in k > 0 ? expJumpElement(k-1):0
+decreases
+pure
+func T2GeqXin_Lower(target uint64, t2 uint64) uint64{
+	return let k := findExpLevel(target) in
+	let bound_t2_1 := Log2FloorBounds(t2 + 1) in
+	let k_pos := (k > 0 ? IntPow2Positive(k-1): 0) in
+	0
+}
+
+
+ghost
+decreases
+requires target >= 0
+ensures target < let k := findExpLevel(target) in expJumpElement(k)
+pure
+func TargetLtXout(target uint64) uint64{
+	return 0
+}
+
+
+
+ghost
+requires target >= 0
+requires t2 >= 0
+requires t2 < target
+requires Log2Floor_pure(t2+1) == Log2Floor_pure(target+1)
+decreases
+pure
+func TStar_inBinarySearchPortion_Lower(target uint64, t2 uint64) uint64{
+	return let t2_geq_x_in := T2GeqXin_Lower(target, t2) in
+	let target_lt_x_out := TargetLtXout(target) in
+	0
+}
+
+
+
+ghost
+requires target >= 0
+requires t2 >= 0
+requires t2 < target
+requires Log2Floor_pure(t2+1) == Log2Floor_pure(target+1)
+decreases
+pure
+func TStar_InLadder_Lower_SameBucket(target uint64, t2 uint64) uint64{
+	return let apply_binary_portion := TStar_inBinarySearchPortion_Lower(target, t2) in
+		0
 }
 
 
@@ -439,7 +571,6 @@ func TStar_InLadder_Upper_SameBucket(target uint64, t2 uint64) uint64{
 @*/
 // ==============================================================================================
 /*@
-//TODO: Add lemma
 // Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target < t2
 ghost
 requires target > 0
@@ -448,7 +579,12 @@ requires t2 < target
 ensures isInLadder(TStar_pure(t2,target), target)
 decreases
 pure
-func TStar_InLadder_Lower(target uint64, t2 uint64) uint64
+func TStar_InLadder_Lower(target uint64, t2 uint64) uint64{
+	return	Log2Floor_pure(t2+1) < Log2Floor_pure(target + 1) ?
+		TStar_InLadder_Lower_Gap(target, t2) :
+		let apply_eq_nogap := Log2FloorEqWhenNotGap_Lower(target,t2) in
+		TStar_InLadder_Lower_SameBucket(target, t2)
+}
 
 // Core Lemma 1: Shows that the tStar is detected when running FBLS(target), target > t2
 
@@ -480,7 +616,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
 	// Denotes the length of the array r.
-	// @ ghost var k uint64 = 0
+	//@ ghost var k uint64 = 0
 
 	//@ invariant acc(r)
 	//@ invariant 0 <= i - 1
