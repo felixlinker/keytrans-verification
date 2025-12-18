@@ -65,6 +65,35 @@ func TestFullBinaryLadderSteps(t *testing.T) {
 	}
 }
 
+func TestFullBinaryLadderSteps_cursed(t *testing.T) {
+	tests := []struct {
+		target uint64
+		want   []uint64
+	}{
+		{target: 0, want: []uint64{0, 1}},
+		{target: 1, want: []uint64{0, 1, 3, 2}},
+		{target: 2, want: []uint64{0, 1, 3, 2}},
+		{target: 3, want: []uint64{0, 1, 3, 7, 5, 4}},
+		{target: 15, want: []uint64{0, 1, 3, 7, 15, 31, 23, 19, 17, 16}},
+		{target: 8, want: []uint64{0, 1, 3, 7, 15, 11, 9, 8}},
+		{target: 10, want: []uint64{0, 1, 3, 7, 15, 11, 9, 10}},
+	}
+
+	for _, tc := range tests {
+		got := FBLS_cursed(tc.target)
+		if len(got) != len(tc.want) {
+			t.Errorf("FullBinaryLadderSteps(%d) = %v; want %v", tc.target, got, tc.want)
+		} else {
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("FullBinaryLadderSteps(%d) = %v; want %v", tc.target, got, tc.want)
+					break
+				}
+			}
+		}
+	}
+}
+
 /*
 func TestFullBinaryLadderStepsRecurse(t *testing.T) {
 	tests := []struct {

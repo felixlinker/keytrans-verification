@@ -427,13 +427,14 @@ func TStar_IsExpJumpElement_WhenGap_Lower(target uint64, t2 uint64) uint64{
 
 
 
-//Lemma UPPER: TStar returns expJumpElement(k), which is in the ladder
+//Lemma UPPER: TStar returns expJumpElement(k), which is a gap and in ladder
 
 ghost
 requires target >= 0
 requires t2 > 0
 requires t2 > target
 requires Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)
+ensures TStar_pure(target, t2) == expJumpElement(Log2Floor_pure(target + 1) + 1)
 ensures TStar_pure(target, t2) == (let k := findExpLevel(target) in expJumpElement(k))
 decreases
 pure
@@ -625,12 +626,13 @@ func isOnPath (v uint64,target uint64, x_in uint64, x_out uint64) bool{
 // @ requires target != t2
 // @ ensures acc(r)
 //
-//	ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
-//	ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
+//			ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
+//			ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
 //
-// @ ensures 0<=idx && idx < len(r)
-// @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
-// @ ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
+//		 ensures 0<=idx && idx < len(r)
+//
+//	 ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
+//	 ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -650,6 +652,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 		//@ k = k+1
 		//@ assert i-1 == expJumpElement(k)
 	}
+
 	// i is now the smallest power of two s.t. i-1 is larger than target
 	//@ assert i > target
 	// assert k > Log2Floor_pure(target)
@@ -660,8 +663,10 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	}
 
 	x_out := i - 1
+	//@ assert x_out == expJumpElement(k)
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 	//@ assert r[int(k)] == expJumpElement(k)
+	// assert k == findExpLevel(target)
 
 	/*@
 		ghost
@@ -674,8 +679,8 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 			assert t2 > target
 			idx = len(r) - 1
 			assert r[idx] == i-1
-			assert TStar_pure(target, t2) == i - 1
-			assert r[idx] == TStar_pure(target,t2)
+			//assert TStar_pure(target, t2) == i - 1
+			//assert r[idx] == TStar_pure(target,t2)
 		}
 	@*/
 	res /*@, index@*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2 @*/)
@@ -705,6 +710,8 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 
 // @ requires acc(r)
 // @ requires x_in <= x_out
+// @ requires target >= 0
+// @ requires t2 >= 0
 // @ ensures acc(res)
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64@*/) (res []uint64 /*@, ghost index int@*/) {
@@ -745,6 +752,61 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64) {
 	res2 /*@, idx2@*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 	//  assert isInLadder(TStar_pure(t2, target), target)
 	return res, res2
+}
+
+// @ requires target > 0
+// @ requires t2 > 0
+// @ requires target != t2
+// @ ensures acc(r)
+// @ ensures idx >= 0 && idx < len(r)
+// @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
+// @ ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
+func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
+	r = make([]uint64, 0)
+
+	k := Log2Floor(target+1) + 1
+	//@ assert k == findExpLevel(target)
+
+	var j uint64 = 0
+	//@ idx = 0
+
+	//@ invariant acc(r)
+	//@ invariant j >= 0 && j <= k
+	//@ invariant len(r) == int(j)
+	//@ invariant forall i uint64 :: 0 <= i && i < len(r) ==> r[i] == expJumpElement(i)
+	for j < k {
+		element := PowOf2(j) - 1
+		r = append( /*@ perm(1/2), @*/ r, element)
+		//@ assert element == expJumpElement(j)
+		j = j + 1
+	}
+
+	//@ assert len(r) == int(k)
+	x_out := PowOf2(k) - 1
+	//@ assert x_out == expJumpElement(k)
+
+	//@ assert k >= 1
+	x_in := PowOf2(k-1) - 1
+	//@ assert x_in == expJumpElement(k-1)
+
+	r = append( /*@ perm(1/2), @*/ r, x_out)
+	//@ assert len(r) > 0
+	//@ assert r[k] == expJumpElement(k)
+
+	/*@
+	ghost if t2 > target{
+		if Log2Floor_pure(t2 +1) > Log2Floor_pure(target +1){
+			TStar_InLadder_Upper_Gap(target, t2)
+			idx = int(k)
+			assert r[idx] == TStar_pure(target,t2)
+		}
+	}
+	@*/
+
+	r /*@, idx @*/ = BinarySearchStep(target, r, x_in, x_out /*@, t2@*/)
+	//@ assume idx >= 0 && idx < len(r)
+	return r /*@, idx@*/
+
 }
 
 // ==============================================================================================
