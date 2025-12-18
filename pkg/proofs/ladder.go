@@ -685,12 +685,12 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64) {
 
 	//@ assume t2 != target
 	//@ assume t2 > target
-	res /*@, _ @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
+	res /*@, _ @*/ := fullBinaryLadderSteps(target /*@, t2 @*/)
 
 	// assert isInLadder(TStar_pure(target, t2), target)
 
 	//@ assume t2 < target
-	res2 /*@, _ @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
+	res2 /*@, _ @*/ := fullBinaryLadderSteps(target /*@, t2 @*/)
 	// assert isInLadder(TStar_pure(t2, target), target)
 	return res, res2
 }
