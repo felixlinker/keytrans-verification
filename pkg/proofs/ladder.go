@@ -240,19 +240,20 @@ func tStar(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 			return PowOf2(i_high)
 		}
 	} else {
-		// i_high == i_low (same log bucket)
-		low_ := PowOf2(i_low)
+		return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
+	}
+}
 
-		if t1 == low_ {
-			// t1 is exactly a power of 2, so t1 - low_ = 0
-			// In float version: log2(0) = -Inf, so i_high - i_low > 0 is always true
-			// Since pick_lowest = false in recursion, it returns 2^i_high
-			// where i_high = floor(log2(t2 - low_))
-			return low_ + PowOf2(Log2Floor(t2-low_))
+func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64 {
+	if x_out <= t2 {
+		return x_out
+	} else {
+		next := x_in + (x_out-x_in)/2
+		if next <= t1 {
+			return tStarRec(t1, t2, next, x_out)
+		} else {
+			return tStarRec(t1, t2, x_in, next)
 		}
-
-		// t1 > low_, safe to recurse normally
-		return low_ + tStar(t1-low_, t2-low_, false)
 	}
 }
 
