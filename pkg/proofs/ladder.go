@@ -353,7 +353,10 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 		@*/
 	}
 
-	return BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, rec_idx, rec_acc_x_out @*/)
+	// @ assert rec_acc_x_out <= t2 ==> r[rec_idx] == tStarRec_pure(target, t2, x_in, rec_acc_x_out)
+	res /*@, idx @*/ = BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, rec_idx, rec_acc_x_out @*/)
+	// @ assert res[idx] == tStarRec_pure(target, t2, x_in, rec_acc_x_out)
+	return res /*@, idx @*/
 }
 
 /*@
