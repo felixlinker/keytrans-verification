@@ -5,7 +5,6 @@ package proofs
 /*@
 // Function: Computes Log2Floor(n)
 ghost
-requires n > 0
 ensures r >= 0
 ensures n >= 1 ==> IntPow2(r) <= n && IntPow2(r+1) > n && r < n
 ensures n == 1 ==> r == 0
