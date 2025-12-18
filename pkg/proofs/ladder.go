@@ -609,14 +609,14 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ invariant k > 1 ==> let apply_mon := Log2FloorMonotonic(k - 1, target) in k - 1 <= Log2Floor_pure(target)
 	//@ invariant len(r) > 0 ==> r[k-1] == i / 2
 	//@ invariant i / 2 <= target
-	for i-1 <= target {
+	for i-1 < target {
 		r = append( /*@ perm(1/2), @*/ r, i)
 		i = i * 2
 		// @ k = k+1
 	}
 	// i is now the smallest power of two s.t. i-1 is larger than target
 
-	var x_in uint64 = 0
+	var x_in uint64 = 1
 	if len(r) > 0 {
 		x_in = r[len(r)-1]
 	}
@@ -643,7 +643,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 }
 
 func FullBinaryLadderSteps(target uint64) (r []uint64) {
-	steps /*@, j @*/ := fullBinaryLadderSteps(target /*@, target + 1 @*/)
+	steps /*@, j @*/ := fullBinaryLadderSteps(target + 1 /*@, target + 2 @*/)
 	for i := range steps {
 		steps[i] = steps[i] - 1
 	}
