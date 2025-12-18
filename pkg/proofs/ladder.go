@@ -164,12 +164,7 @@ ensures t1 < r && r<=t2
 decreases
 pure
 func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
-	return	let i_low := Log2Floor_pure(t1) in
-					let i_high := Log2Floor_pure(t2) in
-						i_high > i_low ?
-							//Here, we need to tell Gobra that IntPow2(i_low +1) <= IntPow2(i_high)
-							(let apply_gap := IntPow2GapLemma(i_low, i_high) in IntPow2(i_low + 1)) :
-							tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low + 1))
+	return let i_low := Log2Floor_pure(t1) in tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low + 1))
 }
 
 ghost
@@ -237,13 +232,7 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ ensures t_star == tStar_pure(t1,t2)
 func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	i_low := Log2Floor(t1)
-	i_high := Log2Floor(t2)
-
-	if i_high > i_low {
-		return PowOf2(i_low + 1)
-	} else {
-		return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
-	}
+	return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
 }
 
 // @ requires 0 < t1
