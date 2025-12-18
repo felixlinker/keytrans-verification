@@ -149,7 +149,7 @@ ensures r <= t2
 decreases
 pure
 func TStar_pure(t1 uint64, t2 uint64) (r uint64){
-	return tStar_pure(t1 +1, t2+1, true)- 1
+	return tStar_pure(t1 +1, t2+1)- 1
 }
 
 @*/
@@ -161,26 +161,33 @@ requires t1 > 0
 requires t2 > t1
 ensures r >= 1
 ensures t1 < r && r<=t2
-decreases t1,t2
+decreases
 pure
-func tStar_pure(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
-    return let i_low := Log2Floor_pure(t1) in
-           let i_high := Log2Floor_pure(t2) in
-           let low_ := IntPow2(i_low) in
-		   let bound_t1 := Log2FloorBounds(t1) in
-		   let bound_t2 := Log2FloorBounds(t2) in
-		   let i_low_positive := IntPow2Positive(i_low) in
-           i_high > i_low ?
-           		(pick_lowest ?
-					let apply_gap := IntPow2GapLemma(i_low, i_high) in  			//Here, we need to tell Gobra that IntPow2(i_low +1) <= IntPow2(i_high)
-						IntPow2(i_low + 1) :
-					let apply_gap := IntPow2GapLemma(i_low, i_high) in				//Here as well
-						IntPow2(i_high)) :
-				(t1 == low_ ?														// We need to consider the case that low_ == t1 if t1 is a power of 2, so this would lead t1 - low_ to 0 and Log2Floor_pure(t1) is not defined.
-					let apply_bounds := Log2FloorBounds(t2 - low_) in
-					low_ + IntPow2(Log2Floor_pure(t2-low_)):
-					low_ + tStar_pure(t1 - low_,t2 - low_, false))
+func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
+	return	let i_low := Log2Floor_pure(t1) in
+					let i_high := Log2Floor_pure(t2) in
+						i_high > i_low ?
+							//Here, we need to tell Gobra that IntPow2(i_low +1) <= IntPow2(i_high)
+							(let apply_gap := IntPow2GapLemma(i_low, i_high) in IntPow2(i_low + 1)) :
+							tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low + 1))
+}
 
+ghost
+requires x_in <= t1
+requires t1 < x_out
+requires 0 < t1
+requires t1 < t2
+ensures r > t1
+ensures r <= t2
+decreases x_out-x_in
+pure
+func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
+	return x_out <= t2 ?
+		x_out :
+		(let next := x_in + (x_out - x_in) / 2 in
+			next <= t1 ?
+				tStarRec_pure(t1, t2, next, x_out) :
+				tStarRec_pure(t1, t2, x_in, next))
 }
 @*/
 
@@ -227,7 +234,7 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 
 // @ requires t1>0
 // @ requires t2 > t1
-// @ ensures t_star == tStar_pure(t1,t2,pick_lowest)
+// @ ensures t_star == tStar_pure(t1,t2)
 func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	i_low := Log2Floor(t1)
 	i_high := Log2Floor(t2)
@@ -239,7 +246,12 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	}
 }
 
-func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64 {
+// @ requires 0 < t1
+// @ requires t1 < t2
+// @ requires x_in <= t1
+// @ requires t1 < x_out
+// @ ensures r == tStarRec_pure(t1, t2, x_in, x_out)
+func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	if x_out <= t2 {
 		return x_out
 	} else {
@@ -373,7 +385,7 @@ ghost
 requires t1 > 0
 requires t2 > t1
 requires Log2Floor_pure(t2) > Log2Floor_pure(t1)
-ensures tStar_pure(t1,t2,true) == IntPow2(Log2Floor_pure(t1)+1)
+ensures tStar_pure(t1,t2) == IntPow2(Log2Floor_pure(t1)+1)
 decreases
 pure
 func tStar_WhenGap_ReturnNextPow2(t1 uint64, t2 uint64) uint64{
@@ -588,7 +600,7 @@ func TStar_InLadder_Upper(target uint64, t2 uint64) uint64{
 // @ requires target != t2
 // @ ensures acc(r)
 // @ ensures 0 < len(r) && 0 <= idx && idx < len(r)
-// @ ensures target < t2 ==> r[idx] == tStar_pure(target, t2, true)
+// @ ensures target < t2 ==> r[idx] == tStar_pure(target, t2)
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -637,8 +649,10 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	return res /*@, target_idx @*/
 }
 
+// @ requires target >= 0
 func FullBinaryLadderSteps(target uint64) (r []uint64) {
 	steps /*@, j @*/ := fullBinaryLadderSteps(target + 1 /*@, target + 2 @*/)
+	// @ invariant acc(steps)
 	for i := range steps {
 		steps[i] = steps[i] - 1
 	}
