@@ -45,8 +45,9 @@ pure func Log2FloorBounds(n uint64) uint64 {
 ghost
 requires a > 0
 requires b > 0
-requires a<= b
+requires a <= b
 ensures Log2Floor_pure(a) <= Log2Floor_pure(b)
+ensures a <= b/2 ==> Log2Floor_pure(a) < Log2Floor_pure(b)
 decreases b
 pure
 func Log2FloorMonotonic(a uint64, b uint64) uint64 {
@@ -99,26 +100,16 @@ func IntPow2(exp uint64) (r uint64) {
   return exp == 0 ? 1 : 2 * IntPow2(exp - 1)
 }
 
-
 // Lemma: Power of 2 always positive
 
 ghost
-requires n>= 0
-ensures IntPow2(n) >= 1
-decreases n
-pure
-func IntPow2Positive(n uint64) uint64{
-	return n==0 ? 1 : IntPow2Positive(n-1)
-}
-
-// Lemma: IntPow2(n) <= IntPow2(n+1), need apparently a more direct version of the lemma as IntPow2IncLemma does not always work
-ghost
 requires n >= 0
-ensures IntPow2(n) <= IntPow2(n+1)
+ensures IntPow2(n) > 0
+ensures IntPow2(n) < IntPow2(n+1)
 decreases n
 pure
-func IntPow2LeqSucc(n uint64) uint64{
-	return IntPow2Positive(n)
+func IntPow2Positive(n uint64) uint64 {
+	return n==0 ? 1 : IntPow2Positive(n-1)
 }
 
 // Lemma: Weaker version of IntPow2IncLemma
@@ -127,10 +118,11 @@ requires a >= 0
 requires b >= 0
 requires a <= b
 ensures IntPow2(a) <= IntPow2(b)
+ensures a < b ==> IntPow2(a) < IntPow2(b)
 decreases b - a
 pure
-func IntPow2Monotonic(a uint64, b uint64) uint64{
-	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2LeqSucc(b - 1)
+func IntPow2Monotonic(a uint64, b uint64) uint64 {
+	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2Positive(b - 1)
 }
 
 // Lemma: Used to convince Gobra that the i_low < i_high ==> IntPow2(i_low +1) <= IntPow2(i_high)
