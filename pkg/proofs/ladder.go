@@ -591,66 +591,80 @@ func TStar_InLadder_Upper(target uint64, t2 uint64) uint64{
 // @ requires t2 > 0
 // @ requires target != t2
 // @ ensures acc(r)
-// @ ensures target < t2 ==> isInLadder(TStar_pure(target,t2), target)
-// @ ensures t2 < target ==> isInLadder(TStar_pure(t2,target), target)
-func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64) {
+// @ ensures 0 < len(r) && 0 <= idx && idx < len(r)
+// @ ensures target < t2 ==> r[idx] == tStar_pure(target, t2, true)
+func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
+
 	// Denotes the length of the array r.
 	//@ ghost var k uint64 = 0
-
-	//@ invariant acc(r)
 	//@ invariant k >= 0
 	//@ invariant i == IntPow2(k)
+	//@ invariant acc(r)
 	// @ invariant len(r) == int(k)
-	//@ invariant forall j int :: 0 <= j && j < len(r) ==> r[j] == expJumpElement(uint64(j))
+	// @ invariant k == Log2Floor_pure(i)
+	// @ invariant k <= target
+	// @ invariant k > 1 ==> let apply_mon := Log2FloorMonotonic(k - 1, target) in k - 1 <= Log2Floor_pure(target)
+	//@ invariant len(r) > 0 ==> r[k-1] == i / 2
+	//@ invariant i / 2 <= target
 	for i-1 <= target {
-		r = append( /*@ perm(1/2), @*/ r, i-1)
+		r = append( /*@ perm(1/2), @*/ r, i)
 		i = i * 2
 		// @ k = k+1
-		//@ assert i-1 == expJumpElement(k)
 	}
 	// i is now the smallest power of two s.t. i-1 is larger than target
 
 	var x_in uint64 = 0
 	if len(r) > 0 {
 		x_in = r[len(r)-1]
-		//@ assert x_in == expJumpElement(k-1)
 	}
 
-	x_out := i - 1
+	x_out := i
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
-	res := BinarySearchStep(target, r, x_in, x_out)
 
-	// Main core theorem to PROVE postcondition >.<
+	// @ assert let apply_mon := Log2FloorMonotonic(target, i) in Log2Floor_pure(target) < k + 1
+	// @ assert k + 1 <= x_out
+	// @ assert let apply_mon := Log2FloorMonotonic(k + 1, x_out) in k <= Log2Floor_pure(x_out)
 
 	/*@
-	ghost
-	if t2 > target{
-		apply_core_Upper := TStar_InLadder_Upper(target, t2)
-	} else{
-		apply_core_Lower := TStar_InLadder_Lower(target, t2)
-	}
-
+		target_idx := len(r) - 1
+		ghost if t2 > x_out {
+			assert let apply_mon := Log2FloorMonotonic(target, t2) in Log2Floor_pure(target) < Log2Floor_pure(t2)
+		} else {
+			assume false
+		}
 	@*/
 
-	return res
+	res /*@, j @*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2 @*/)
+
+	return res /*@, target_idx @*/
+}
+
+func FullBinaryLadderSteps(target uint64) (r []uint64) {
+	steps /*@, j @*/ := fullBinaryLadderSteps(target /*@, target + 1 @*/)
+	for i := range steps {
+		steps[i] = steps[i] - 1
+	}
+	return steps
 }
 
 // @ requires acc(r)
 // @ requires x_in <= x_out
 // @ ensures acc(res)
+// @ ensures len(res) >= len(r)
+// @ ensures forall i int :: 0 <= i && i < len(r) ==> res[i] == old(r[i])
 // @ decreases x_out - x_in
-func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64) (res []uint64) {
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64@*/) (res []uint64 /*@, ghost idx int @*/) {
 	if x_in+1 >= x_out {
-		return r
+		return r /*@, 0 @*/
 	}
 	next := x_in + (x_out-x_in)/2
 	r = append( /*@ perm(1/2), @*/ r, next)
 	if next <= target {
-		return BinarySearchStep(target, r, next, x_out)
+		return BinarySearchStep(target, r, next, x_out /*@, t2 @*/)
 	} else {
-		return BinarySearchStep(target, r, x_in, next)
+		return BinarySearchStep(target, r, x_in, next /*@, t2 @*/)
 	}
 }
 
@@ -663,21 +677,21 @@ func GetInt() (res uint64)
 @*/
 
 // @ requires target > 0
-// @ ensures forall t2 uint64 :: t2 < target && t2 >=0 ==> isInLadder(TStar_pure(t2, target), target)
-// @ ensures forall t2 uint64 :: target < t2 && target >= 0 ==> isInLadder(TStar_pure(target, t2), target)
+// ensures forall t2 uint64 :: t2 < target && t2 >=0 ==> isInLadder(TStar_pure(t2, target), target)
+// ensures forall t2 uint64 :: target < t2 && target >= 0 ==> isInLadder(TStar_pure(target, t2), target)
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64) {
 
 	//@ t2 := GetInt()
 
 	//@ assume t2 != target
 	//@ assume t2 > target
-	res := FullBinaryLadderSteps(target /*@, t2 @*/)
+	res /*@, _ @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 
-	//@ assert isInLadder(TStar_pure(target, t2), target)
+	// assert isInLadder(TStar_pure(target, t2), target)
 
 	//@ assume t2 < target
-	res2 := FullBinaryLadderSteps(target /*@, t2 @*/)
-	// @ assert isInLadder(TStar_pure(t2, target), target)
+	res2 /*@, _ @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
+	// assert isInLadder(TStar_pure(t2, target), target)
 	return res, res2
 }
 
