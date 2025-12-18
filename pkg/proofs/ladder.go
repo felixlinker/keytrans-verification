@@ -223,22 +223,18 @@ func PowOf2(exp uint64) (r uint64) {
 // @ ensures t_star >= 1
 // @ ensures t_star == TStar_pure(t1,t2)
 func TStar(t1 uint64, t2 uint64) (t_star uint64) {
-	return tStar(t1+1, t2+1, true) - 1
+	return tStar(t1+1, t2+1) - 1
 }
 
 // @ requires t1>0
 // @ requires t2 > t1
 // @ ensures t_star == tStar_pure(t1,t2,pick_lowest)
-func tStar(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
+func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	i_low := Log2Floor(t1)
 	i_high := Log2Floor(t2)
 
 	if i_high > i_low {
-		if pick_lowest {
-			return PowOf2(i_low + 1)
-		} else {
-			return PowOf2(i_high)
-		}
+		return PowOf2(i_low + 1)
 	} else {
 		return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
 	}
