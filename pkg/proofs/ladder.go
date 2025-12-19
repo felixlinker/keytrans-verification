@@ -294,14 +294,18 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	return res /*@, search_idx @*/
 }
 
-// @ requires target >= 0
-func FullBinaryLadderSteps(target uint64) (r []uint64) {
-	steps /*@, j @*/ := fullBinaryLadderSteps(target + 1 /*@, target + 2 @*/)
+// @ requires 0 <= target && target < t2
+// @ ensures acc(r) && 0 < len(r)
+// @ ensures 0 <= idx && idx < len(r)
+// ensures r[idx] == TStar_pure(target, t2)
+func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
+	steps /*@, r_idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
 	// @ invariant acc(steps)
+	// @ invariant 0 <= i && i < len(steps)
 	for i := range steps {
 		steps[i] = steps[i] - 1
 	}
-	return steps
+	return steps /*@, r_idx @*/
 }
 
 // @ requires 0 < len(r) && acc(r)
