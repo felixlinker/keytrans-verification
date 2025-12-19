@@ -317,8 +317,7 @@ func FullBinaryLadderSteps(target uint64) (r []uint64) {
 // @ requires 0 < acc_idx && acc_idx < len(r)
 // @ requires 0 < target && target < t2
 // @ requires 0 < x_in && x_in <= target && target < x_out
-// @ requires x_out <= acc_x_out
-// @ requires x_out <= t2 ==> acc_x_out <= t2
+// @ requires x_out <= t2 ? x_out <= acc_x_out && acc_x_out <= t2 : acc_x_out == x_out
 // @ ensures acc(res)
 // @ ensures len(res) >= len(r)
 // @ ensures forall i int :: 0 <= i && i < len(r) ==> res[i] == old(r[i])
@@ -327,13 +326,8 @@ func FullBinaryLadderSteps(target uint64) (r []uint64) {
 // @ ensures res[idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost acc_idx int, ghost acc_x_out uint64 @*/) (res []uint64 /*@, ghost idx int @*/) {
-	/*@
-		rec_idx := acc_idx
-		rec_acc_x_out := acc_x_out
-	@*/
-
+	// @ rec_idx := acc_idx
 	if x_in+1 >= x_out {
-		// @ assert r[rec_idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
 		return r /*@, rec_idx @*/
 	}
 
@@ -346,17 +340,14 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 	} else {
 		rec_x_out = next
 		/*@
-		ghost if rec_x_out <= t2 {
+		ghost if rec_x_out <= t2 && acc_x_out > t2 {
 			rec_idx = len(r) - 1
-			rec_acc_x_out = rec_x_out
 		}
 		@*/
 	}
 
-	// @ assert rec_acc_x_out <= t2 ==> r[rec_idx] == tStarRec_pure(target, t2, x_in, rec_acc_x_out)
-	res /*@, idx @*/ = BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, rec_idx, rec_acc_x_out @*/)
-	// @ assert res[idx] == tStarRec_pure(target, t2, x_in, rec_acc_x_out)
-	return res /*@, idx @*/
+	// @ rec_acc_x_out := acc_x_out <= t2 ? acc_x_out : rec_x_out
+	return BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, rec_idx, rec_acc_x_out @*/)
 }
 
 /*@
