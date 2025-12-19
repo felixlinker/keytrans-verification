@@ -256,7 +256,7 @@ func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 // @ requires 0 < target && target < t2
 // @ ensures acc(r)
 // @ ensures 0 < len(r) && 0 <= idx && idx < len(r)
-// @ ensures target < t2 ==> r[idx] == tStar_pure(target, t2)
+// @ ensures r[idx] == tStar_pure(target, t2)
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
