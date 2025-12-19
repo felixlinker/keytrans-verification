@@ -262,16 +262,13 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	var i uint64 = 1
 
 	// Denotes the length of the array r.
-	//@ ghost var k uint64 = 0
-	//@ invariant k >= 0
-	//@ invariant i == IntPow2(k)
-	//@ invariant acc(r)
+	// @ ghost var k uint64 = 0
+	// @ invariant acc(r)
 	// @ invariant len(r) == int(k)
-	// @ invariant k == Log2Floor_pure(i)
-	// @ invariant k <= target
+	// @ invariant 0 <= k && k <= target
+	// @ invariant i == IntPow2(k) && k == Log2Floor_pure(i)
 	// @ invariant k > 1 ==> let apply_mon := Log2FloorMonotonic(k - 1, target) in k - 1 <= Log2Floor_pure(target)
 	//@ invariant len(r) > 0 ==> r[k-1] == i / 2
-	//@ invariant i / 2 <= target
 	for i-1 < target {
 		r = append( /*@ perm(1/2), @*/ r, i)
 		i = i * 2
@@ -290,13 +287,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ assert let apply_mon := Log2FloorMonotonic(target, i) in Log2Floor_pure(target) < k + 1
 	// @ assert k + 1 <= x_out
 	// @ assert let apply_mon := Log2FloorMonotonic(k + 1, x_out) in k <= Log2Floor_pure(x_out)
-
-	/*@
-		ghost target_idx := len(r) - 1
-		ghost if t2 > x_out {
-			assert let apply_mon := Log2FloorMonotonic(target, t2) in Log2Floor_pure(target) < Log2Floor_pure(t2)
-		}
-	@*/
+	// @ ghost target_idx := len(r) - 1
 
 	res /*@, search_idx @*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2, target_idx, x_out @*/)
 
@@ -314,15 +305,12 @@ func FullBinaryLadderSteps(target uint64) (r []uint64) {
 }
 
 // @ requires 0 < len(r) && acc(r)
-// @ requires 0 < acc_idx && acc_idx < len(r)
 // @ requires 0 < target && target < t2
 // @ requires 0 < x_in && x_in <= target && target < x_out
+// @ requires 0 < acc_idx && acc_idx < len(r)
 // @ requires x_out <= t2 ? x_out <= acc_x_out && acc_x_out <= t2 : acc_x_out == x_out
-// @ ensures acc(res)
-// @ ensures len(res) >= len(r)
-// @ ensures forall i int :: 0 <= i && i < len(r) ==> res[i] == old(r[i])
-// @ ensures 0 <= idx && idx < len(res)
 // @ requires acc_x_out <= t2 ==> r[acc_idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
+// @ ensures acc(res) && 0 <= idx && idx < len(res)
 // @ ensures res[idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost acc_idx int, ghost acc_x_out uint64 @*/) (res []uint64 /*@, ghost idx int @*/) {
