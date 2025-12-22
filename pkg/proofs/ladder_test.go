@@ -45,9 +45,12 @@ func TestFullBinaryLadderSteps(t *testing.T) {
 		{target: 1, want: []uint64{0, 1, 3, 2}},
 		{target: 2, want: []uint64{0, 1, 3, 2}},
 		{target: 3, want: []uint64{0, 1, 3, 7, 5, 4}},
+		{target: 7, want: []uint64{0, 1, 3, 7, 15, 11, 9, 8}},
 		{target: 15, want: []uint64{0, 1, 3, 7, 15, 31, 23, 19, 17, 16}},
 		{target: 8, want: []uint64{0, 1, 3, 7, 15, 11, 9, 8}},
 		{target: 10, want: []uint64{0, 1, 3, 7, 15, 11, 9, 10}},
+		{target: 11, want: []uint64{0, 1, 3, 7, 15, 11, 13, 12}},
+		{target: 9, want: []uint64{0, 1, 3, 7, 15, 11, 9, 10}},
 	}
 
 	for _, tc := range tests {
@@ -74,9 +77,12 @@ func TestFullBinaryLadderSteps_cursed(t *testing.T) {
 		{target: 1, want: []uint64{0, 1, 3, 2}},
 		{target: 2, want: []uint64{0, 1, 3, 2}},
 		{target: 3, want: []uint64{0, 1, 3, 7, 5, 4}},
+		{target: 7, want: []uint64{0, 1, 3, 7, 15, 11, 9, 8}},
 		{target: 15, want: []uint64{0, 1, 3, 7, 15, 31, 23, 19, 17, 16}},
 		{target: 8, want: []uint64{0, 1, 3, 7, 15, 11, 9, 8}},
 		{target: 10, want: []uint64{0, 1, 3, 7, 15, 11, 9, 10}},
+		{target: 11, want: []uint64{0, 1, 3, 7, 15, 11, 13, 12}},
+		{target: 9, want: []uint64{0, 1, 3, 7, 15, 11, 9, 10}},
 	}
 
 	for _, tc := range tests {
