@@ -354,35 +354,6 @@ func findExpLevel(target uint64) (r uint64){
 // ==================================================================================
 // ==================================================================================
 
-//Lemma: target >= x_in when k = findExpLevel(target) && k > 0
-
-ghost
-requires target >= 0
-ensures target >= (let k := findExpLevel(target) in k >0 ? expJumpElement(k-1):0)
-decreases
-pure
-func TargetGeqXin(target uint64) uint64 {
-	return let k := findExpLevel(target) in
-		let target_1_bounded := Log2FloorBounds(target+1) in
-		let k_pos := (k > 0 ? IntPow2Positive(k-1):0) in
-		0
-}
-
-//Lemma: Constraint the range of tStar is in the range of (x_in, x_out]
-
-ghost
-requires target >= 0
-decreases
-pure
-func isInBinarySearchPortion(v uint64, target uint64) (r bool){
-	return let k := findExpLevel(target) in
-			  let x_out := expJumpElement(k) in
-			  let x_in := (k > 0 ? expJumpElement(k-1) : 0) in
-				v > x_in && v < x_out
-}
-
-
-
 // The element v is on path, i.e. v == mid(x_in,x_out)
 ghost
 requires x_out > x_in
@@ -396,6 +367,45 @@ func isOnPath (v uint64, target uint64, x_in uint64, x_out uint64) bool{
 				isOnPath(v,target, mid, x_out):
 				isOnPath(v,target, x_in, mid))
 }
+
+
+
+
+
+//Problem: We need to show that tStarRec is on path of the target
+// Bruh
+// TODO
+ghost
+requires t1 > 0
+requires t1 < t2
+requires x_in <= t1 && t1 < x_out // Constraints on t1
+requires t2 < x_out
+requires target == t1 || target == t2
+ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), target, x_in, x_out)
+decreases
+pure
+func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, x_out uint64) uint64
+
+
+//Problem: For index-1 started stuff
+ghost
+requires x_in >= 1
+requires x_out > x_in
+requires v >= 1
+requires target >= 1
+requires isOnPath(v,target, x_in, x_out)
+ensures isOnPath(v-1,target-1, x_in-1, x_out-1)
+decreases x_out - x_in
+pure
+func isOnPath_shift(v uint64, target uint64, x_in uint64, x_out uint64) uint64{
+	return x_in +1 >= x_out ? 0 :
+		let mid := x_in + (x_out - x_in)/2 in
+			v == mid ? 0 : 			// v - 1 == mid - 1 = mid_shifted
+			(mid <= target ?
+				isOnPath_shift(v,target, mid, x_out):
+				isOnPath_shift(v,target, x_in, mid))
+}
+
 @*/
 // ==============================================================================================
 // =======================================On Path Lemmas=========================================
@@ -439,6 +449,8 @@ func TStar_OnPath_Upper(target uint64, t2 uint64) uint64
 
 
 //TODO
+//Lemma: Assume same bucket LOWER: Generally speaking, we need to show TStar(t2, target) is on path torwards target
+//Issue: shifted index by one
 ghost
 requires t2 >= 0
 requires target > t2
@@ -449,7 +461,16 @@ ensures let k:= findExpLevel(target) in
 		isOnPath(TStar_pure(t2,target), target, x_in, x_out)
 decreases
 pure
-func TStar_OnPath_Lower(target uint64, t2 uint64) uint64
+func TStar_OnPath_Lower(target uint64, t2 uint64) uint64{
+	return let i_low := Log2Floor_pure(t2+1) in
+	let x_in := IntPow2(i_low) in
+	let x_out := IntPow2(i_low+1) in
+	// t1_arg = t2 + 1, t2_arg = target + 1, target_arg = target + 1
+	// we need target = t2_arg
+	let _ := tStarRec_isOnPath_target(t2 + 1, target +1,target +1, x_in, x_out) in
+	let _ := isOnPath_shift(tStar_pure(t2 +1, target+1), target +1, x_in, x_out ) in
+	0
+}
 
 
 //Shows that v is on path of the left side of the binary search steps
@@ -483,7 +504,6 @@ pure
 func isOnPath_subpath_right(v uint64, target uint64, x_in uint64,x_out uint64, next uint64) uint64{
 	return 0
 }
-
 
 
 @*/
@@ -578,12 +598,14 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires len(r) >= int(k) + 1
 // @ requires forall i uint64 :: 0 <= i && i < k ==> r[i] == expJumpElement(i)
 // @ requires r[k] == expJumpElement(k)
-// Now, we handle the most important cases.
 // The elements are on path of the binary search as soon as t2 and target are in the same bucket!
 // ============= Case 1: t2 > target =============
 // Either we have found TStar and the index shows that the element is TStar
+
 // @ requires t2 > target && Log2Floor_pure(t2+1) > Log2Floor_pure(target+1) ==> (foundTStar && r[currIdx] == TStar_pure(target, t2))
+
 // Or we are on path if they are still in the same bucket
+
 // @ requires t2 > target && !(Log2Floor_pure(t2+1) > Log2Floor_pure(target+1)) ==> (foundTStar ==> r[currIdx] == TStar_pure(target, t2)) &&  (!foundTStar ==> isOnPath(TStar_pure(target, t2), target, x_in, x_out))
 // ============= Case 1: t2 < target =============
 // @ requires t2 < target && Log2Floor_pure(target+1) > Log2Floor_pure(t2+1) ==> (foundTStar && r[currIdx] == TStar_pure(t2, target))
@@ -653,31 +675,34 @@ pure
 func GetInt() (res uint64)
 @*/
 
-// @ requires target > 0
-func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64) {
+// @ requires target >= 0
+// @ ensures acc(r1)
+// @ ensures acc(r2)
+//
+//	ensures forall t2 uint64 :: target < t2 && target >= 0 ==> r1[idx] == TStar_pure(target, t2)
+//	ensures forall t2 uint64 :: target > t2 && t2 >= 0 ==> r2[idx2] == TStar_pure(t2, target)
+func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64 /*@, ghost idx int, ghost idx2 int@*/) {
 
 	//@ t2 := GetInt()
-
 	//@ assume t2 != target
 	//@ assume t2 > target
-	res /*@, idx@*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
-
-	// assert isInLadder(TStar_pure(target, t2), target)
-
+	res /*@, idx@*/ := FBLS_cursed(target /*@, t2 @*/)
+	//@ assert acc(res)
 	//@ assume t2 < target
-	res2 /*@, idx2@*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
-	//  assert isInLadder(TStar_pure(t2, target), target)
-	return res, res2
+	res2 /*@, idx2@*/ := FBLS_cursed(target /*@, t2 @*/)
+	//@ assert acc(res2)
+	//@ assert idx >= 0 && idx < len(res)
+	//@ assert idx2 >=0 && idx < len(res2)
+	return res, res2 /*@, idx, idx2@*/
 }
 
-// @ requires target > 0
+// @ requires target >= 0
 // @ requires t2 > 0
 // @ requires target != t2
 // @ ensures acc(r)
 // @ ensures idx >= 0 && idx < len(r)
-//
-//	ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
-//	ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
+// @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
+// @ ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
 func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
 
@@ -734,8 +759,7 @@ func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost 
 	@*/
 
 	r /*@, idx @*/ = BinarySearchStep(target, r, x_in, x_out /*@, t2,k , idx, foundTStar@*/)
-	//@ assert acc(r)
-	//@ assume idx >= 0 && idx < len(r) //Need to get rid of that garbage
+
 	return r /*@, idx@*/
 
 }
