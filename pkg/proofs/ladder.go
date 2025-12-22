@@ -154,6 +154,8 @@ func TStar_pure(t1 uint64, t2 uint64) (r uint64){
 }
 
 
+// Function: New TStar_pure, not using any booleans and recursion only.
+// The reason why we can prove the whole stuff smoothly
 ghost
 requires 0 < t1
 requires t1 < t2
@@ -162,9 +164,14 @@ ensures r <= t2
 decreases
 pure
 func tStar_pure(t1 uint64, t2 uint64) (r uint64){
-	return let i_low := Log2Floor_pure(t1) in tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low+1))
+	return let i_low := Log2Floor_pure(t1) in
+				tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low+1))
 }
 
+
+//Function: Similar to the version we have for the binary search version
+//The goal is to prove the equality of the binary search with TStar
+// Essential for proving the properties.
 
 ghost
 requires x_in <= t1
@@ -188,6 +195,8 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 // =============================Core Lemma======================================
 /*@
 // Core Lemma: Shows that tPure function indicates t1<r <= t2
+// Original function, not used right now.
+// Used for sightseeing and keep in memory which makes me suffer for months
 ghost
 requires t1 > 0
 requires t2 > t1
@@ -336,8 +345,6 @@ func expJumpElement(k uint64) (r uint64){
 
 
 //Function: Find the first element that target < 2^r - 1
-
-
 ghost
 requires target >= 0
 ensures r >= 1
@@ -354,21 +361,64 @@ func findExpLevel(target uint64) (r uint64){
 // ==================================================================================
 // ==================================================================================
 
-// The element v is on path, i.e. v == mid(x_in,x_out)
+// The element v is on path, i.e. v == next(x_in,x_out)
 ghost
 requires x_out > x_in
 decreases x_out - x_in
 pure
 func isOnPath (v uint64, target uint64, x_in uint64, x_out uint64) bool{
 	return x_in +1 >= x_out ? false :
-		let mid := x_in + (x_out - x_in)/2 in
-			v == mid ||
-			(mid <= target ?
-				isOnPath(v,target, mid, x_out):
-				isOnPath(v,target, x_in, mid))
+		let next := x_in + (x_out - x_in)/2 in
+			v == next ||
+			(next <= target ?
+				isOnPath(v,target, next, x_out):
+				isOnPath(v,target, x_in, next))
+}
+
+//Lemma: When Log2Floor(t2) > Log2Floor(t1) ==> IntPow2(Log2Floor(t1)+1) <= t2
+
+ghost
+requires t1 >0
+requires t2 > 0
+requires Log2Floor_pure(t2) > Log2Floor_pure(t1)
+ensures IntPow2(Log2Floor_pure(t1)+1) <= t2
+decreases
+pure
+func GapImpliesPow2Bound(t1 uint64, t2 uint64) uint64{
+	return let _:= Log2FloorBounds(t2) in
+		let _:= IntPow2Monotonic(Log2Floor_pure(t1), Log2Floor_pure(t2)) in
+		let _:= IntPow2Positive(Log2Floor_pure(t1)+1) in
+		0
 }
 
 
+
+ghost
+decreases
+requires x_in <= t1 && t1 < x_out
+requires t1 > 0 && t1 < t2
+requires x_out <= t2
+ensures tStarRec_pure(t1,t2,x_in,x_out) == x_out
+pure
+func tStarRec_returns_expJumpBound(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64{
+	return 0
+}
+
+
+
+
+//tStarRec returns a midpoint on path when t2 < x_out given same bucket
+// Bruh, doesn't spark joy
+// TODO
+ghost
+requires t1 > 0
+requires t1 < t2
+requires x_in <= t1 && t1 < x_out // Constraints on t1
+requires t2 < x_out
+ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), t1, x_in, x_out)
+decreases
+pure
+func tStarRec_isOnPath(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64
 
 
 
@@ -388,6 +438,7 @@ func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, 
 
 
 //Problem: For index-1 started stuff
+//Solution: Make the 1 digit shifted!
 ghost
 requires x_in >= 1
 requires x_out > x_in
@@ -399,11 +450,12 @@ decreases x_out - x_in
 pure
 func isOnPath_shift(v uint64, target uint64, x_in uint64, x_out uint64) uint64{
 	return x_in +1 >= x_out ? 0 :
-		let mid := x_in + (x_out - x_in)/2 in
-			v == mid ? 0 : 			// v - 1 == mid - 1 = mid_shifted
-			(mid <= target ?
-				isOnPath_shift(v,target, mid, x_out):
-				isOnPath_shift(v,target, x_in, mid))
+		let next := x_in + (x_out - x_in)/2 in
+			//next_shifted = x_in - 1 + (x_out-1 - x_in+1)/2 == next - 1
+			v == next ? 0 : 			// v - 1 == next - 1 = next_shifted
+			(next <= target ?
+				isOnPath_shift(v,target, next, x_out):
+				isOnPath_shift(v,target, x_in, next))
 }
 
 @*/
@@ -411,7 +463,8 @@ func isOnPath_shift(v uint64, target uint64, x_in uint64, x_out uint64) uint64{
 // =======================================On Path Lemmas=========================================
 
 /*@
-//TODO
+//Lemma: t2 is way more larger than x_out, so we return x_out in this case
+// Easy case
 ghost
 requires target >= 0
 requires t2 > target
@@ -419,22 +472,40 @@ requires Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)
 ensures TStar_pure(target, t2) == expJumpElement(findExpLevel(target))
 decreases
 pure
-func TStar_Gap_Upper(target uint64, t2 uint64) uint64
+func TStar_Gap_Upper(target uint64, t2 uint64) uint64{
+	return let i_low := Log2Floor_pure(target+1) in
+		let x_out := IntPow2(i_low+1) in
+		let _:= GapImpliesPow2Bound(target+1, t2+1) in
+		let _:= tStarRec_returns_expJumpBound(target+1, t2 +1, IntPow2(i_low), x_out) in
+		0
+
+}
 
 
-//TODO
+//Lemma : t2 is way more smaller than x_in, so we return x_in in this case
+// Also easy case
 ghost
+requires target >0
 requires t2 >= 0
 requires target > t2
 requires Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)
 ensures TStar_pure(t2,target) == expJumpElement(findExpLevel(t2))
 decreases
 pure
-func TStar_Gap_Lower(target uint64, t2 uint64) uint64
+func TStar_Gap_Lower(target uint64, t2 uint64) uint64{
+	return let i_low := Log2Floor_pure(t2+1) in
+		let x_in := IntPow2(i_low+1) in
+		let _:= GapImpliesPow2Bound(t2+1, target+1) in
+		let _:= tStarRec_returns_expJumpBound(t2+1, target +1, IntPow2(i_low), x_in) in
+		0
+
+}
 
 
-//TODO
+
+//Lemma: Assume same bucket UPPER: Generally speaking, we need to show TStar(target, t2) is on path torwards target
 ghost
+//annoying case 2.0
 requires target >= 0
 requires t2 > target
 requires Log2Floor_pure(t2 + 1) == Log2Floor_pure(target + 1)
@@ -444,13 +515,24 @@ ensures let k:= findExpLevel(target) in
 		isOnPath(TStar_pure(target,t2), target, x_in, x_out)
 decreases
 pure
-func TStar_OnPath_Upper(target uint64, t2 uint64) uint64
+func TStar_OnPath_Upper(target uint64, t2 uint64) uint64{
+	return let i_low := Log2Floor_pure(t2+1) in
+		let x_in := IntPow2(i_low) in
+		let x_out := IntPow2(i_low+1) in
+		// t1_arg = target + 1, t2_arg = t2 + 1, target_arg = target + 1
+		// we need target = t2_arg
+		//One can also strengthen the args using bounds and int2positive
+		let _ := tStarRec_isOnPath_target(target + 1, t2 +1,target +1, x_in, x_out) in
+		//Denotes tStarRec is on path when target is t1 or t2
+		let _ := isOnPath_shift(tStar_pure(target+1, t2+1), target +1, x_in, x_out ) in
+		//in index 1
+		0
+}
 
 
-
-//TODO
 //Lemma: Assume same bucket LOWER: Generally speaking, we need to show TStar(t2, target) is on path torwards target
-//Issue: shifted index by one
+//Issue: shifted index by one, annoying case
+//Solution: tStarRec_isOnPath_target solves this issue (additional lemma)
 ghost
 requires t2 >= 0
 requires target > t2
@@ -468,7 +550,9 @@ func TStar_OnPath_Lower(target uint64, t2 uint64) uint64{
 	// t1_arg = t2 + 1, t2_arg = target + 1, target_arg = target + 1
 	// we need target = t2_arg
 	let _ := tStarRec_isOnPath_target(t2 + 1, target +1,target +1, x_in, x_out) in
+	//Denotes tStarRec is on path when target is t1 or t2
 	let _ := isOnPath_shift(tStar_pure(t2 +1, target+1), target +1, x_in, x_out ) in
+	//in index 1
 	0
 }
 
@@ -576,13 +660,13 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	//res /*@, index@*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2,k, idx, false@*/)
 
 	// Main core theorem to PROVE postcondition >.<
-	/*@
-	ghost
-	if i <= t2{
-		//idx = index
-		assume false
-	}
-	@*/
+	/*
+		ghost
+		if i <= t2{
+			//idx = index
+			assume false
+		}
+	*/
 
 	//r = res
 
