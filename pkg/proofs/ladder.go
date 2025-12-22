@@ -111,15 +111,6 @@ func IntPow2Positive(n uint64) uint64{
 	return n==0 ? 1 : IntPow2Positive(n-1)
 }
 
-// Lemma: IntPow2(n) <= IntPow2(n+1), need apparently a more direct version of the lemma as IntPow2IncLemma does not always work
-ghost
-requires n >= 0
-ensures IntPow2(n) <= IntPow2(n+1)
-decreases n
-pure
-func IntPow2LeqSucc(n uint64) uint64{
-	return IntPow2Positive(n)
-}
 
 // Lemma: Weaker version of IntPow2IncLemma, i.e. forall a b :: IntPow2(a) <= IntPow2(b)
 ghost
@@ -130,7 +121,7 @@ ensures IntPow2(a) <= IntPow2(b)
 decreases b - a
 pure
 func IntPow2Monotonic(a uint64, b uint64) uint64{
-	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2LeqSucc(b - 1)
+	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2Positive(b - 1)
 }
 
 // Lemma: Used to convince Gobra that the i_low < i_high ==> IntPow2(i_low +1) <= IntPow2(i_high)
@@ -260,10 +251,12 @@ func PowOf2(exp uint64) (r uint64) {
 // @ requires t2 > t1
 // @ ensures t_star >= 1
 // @ ensures t_star == TStar_pure(t1,t2)
+// @ decreases
 func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1) - 1
 }
 
+// Older version of tStar, will not be used in the newer version
 // @ requires t1 > 0
 // @ requires t2 > t1
 // @ ensures t_star == tStar_pure_orig(t1,t2,pick_lowest)
@@ -299,6 +292,7 @@ func tStar_orig(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 // @ requires t2 > t1
 // @ ensures t_star > t1 && t_star <= t2
 // @ ensures tStar_pure(t1, t2) == t_star
+// @ decreases
 func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	i_low := Log2Floor(t1)
 	return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
@@ -310,6 +304,7 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ requires t1 < x_out
 // @ ensures r > t1 && r <= t2
 // @ ensures r == tStarRec_pure(t1,t2,x_in, x_out)
+// @ decreases x_out - x_in
 func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	if x_out <= t2 {
 		return x_out
@@ -386,12 +381,63 @@ func isInBinarySearchPortion(v uint64, target uint64) (r bool){
 				v > x_in && v < x_out
 }
 
+
+
+// The element v is on path, i.e. v == mid(x_in,x_out)
+ghost
+requires x_in >=0
+requires x_out > x_in
+decreases x_out - x_in
+pure
+func isOnPath (v uint64, target uint64, x_in uint64, x_out uint64) bool{
+	return x_in +1 >= x_out ? false :
+		let mid := x_in + (x_out - x_in)/2 in
+			v == mid ||
+			(mid <= target ?
+				isOnPath(v,target, mid, x_out):
+				isOnPath(v,target, x_in, mid))
+}
 @*/
 // ==============================================================================================
+// =======================================On Path Lemmas=========================================
 
 /*@
+//TODO
+ghost
+requires target >= 0
+requires t2 > target
+requires Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)
+ensures TStar_pure(target, t2) == expJumpElement(findExpLevel(target))
+decreases
+pure
+func TStar_Gap_Upper(target uint64, t2 uint64) uint64
 
+
+//TODO
+ghost
+requires t2 >= 0
+requires target > t2
+requires Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)
+ensures TStar_pure(t2,target) == expJumpElement(findExpLevel(t2))
+decreases
+pure
+func TStar_Gap_Lower(target uint64, t2 uint64) uint64
+
+
+//TODO
+ghost
+requires target >= 0
+requires t2 > target
+requires Log2Floor_pure(t2 + 1) == Log2Floor_pure(target + 1)
+ensures let k:= findExpLevel(target) in
+		let x_in := expJumpElement(k-1) in
+		let x_out := expJumpElement(k) in
+		isOnPath(TStar_pure(target,t2), target, x_in, x_out)
+decreases
+pure
+func TStar_OnPath_Upper(target uint64, t2 uint64) uint64
 @*/
+// ==============================================================================================
 
 // ======================================Core Lemma============================================
 
@@ -521,6 +567,7 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64) {
 // @ requires target != t2
 // @ ensures acc(r)
 // @ ensures idx >= 0 && idx < len(r)
+//
 //	ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
 //	ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
 func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
@@ -528,7 +575,7 @@ func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost 
 
 	k := Log2Floor(target+1) + 1
 	//@ assert k == findExpLevel(target)
-	//@ foundTStar := false
+	//@ ghost var foundTStar bool = false
 
 	var j uint64 = 0
 	//@ idx = 0
@@ -548,31 +595,29 @@ func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost 
 	x_out := PowOf2(k) - 1
 	//@ assert x_out == expJumpElement(k)
 
-	//@ assert k >= 1
 	x_in := PowOf2(k-1) - 1
 	//@ assert x_in == expJumpElement(k-1)
 
 	r = append( /*@ perm(1/2), @*/ r, x_out)
-	//@ assert len(r) > 0
 	//@ assert r[k] == expJumpElement(k)
 
 	/*@
 	ghost if t2 > target{
 		if Log2Floor_pure(t2 +1) > Log2Floor_pure(target +1){
-			//TStar_InLadder_Upper_Gap(target, t2)
+			TStar_Gap_Upper(target, t2)
 			idx = int(k)
-			//assert r[idx] == TStar_pure(target,t2)
-			assume true
+			foundTStar = true // GAP case: we have found our TStar
 		} else{
-			assume true
+			//In this case, the element is on the binary search path between target and t2
+			Log2FloorEqWhenNotGap_Upper(target, t2)
+			TStar_OnPath_Upper(target, t2)
 		}
 	} else{
-		if Log2Floor_pure(t2 +1) > Log2Floor_pure(target +1){
-			ghost var gapIdx uint64 = Log2Floor_pure(t2 + 1) + 1
-			assert 0 <= idx&& idx <= int(k)
-			//assert r[idx] == expJumpElement(gapIdx)
-			//assert r[idx] == TStar_pure(t2,target)
-			assume true
+		if Log2Floor_pure(target +1) > Log2Floor_pure(t2 +1){
+			TStar_Gap_Lower(target, t2)
+			ghost var gapIdx uint64 = Log2Floor_pure(t2 + 1) + 1 	//The index consists of the lower exponential jump of t2.
+			idx = int(gapIdx)
+			foundTStar = true 		//GAP case
 		} else {
 			assume true
 		}
