@@ -392,7 +392,7 @@ func GapImpliesPow2Bound(t1 uint64, t2 uint64) uint64{
 }
 
 
-
+//Lemma: tStarRec returns the element of the bound because it's easy
 ghost
 decreases
 requires x_in <= t1 && t1 < x_out
@@ -404,37 +404,6 @@ func tStarRec_returns_expJumpBound(t1 uint64, t2 uint64, x_in uint64, x_out uint
 	return 0
 }
 
-
-
-
-//tStarRec returns a midpoint on path when t2 < x_out given same bucket
-// Bruh, doesn't spark joy
-// TODO
-ghost
-requires t1 > 0
-requires t1 < t2
-requires x_in <= t1 && t1 < x_out // Constraints on t1
-requires t2 < x_out
-ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), t1, x_in, x_out)
-decreases
-pure
-func tStarRec_isOnPath(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64
-
-
-
-//Problem: We need to show that tStarRec is on path of the target
-// Bruh
-// TODO
-ghost
-requires t1 > 0
-requires t1 < t2
-requires x_in <= t1 && t1 < x_out // Constraints on t1
-requires t2 < x_out
-requires target == t1 || target == t2
-ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), target, x_in, x_out)
-decreases
-pure
-func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, x_out uint64) uint64
 
 
 //Problem: For index-1 started stuff
@@ -588,6 +557,54 @@ pure
 func isOnPath_subpath_right(v uint64, target uint64, x_in uint64,x_out uint64, next uint64) uint64{
 	return 0
 }
+// ==============================================================================================
+// ==============================================================================================
+
+
+
+//tStarRec returns a midpoint on path when t2 < x_out given same bucket
+// The is generally the step case where we go left or right
+ghost
+requires t1 > 0
+requires t1 < t2
+requires x_in <= t1 && t1 < x_out // Constraints on t1
+requires t2 < x_out
+ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), t1, x_in, x_out)
+decreases x_out - x_in
+pure
+func tStarRec_isOnPath(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64{
+	return x_in + 1 >= x_out ? 0 : //Base case: will not be handled here
+		let next := x_in + (x_out-x_in)/2 in
+		 //t2 < x_out ==> x_out <= t2 is false
+		 // we take the recursive branch
+		(next <= t1 ?
+			// Go right: when next <= target
+			tStarRec_isOnPath(t1,t2,next, x_out):
+			// Go left: next > target
+			// Need to check t2 < next
+			(t2 < next ?
+				// t2 >= next means tStarRec will return next a midpoint
+				tStarRec_isOnPath(t1,t2,x_in,next) : 0))
+}
+
+
+
+// Lemma: Base case of the tStarRec_isOnPath
+// Here, we have already found target == t1 and target == t2
+//Problem: We need to show that tStarRec is on path of the target
+// TODO
+ghost
+requires t1 > 0
+requires t1 < t2
+requires x_in <= t1 && t1 < x_out // Constraints on t1
+requires t2 < x_out
+requires target == t1 || target == t2
+ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), target, x_in, x_out)
+decreases
+pure
+func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, x_out uint64) uint64
+
+
 
 
 @*/
@@ -823,7 +840,7 @@ func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost 
 		if Log2Floor_pure(t2 +1) > Log2Floor_pure(target +1){
 			TStar_Gap_Upper(target, t2)
 			idx = int(k)
-			foundTStar = true // GAP case: we have found our TStar
+			foundTStar = true 			// GAP case: we have found our TStar
 		} else{
 			//In this case, the element is on the binary search path between target and t2
 			Log2FloorEqWhenNotGap_Upper(target, t2)
@@ -834,7 +851,7 @@ func FBLS_cursed(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost 
 			TStar_Gap_Lower(target, t2)
 			ghost var gapIdx uint64 = Log2Floor_pure(t2 + 1) + 1 	//The index consists of the lower exponential jump of t2.
 			idx = int(gapIdx)
-			foundTStar = true 		//GAP case
+			foundTStar = true 			//GAP case
 		} else {
 			Log2FloorEqWhenNotGap_Lower(target, t2)
 			TStar_OnPath_Lower(target, t2)
