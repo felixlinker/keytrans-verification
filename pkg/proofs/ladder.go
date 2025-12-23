@@ -83,6 +83,23 @@ func Log2FloorEqWhenNotGap_Lower(target uint64, t2 uint64) uint64{
 }
 
 
+ghost
+requires x >= 1
+requires n >= 0
+requires IntPow2(n) <= x
+requires x < IntPow2(n+1)
+ensures Log2Floor_pure(x) == n
+decreases x
+pure
+func Log2Floor_equal(x uint64, n uint64) uint64{
+	return x < 2 ?
+		// Base case: x== 1 && IntPow2(n) < 1 IntPow2(n+1)
+		// n == 0
+		0 :
+		//Inductive case: x >= 2, x >=1
+		// By I.H. Log2Floor(x/2) == n - 1
+		Log2Floor_equal(x/2, n-1)
+}
 
 @*/
 // ==================================================================================
@@ -649,8 +666,23 @@ func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, 
 				midOnPath(target, x_in, x_out)))
 }
 
-
-
+//Lemma: Link k with findExpLevel(target)
+ghost
+decreases
+requires target >= 0
+requires k > 0
+requires IntPow2(k - 1) <= target + 1
+requires IntPow2(k) > target + 1
+ensures k == findExpLevel(target)
+pure
+func findExpTarget_link_loop(target uint64, k uint64) uint64{
+	// given IntPow2(k - 1) <= target + 1 < IntPow2(k)
+	// By equal lemma: Log2Floor(target+1) == k - 1
+	// So findExpLevel(target) == Log2Floor(target+1) +1 == k -1+1==k
+	// Q.E.D
+	return let _:= Log2Floor_equal(target + 1, k - 1) in
+	0
+}
 
 @*/
 // ==============================================================================================
@@ -676,6 +708,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	//@ invariant i == IntPow2(k)
 	//@ invariant len(r) == int(k)
 	//@ invariant forall j uint64 :: 0 <= j && j < len(r) ==> r[j] == expJumpElement(j)
+	//@ invariant k == 0 || IntPow2(k - 1) <= target + 1 //Important invariant for the findExpTarget_link_loop in below
 	for i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
 		i = i * 2
@@ -688,17 +721,16 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	var x_in uint64 = 0
 	if len(r) > 0 {
 		x_in = r[len(r)-1]
-		//@ assert x_in == expJumpElement(k-1)
 	}
+	//@ assert x_in == expJumpElement(k-1)
 
 	x_out := i - 1
 	//@ assert x_out == expJumpElement(k)
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 	//@ assert r[int(k)] == expJumpElement(k)
-	//TODO: Link k to findExpLevel(target)
 
-	// assert k == findExpLevel(target)
-	//@ assume k == findExpLevel(target)
+	//@ findExpTarget_link_loop(target,k)
+	//@ assert k == findExpLevel(target)
 
 	/*@
 	ghost if t2 > target{
