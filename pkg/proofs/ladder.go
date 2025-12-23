@@ -847,14 +847,13 @@ pure
 func GetInt() (res uint64)
 @*/
 
+
 // @ requires target >= 0
 // @ ensures acc(r1)
 // @ ensures acc(r2)
-//
-//	ensures forall t2 uint64 :: target < t2 && target >= 0 ==> r1[idx] == TStar_pure(target, t2)
-//	ensures forall t2 uint64 :: target > t2 && t2 >= 0 ==> r2[idx2] == TStar_pure(t2, target)
+// @ ensures forall t2, idx1 uint64 :: target < t2 && target >= 0 && 0 <= idx1 && idx1 < len(r1) ==> TStar_pure(target, t2) == r1[idx1]
+// @ ensures forall t2, idx2 uint64 :: target > t2 && t2 >= 0 && 0 <= idx2 && idx2 < len(r2) ==> TStar_pure(t2, target) == r2[idx2]
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64 /*@, ghost idx int, ghost idx2 int@*/) {
-
 	//@ t2 := GetInt()
 	//@ assume t2 != target
 	//@ assume t2 > target
@@ -862,9 +861,6 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64 /*@,
 	//@ assert acc(res)
 	//@ assume t2 < target
 	res2 /*@, idx2@*/ := FBLS_cursed(target /*@, t2 @*/)
-	//@ assert acc(res2)
-	//@ assert idx >= 0 && idx < len(res)
-	//@ assert idx2 >=0 && idx < len(res2)
 	return res, res2 /*@, idx, idx2@*/
 }
 
