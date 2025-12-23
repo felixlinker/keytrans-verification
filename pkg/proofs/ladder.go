@@ -607,7 +607,7 @@ func midOnPath(target uint64, x_in uint64, x_out uint64) uint64{
 ghost
 requires t1 > 0
 requires t1 < t2
-requires x_in <= t1 && t1 < x_out 
+requires x_in <= t1 && t1 < x_out
 requires t2 < x_out
 requires x_in +1 < x_out
 requires let next := x_in + (x_out - x_in) / 2 in next > t1
@@ -661,16 +661,15 @@ func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, 
 // @ requires t2 > 0
 // @ requires target != t2
 // @ ensures acc(r)
-//
-//	 ensures 0<=idx && idx < len(r)
-//
-//		ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
-//		ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
+// @ ensures 0<=idx && idx < len(r)
+// @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
+// @ ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
 	// Denotes the length of the array r.
 	//@ ghost var k uint64 = 0
+	//@ ghost var foundTStar = false
 
 	//@ invariant acc(r)
 	//@ invariant k >= 0
@@ -686,51 +685,46 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 
 	// i is now the smallest power of two s.t. i-1 is larger than target
 	//@ assert i > target
-	// assert k > Log2Floor_pure(target)
-	//var x_in uint64 = 0
-	//if len(r) > 0 {
-	//	x_in = r[len(r)-1]
-	// assert x_in == expJumpElement(k-1)
-	//}
+	var x_in uint64 = 0
+	if len(r) > 0 {
+		x_in = r[len(r)-1]
+		//@ assert x_in == expJumpElement(k-1)
+	}
 
 	x_out := i - 1
 	//@ assert x_out == expJumpElement(k)
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 	//@ assert r[int(k)] == expJumpElement(k)
+	//TODO: Link k to findExpLevel(target)
+
 	// assert k == findExpLevel(target)
+	//@ assume k == findExpLevel(target)
 
 	/*@
-		ghost
-		if t2 > i {
-			Log2FloorMonotonic(i, t2)
-			Log2FloorMonotonic(target, i)
-			assert Log2Floor_pure(t2) >= Log2Floor_pure(i)
-			assert Log2Floor_pure(i) >= Log2Floor_pure(target)
-			assume Log2Floor_pure(t2) > Log2Floor_pure(target)
-			assert t2 > target
-			idx = len(r) - 1
-			assert r[idx] == i-1
-			//assert TStar_pure(target, t2) == i - 1
-			//assert r[idx] == TStar_pure(target,t2)
+	ghost if t2 > target{
+		if Log2Floor_pure(t2 +1) > Log2Floor_pure(target +1){
+			TStar_Gap_Upper(target, t2)
+			idx = int(k)
+			foundTStar = true 			// GAP case: we have found our TStar
+		} else{
+			//In this case, the element is on the binary search path between target and t2
+			Log2FloorEqWhenNotGap_Upper(target, t2)
+			TStar_OnPath_Upper(target, t2)
 		}
+	} else{
+		if Log2Floor_pure(target +1) > Log2Floor_pure(t2 +1){
+			TStar_Gap_Lower(target, t2)
+			ghost var gapIdx uint64 = Log2Floor_pure(t2 + 1) + 1 	//The index consists of the lower exponential jump of t2.
+			idx = int(gapIdx)
+			foundTStar = true 			//GAP case
+		} else {
+			Log2FloorEqWhenNotGap_Lower(target, t2)
+			TStar_OnPath_Lower(target, t2)
+		}
+	}
 	@*/
-	// foundTStar := false
-	// assume t2 > target && Log2Floor_pure(t2+1) > Log2Floor_pure(target+1) ==> (foundTStar && r[idx] == TStar_pure(target, t2))
-	// assume t2 > target && !(Log2Floor_pure(t2+1) > Log2Floor_pure(target+1)) ==> (foundTStar ==> r[idx] == TStar_pure(target, t2)) &&  (!foundTStar ==> isOnPath(TStar_pure(target, t2), target, x_in, x_out))
-	// assume k == findExpLevel(target)
-	//Shut gobruh
-	//res /*@, index@*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2,k, idx, false@*/)
 
-	// Main core theorem to PROVE postcondition >.<
-	/*
-		ghost
-		if i <= t2{
-			//idx = index
-			assume false
-		}
-	*/
-
-	//r = res
+	r /*@, idx @*/ = BinarySearchStep(target, r, x_in, x_out /*@, t2,k , idx, foundTStar@*/)
 
 	return r /*@, idx@*/
 }
