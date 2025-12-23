@@ -588,11 +588,42 @@ func tStarRec_isOnPath(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64{
 }
 
 
+//Lemma: Ensures that the next is on the path, i.e. v == next in isOnPath
+ghost
+requires target >= 0
+requires x_in +1 < x_out
+ensures let next := x_in + (x_out-x_in)/2 in isOnPath(next, target, x_in, x_out)
+decreases x_out - x_in
+pure
+func midOnPath(target uint64, x_in uint64, x_out uint64) uint64{
+	return 0
+}
+
+
+//Important lemma: returns next when t1 < next <= t2
+// 2 steps
+// 1. tStarRec(t1,t2,x_in,x_out) == tStarRec(t1,t2,x_in,next)
+// 2. tStarRec(t1,t2,x_in,x_out) == next
+ghost
+requires t1 > 0
+requires t1 < t2
+requires x_in <= t1 && t1 < x_out 
+requires t2 < x_out
+requires x_in +1 < x_out
+requires let next := x_in + (x_out - x_in) / 2 in next > t1
+requires let next := x_in + (x_out - x_in) / 2 in next <= t2
+ensures let next := x_in + (x_out - x_in) / 2 in tStarRec_pure(t1,t2,x_in,x_out) == next 			//It exactly says that tStarRec RETURNS the value!
+decreases x_out - x_in
+pure
+func tStarRec_returns_mid(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64{
+	return let next := x_in + (x_out - x_in) / 2 in
+		let _:= tStarRec_returns_expJumpBound(t1,t2,x_in,next) in 0
+}
+
 
 // Lemma: Base case of the tStarRec_isOnPath
 // Here, we have already found target == t1 and target == t2
 //Problem: We need to show that tStarRec is on path of the target
-// TODO
 ghost
 requires t1 > 0
 requires t1 < t2
@@ -600,9 +631,23 @@ requires x_in <= t1 && t1 < x_out // Constraints on t1
 requires t2 < x_out
 requires target == t1 || target == t2
 ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), target, x_in, x_out)
-decreases
+decreases x_out - x_in
 pure
-func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, x_out uint64) uint64
+func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, x_out uint64) uint64{
+	return x_in + 1 >= x_out ? 0 : //Base case
+		let next := x_in + (x_out-x_in)/2 in
+		(next <= t1 ?
+			tStarRec_isOnPath_target(t1,t2,target,next, x_out):
+			// Go left: next > target
+			// Need to check t2 < next
+			(t2 < next ?
+				// t2 >= next means tStarRec will return next a midpoint
+				tStarRec_isOnPath_target(t1,t2,target,x_in,next):
+				//t1 < next <= t2
+				// So v == mid is true, so isOnPath returns true
+				let _ := tStarRec_returns_mid(t1, t2, x_in, x_out) in
+				midOnPath(target, x_in, x_out)))
+}
 
 
 
