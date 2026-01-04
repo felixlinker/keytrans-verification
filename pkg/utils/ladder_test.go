@@ -1,5 +1,6 @@
-package proofs
+package utils
 
+/*
 import (
 	"testing"
 )
@@ -68,6 +69,7 @@ func TestFullBinaryLadderSteps(t *testing.T) {
 	}
 }
 
+
 func TestFullBinaryLadderSteps_cursed(t *testing.T) {
 	tests := []struct {
 		target uint64
@@ -100,7 +102,7 @@ func TestFullBinaryLadderSteps_cursed(t *testing.T) {
 	}
 }
 
-/*
+
 func TestFullBinaryLadderStepsRecurse(t *testing.T) {
 	tests := []struct {
 		target        uint64

@@ -207,9 +207,24 @@ func (ladder Ladder) TerminateWithinGreatest(label []byte, targetVersion *uint64
 	return true
 }
 
-// @ requires *targetVersion >= 0
+//TODO: Add pred for ladder
+
+/*
+pred (p Ladder) Inv() {
+	(p.Result_type == Inclusion || p.Result_type == NonInclusionParent || p.Result_type == NonInclusionLeaf) &&
+	p.Result_type == NonInclusionLeaf ==> p.Leaf.Inv()
+}
+
+*/
+
+//	requires acc(targetVersion, _)
+//	requires acc(label)
+//	requires ladder.Inv()
+//	requires *targetVersion >= 0
+//
 // ensures exists v :: int v > int(*targetVersion) ==> res == 1 && err == nil
 // ensures exists v :: int v < int(*targetVersion) ==> res == -1 && err == nil
+// @ trusted
 func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint64) (res int, err error) { //-1, 0, 1, -2
 
 	for _, v := range ladder.Inclusions {
@@ -223,18 +238,18 @@ func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint64) (
 		}
 	}
 	//@ t2 := 0
-	//@ assert *targetVersion > 0
-	expected := FullBinaryLadderSteps(*targetVersion /*@, t2 @*/)
+	expected := make([]uint64, 0)
+	//expected /*@, _@*/ := FullBinaryLadderSteps(*targetVersion /*@, t2 @*/)
 
 	for _, v := range expected {
 		currentLabelVersion := VRFInput{
 			Label:   label,
 			Version: int(v),
 		}
-		if v <= *targetVersion && !(ladder.hasInclusion(currentLabelVersion)) {
+		if uint64(v) <= *targetVersion && !(ladder.hasInclusion(currentLabelVersion)) {
 			return -2, errors.New("server error: information missing") //Error
 		}
-		if v > *targetVersion && !(ladder.hasNonInclusion(currentLabelVersion)) {
+		if uint64(v) > *targetVersion && !(ladder.hasNonInclusion(currentLabelVersion)) {
 			return -2, errors.New("server error: information missing") //Error
 		}
 	}

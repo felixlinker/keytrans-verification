@@ -138,7 +138,6 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 
 // @ ensures tree_size != 0 ==> tree != nil
 // @ ensures tree != nil ==> tree.Inv()
-// @ pure
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	root := RootNode(tree_size)
 	if tree_size == 0 {

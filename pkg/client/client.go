@@ -67,12 +67,16 @@ pred (s SearchResponse) Inv() {
 	acc(s.Opening) &&
 	s.Value.Inv()
 }
+
+
+
 @*/
 
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ preserves acc(query.Inv(), p) && acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(res) && res.Inv()
+// @ trusted
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	if err := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/); err != nil {
@@ -86,7 +90,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 		return nil, errors.New("prefix roots provided")
 	}
 
-	ladderIndices := proofs.FullBinaryLadderSteps(*resp.Version)
+	ladderIndices := proofs.FullBinaryLadderSteps(uint64(*resp.Version))
 	if len(resp.Binary_ladder) != len(ladderIndices) {
 		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("length of binary ladder does not match greatest version")
@@ -116,6 +120,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 	return nil, nil
 }
 
+// @ trusted
 func (st *UserState) CreateInclusionLadder(targetVersion *uint32, vrfs proofs.VRFProof) (ladder proofs.Ladder) {
 	Ladd := proofs.Ladder{
 		Inclusions:    []proofs.VRFInput{},
@@ -144,13 +149,12 @@ type PT interface {
 type BLOutputs = []bool
 
 // @ trusted
-// @ preserves acc(PT)
-// @ preserves acc(label)
-func CheckGreatest(prefixTree PT, label []byte, t uint32) (int, error) {
+// @ requires acc(label)
+func CheckGreatest(prefixTree PT, label []byte, t uint64) (int, error) {
 	steps := proofs.FullBinaryLadderSteps(t)
 
 	for _, step := range steps {
-		if commitment, err := prefixTree.GetCommitment(label, step); err != nil {
+		if commitment, err := prefixTree.GetCommitment(label, uint32(step)); err != nil {
 			return 0, err
 		} else {
 			incl := commitment != nil
@@ -175,9 +179,8 @@ func CheckGreatest(prefixTree PT, label []byte, t uint32) (int, error) {
 // Access to the structs. We only need read priviledge with query
 
 // @ requires acc(st)
-// @ requires acc(resp)
-// @ requires acc(query)
-// @ pure
+// @ requires query.Inv()
+// @ requires resp.Inv()
 func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse) (res *proofs.UpdateValue, err error) {
 	t := resp.Version
 

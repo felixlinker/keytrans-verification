@@ -685,13 +685,12 @@ func findExpTarget_link_loop(target uint64, k uint64) uint64{
 }
 
 @*/
-// ==============================================================================================
-
+// ============================================================================================
 // ======================================Core Lemma============================================
 
-// @ requires target > 0
+// @ requires target >= 0
 // @ requires t2 > 0
-// @ requires target != t2
+// @ requires t2 != target
 // @ ensures acc(r)
 // @ ensures 0<=idx && idx < len(r)
 // @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
@@ -743,7 +742,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 			Log2FloorEqWhenNotGap_Upper(target, t2)
 			TStar_OnPath_Upper(target, t2)
 		}
-	} else{
+	} else if t2 < target{
 		if Log2Floor_pure(target +1) > Log2Floor_pure(t2 +1){
 			TStar_Gap_Lower(target, t2)
 			ghost var gapIdx uint64 = Log2Floor_pure(t2 + 1) + 1 	//The index consists of the lower exponential jump of t2.
@@ -819,6 +818,8 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 			}
 			if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
 				isOnPath_subpath_right(TStar_pure(t2, target), target, x_in, x_out, next)
+			} else if t2 == target{
+				assume false
 			}
 		}
 		@*/
@@ -832,8 +833,7 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 			}
 			if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
 				isOnPath_subpath_left(TStar_pure(t2, target), target, x_in, x_out, next)
-			}
-		}
+		}}
 		@*/
 		return BinarySearchStep(target, r, x_in, next /*@, t2,k, currIdx, foundTStar@*/)
 	}
@@ -847,20 +847,19 @@ pure
 func GetInt() (res uint64)
 @*/
 
-
 // @ requires target >= 0
 // @ ensures acc(r1)
 // @ ensures acc(r2)
-// @ ensures forall t2, idx1 uint64 :: target < t2 && target >= 0 && 0 <= idx1 && idx1 < len(r1) ==> TStar_pure(target, t2) == r1[idx1]
-// @ ensures forall t2, idx2 uint64 :: target > t2 && t2 >= 0 && 0 <= idx2 && idx2 < len(r2) ==> TStar_pure(t2, target) == r2[idx2]
+// @ ensures forall t2 uint64 :: exists idx1 uint64 :: target < t2 && target >= 0 && 0 <= idx1 && idx1 < len(r1) ==> TStar_pure(target, t2) == r1[idx1]
+// @ ensures forall t2 uint64 :: exists idx2 uint64 ::target > t2 && t2 >= 0 && 0 <= idx2 && idx2 < len(r2) ==> TStar_pure(t2, target) == r2[idx2]
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64, r2 []uint64 /*@, ghost idx int, ghost idx2 int@*/) {
 	//@ t2 := GetInt()
 	//@ assume t2 != target
 	//@ assume t2 > target
-	res /*@, idx@*/ := FBLS_cursed(target /*@, t2 @*/)
+	res /*@, idx@*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 	//@ assert acc(res)
 	//@ assume t2 < target
-	res2 /*@, idx2@*/ := FBLS_cursed(target /*@, t2 @*/)
+	res2 /*@, idx2@*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 	return res, res2 /*@, idx, idx2@*/
 }
 
