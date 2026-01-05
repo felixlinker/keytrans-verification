@@ -9,11 +9,12 @@ import (
 type TreeHead struct {
 	Tree_size uint64
 	Signature []byte
+	RootHash  []byte //Added RootHash for comparison
 }
 
 /*@
 pred (t TreeHead) Inv() {
-	acc(t.Signature)
+	acc(t.Signature) && acc(t.RootHash)
 }
 @*/
 
@@ -148,8 +149,8 @@ type PT interface {
 
 type BLOutputs = []bool
 
-// @ trusted
 // @ requires acc(label)
+// @ trusted
 func CheckGreatest(prefixTree PT, label []byte, t uint64) (int, error) {
 	steps := proofs.FullBinaryLadderSteps(t)
 
@@ -158,10 +159,10 @@ func CheckGreatest(prefixTree PT, label []byte, t uint64) (int, error) {
 			return 0, err
 		} else {
 			incl := commitment != nil
-			if !incl && step <= t {
-				return 1, nil
-			} else if incl && t < step {
+			if !incl && step <= t { //Greatest is less than t
 				return -1, nil
+			} else if incl && t < step { //Greatest is greater than t
+				return 1, nil
 			} else if incl && step <= t {
 				continue
 			} else if !incl && t < step {
@@ -173,25 +174,32 @@ func CheckGreatest(prefixTree PT, label []byte, t uint64) (int, error) {
 	return 0, nil
 }
 
-// Show: forall root, root': root == root' ==> VerifyLatestKey(root) == VerifyLatestKey(root')
-// ensures forall query resp resp' Searchresponse resp.full_Tree_head == resp'.full_Tree_head ==> VerifyLatestKey(query, resp)== VerifyLatestKey(query, resp) // root version matching
+type MonitoringMapEntry struct {
+	Position uint64
+	Version  uint32
+}
 
-// Access to the structs. We only need read priviledge with query
+// Goal: ensures forall st, st2 *UserState :: forall query, query2 SearchRequest :: forall resp, resp2 SearchResponse :: query.Label === query2.Label && err != nil ==> st.VerifyLatestKey(query, resp, p).Value === st2.VerifyLatestKey(query2, resp2, p).Value
 
 // @ requires acc(st)
 // @ requires query.Inv()
+// @ requires noPerm < p
 // @ requires resp.Inv()
-func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse) (res *proofs.UpdateValue, err error) {
-	t := resp.Version
+// @ requires acc(monitor_map)
+// @ requires acc(resp.Version, _)
+func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res *proofs.UpdateValue, err error) {
+	t := resp.Version //Claimed greatest version
+	tVal := uint64(*t)
 
 	search_tree := MkImplicitBinarySearchTree(st.Size)
-	frontiers := search_tree.FrontierNodes()
+	//@ assume acc(search_tree, p)
+	frontiers := search_tree.FrontierNodes( /*@p@*/ )
 	terminalLogEntry := -1
 
 	for _, frontier := range frontiers {
 		prefixtree_proof := resp.Inclusion.VRFProofs[frontier]
 		ladder := st.CreateInclusionLadder(t, prefixtree_proof)
-		if LtGtOrEq, err := ladder.CompareToTheGreatest(query.Label, t); err != nil {
+		if LtGtOrEq, err := ladder.CompareToTheGreatest(query.Label, tVal); err != nil {
 			return nil, err
 		} else {
 			if LtGtOrEq == 1 {
@@ -208,8 +216,17 @@ func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse) (
 			}
 		}
 	}
-
-	// TODO: Contact monitoring mode
+	if terminalLogEntry == -1 {
+		return nil, errors.New("Claimed Version is not found.")
+	}
+	if frontiers[0] < uint64(terminalLogEntry) { 
+		//TODO: Need also to check if it's in contact monitoring mode
+		entry := MonitoringMapEntry{
+			Position: uint64(len(frontiers) - 1),
+			Version:  *t,
+		}
+		monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
+	}
 
 	return nil, nil
 }

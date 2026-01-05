@@ -225,15 +225,15 @@ pred (p Ladder) Inv() {
 // ensures exists v :: int v > int(*targetVersion) ==> res == 1 && err == nil
 // ensures exists v :: int v < int(*targetVersion) ==> res == -1 && err == nil
 // @ trusted
-func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint64) (res int, err error) { //-1, 0, 1, -2
+func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion uint64) (res int, err error) { //-1, 0, 1, -2
 
 	for _, v := range ladder.Inclusions {
-		if v.Version > int(*targetVersion) && bytes.Equal(v.Label, label) {
+		if v.Version > int(targetVersion) && bytes.Equal(v.Label, label) {
 			return 1, nil // > t
 		}
 	}
 	for _, v := range ladder.NonInclusions {
-		if v.Version < int(*targetVersion) && bytes.Equal(v.Label, label) {
+		if v.Version < int(targetVersion) && bytes.Equal(v.Label, label) {
 			return -1, nil // < t
 		}
 	}
@@ -246,10 +246,10 @@ func (ladder Ladder) CompareToTheGreatest(label []byte, targetVersion *uint64) (
 			Label:   label,
 			Version: int(v),
 		}
-		if uint64(v) <= *targetVersion && !(ladder.hasInclusion(currentLabelVersion)) {
+		if uint64(v) <= targetVersion && !(ladder.hasInclusion(currentLabelVersion)) {
 			return -2, errors.New("server error: information missing") //Error
 		}
-		if uint64(v) > *targetVersion && !(ladder.hasNonInclusion(currentLabelVersion)) {
+		if uint64(v) > targetVersion && !(ladder.hasNonInclusion(currentLabelVersion)) {
 			return -2, errors.New("server error: information missing") //Error
 		}
 	}
