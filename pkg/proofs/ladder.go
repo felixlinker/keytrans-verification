@@ -689,12 +689,13 @@ func findExpTarget_link_loop(target uint64, k uint64) uint64{
 // ======================================Core Lemma============================================
 
 // @ requires target >= 0
-// @ requires t2 > 0
+// @ requires t2 >= 0
 // @ requires t2 != target
 // @ ensures acc(r)
 // @ ensures 0<=idx && idx < len(r)
 // @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
 // @ ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
+// @ ensures forall i uint64 :: 0<= i && i < len(r) ==> r[i] >= 0
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -762,6 +763,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 
 // @ requires acc(r)
 // @ requires x_in < x_out
+//@ requires x_in >= 0
 // @ requires target >= 0
 // @ requires t2 >= 0
 // @ requires k >=1
@@ -769,6 +771,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires len(r) >= int(k) + 1
 // @ requires forall i uint64 :: 0 <= i && i < k ==> r[i] == expJumpElement(i)
 // @ requires r[k] == expJumpElement(k)
+//@ requires forall l uint64 :: 0<= l && l < len(r) ==> r[l] >= 0
 // The elements are on path of the binary search as soon as t2 and target are in the same bucket!
 // ============= Case 1: t2 > target =============
 // Either we have found TStar and the index shows that the element is TStar
@@ -787,6 +790,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ ensures 0<= resIdx && resIdx < len(res)
 // @ ensures target < t2 ==> res[resIdx] == TStar_pure(target, t2)
 // @ ensures t2 < target ==> res[resIdx] == TStar_pure(t2,target)
+// @ ensures forall l uint64 :: 0<= l && l < len(res) ==> res[l] >= 0
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost k uint64, ghost currIdx int, ghost foundTStar bool@*/) (res []uint64 /*@, ghost resIdx int@*/) {
 	if x_in+1 >= x_out {
@@ -795,6 +799,7 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 	next := x_in + (x_out-x_in)/2
 	//@ thisIdx := len(r)  //Keep track of the last element
 	r = append( /*@ perm(1/2), @*/ r, next)
+
 	//Assign gap case
 	/*@
 	ghost if t2 > target && !(Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)){

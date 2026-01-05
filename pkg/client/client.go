@@ -144,18 +144,30 @@ type PT interface {
 	// label and version pair provided. Returns nil if we can prove that the
 	// prefix tree does not contain a key for the label and version pair provided.
 	// Returns error in any other case.
-	GetCommitment(Label []byte, Version uint32) ([]byte, error)
+
+	//@ requires Label != nil
+	//@ requires len(Label) >= 0
+	//@ requires Version >= 0
+	//@ ensures err == nil ==> (res != nil || res == nil)
+	//@ ensures err != nil ==> res == nil
+	GetCommitment(Label []byte, Version uint64) (res []byte, err error)
 }
 
-type BLOutputs = []bool
-
 // @ requires acc(label)
-// @ trusted
-func CheckGreatest(prefixTree PT, label []byte, t uint64) (int, error) {
-	steps := proofs.FullBinaryLadderSteps(t)
+// @ requires len(label) > 0
+// @ requires label != nil
+// @ requires t != t2
+// @ requires t >= 0 && t2 >= 0
+// @ requires prefixTree != nil
+func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64@*/) (res int, err error) {
+	steps /*@, idx2 @*/ := proofs.FullBinaryLadderSteps(t /*@, t2@*/)
 
-	for _, step := range steps {
-		if commitment, err := prefixTree.GetCommitment(label, uint32(step)); err != nil {
+	//@ invariant acc(steps)
+	//@ invariant idx >= 0 && idx <= len(steps)
+	//@ invariant forall l uint64 :: l >= 0 && l < len(steps) ==> steps[l]>=0
+	for idx := 0; idx < len(steps); idx++ {
+		step := steps[idx]
+		if commitment, err := prefixTree.GetCommitment(label, step); err != nil {
 			return 0, err
 		} else {
 			incl := commitment != nil
@@ -169,6 +181,7 @@ func CheckGreatest(prefixTree PT, label []byte, t uint64) (int, error) {
 				continue
 			}
 		}
+
 	}
 
 	return 0, nil
@@ -187,6 +200,7 @@ type MonitoringMapEntry struct {
 // @ requires resp.Inv()
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version, _)
+
 func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res *proofs.UpdateValue, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -219,8 +233,8 @@ func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, m
 	if terminalLogEntry == -1 {
 		return nil, errors.New("Claimed Version is not found.")
 	}
-	if frontiers[0] < uint64(terminalLogEntry) { 
-		//TODO: Need also to check if it's in contact monitoring mode
+	if frontiers[0] < uint64(terminalLogEntry) {
+		//TODO: Need also to check if it's in contact monitoring mode, omitted because it's not so important in the proof
 		entry := MonitoringMapEntry{
 			Position: uint64(len(frontiers) - 1),
 			Version:  *t,
