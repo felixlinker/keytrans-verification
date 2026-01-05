@@ -9,23 +9,23 @@ import (
 type TreeHead struct {
 	Tree_size uint64
 	Signature []byte
-	RootHash  []byte //Added RootHash for comparison
 }
 
 /*@
 pred (t TreeHead) Inv() {
-	acc(t.Signature) && acc(t.RootHash)
+	acc(t.Signature)
 }
 @*/
 
 type FullTreeHead struct {
 	Tree_head TreeHead
+	RootHash  []byte //Added RootHash for comparison
 	// TODO: AuditorTreeHead auditor_tree_head
 }
 
 /*@
 pred (f FullTreeHead) Inv() {
-	f.Tree_head.Inv()
+	f.Tree_head.Inv() && acc(f.RootHash)
 }
 
 ghost
@@ -200,7 +200,6 @@ type MonitoringMapEntry struct {
 // @ requires resp.Inv()
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version, _)
-
 func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res *proofs.UpdateValue, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -244,3 +243,10 @@ func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, m
 
 	return nil, nil
 }
+
+// TODO: Prove me
+// @ requires query1.Label === query2.Label
+// @ requires resp1.Full_tree_head.RootHash === resp2.Full_tree_head.RootHash
+// @ requires resp1.Version != resp2.Version
+// @ ensures err1 != nil || err2 != nil
+func VerifylatestKeyWrapper(query1 SearchRequest, resp1 SearchResponse, query2 SearchRequest, resp2 SearchResponse) (err1 error, err2 error)
