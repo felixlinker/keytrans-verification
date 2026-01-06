@@ -139,52 +139,105 @@ func (st *UserState) CreateInclusionLadder(targetVersion *uint32, vrfs proofs.VR
 	return ladder
 }
 
+//Lemma : Merkle Binding
+// This Merkle binding theorem is needed for showing that the commitment is in the tree state
+// It is also one of the important lemmas we need to show that the commitment we get is consistent
+// We use the following paper to derive the following lemma
+// Paper: https://arxiv.org/pdf/2501.10802
+//TODO: If we can formally verify that using Gobra without using the paper, then we will have better ground to argue that the stuff is formally verified. Relying on the paper itself will be somehow risky
+
+/*@
+ghost
+opaque
+decreases
+pure
+func CommitmentExistsInTree(RootHash []byte, label []byte, Version uint64) bool
+@*/
+
 type PT interface {
 	// Returns non-nil if we can prove that the prefix tree contains a key for the
 	// label and version pair provided. Returns nil if we can prove that the
 	// prefix tree does not contain a key for the label and version pair provided.
 	// Returns error in any other case.
 
-	//@ requires Label != nil
-	//@ requires len(Label) >= 0
+	//@ requires Label != nil && len(Label) >= 0
 	//@ requires Version >= 0
-	//@ ensures err == nil ==> (res != nil || res == nil)
+	//@ ensures err == nil ==> res != nil && CommitmentExistsInTree(RootHash, Label, Version)
 	//@ ensures err != nil ==> res == nil
-	GetCommitment(Label []byte, Version uint64) (res []byte, err error)
+	GetCommitment(Label []byte, Version uint64 /*@, ghost RootHash []byte@*/) (res []byte, err error)
 }
 
+// TODO: I don't think this property is strong enough... and we need to link TStar with the element, so more cases needed...
 // @ requires acc(label)
 // @ requires len(label) > 0
 // @ requires label != nil
 // @ requires t != t2
 // @ requires t >= 0 && t2 >= 0
 // @ requires prefixTree != nil
-func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64@*/) (res int, err error) {
+// @ ensures err == nil && res == -1 ==> exists step uint64 :: step <= t && !CommitmentExistsInTree(RootHash, label, step)
+// @ ensures err == nil && res == 1 ==> exists step uint64 :: step > t && CommitmentExistsInTree(RootHash, label, step)
+// Argue on TStar
+//
+// ensures err == nil && res == 0 && t2 > t ==> !CommitmentExistsInTree(RootHash, label, proofs.TStar_pure(t, t2))
+//
+//  ensures err == nil && res == 0 && t2 < t ==> CommitmentExistsInTree(RootHash, label, proofs.TStar_pure(t2, t))
+func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64, RootHash []byte@*/) (res int, err error /*@, ghost foundTStar bool@*/) {
 	steps /*@, idx2 @*/ := proofs.FullBinaryLadderSteps(t /*@, t2@*/)
+	/*@
+		assert 0 <= idx2 && idx2 < len(steps)
+		assert t < t2 ==> steps[idx2] == proofs.TStar_pure(t,t2)
+		assert t2 < t ==> steps[idx2] == proofs.TStar_pure(t2,t)
+		ghost var tStar uint64
+		if t < t2{
+			tStar = proofs.TStar_pure(t,t2)
+		}else {
+			tStar = proofs.TStar_pure(t2,t)
+		}
+	@*/
+	var idx int
+
+	//@ ghost var processedTStar bool = false
+	//@ assert tStar == steps[idx2]
 
 	//@ invariant acc(steps)
 	//@ invariant idx >= 0 && idx <= len(steps)
 	//@ invariant forall l uint64 :: l >= 0 && l < len(steps) ==> steps[l]>=0
-	for idx := 0; idx < len(steps); idx++ {
+	//@ invariant tStar == steps[idx2]
+	//@ invariant forall j int :: 0<=j && j < idx ==>
+	//@ 				(let s := steps[j] in (s<= t ==> CommitmentExistsInTree(RootHash, label, s) && s > t ==> !CommitmentExistsInTree(RootHash,label,s)))
+	for idx = 0; idx < len(steps); idx++ {
 		step := steps[idx]
-		if commitment, err := prefixTree.GetCommitment(label, step); err != nil {
-			return 0, err
+		if commitment, err := prefixTree.GetCommitment(label, step /*@,RootHash@*/); err != nil {
+			return 0, err /*@, processedTStar@*/
 		} else {
 			incl := commitment != nil
-			if !incl && step <= t { //Greatest is less than t
-				return -1, nil
+			// @ assert incl == CommitmentExistsInTree(RootHash, label, step)
+			if !incl && step <= t { //Claimed Greatest is less than t
+				//@ assert !CommitmentExistsInTree(RootHash, label, step)
+				//@ assert step <= t
+				return -1, nil /*@, processedTStar@*/
 			} else if incl && t < step { //Greatest is greater than t
-				return 1, nil
+				//@ assert CommitmentExistsInTree(RootHash, label, step)
+				//@ assert step > t
+				return 1, nil /*@, processedTStar@*/
 			} else if incl && step <= t {
 				continue
 			} else if !incl && t < step {
 				continue
 			}
+
+			//@ assert step <= t ==> incl
+			//@ assert step > t ==> !incl
+			//@ assert step <= t ==> CommitmentExistsInTree(RootHash, label, step)
+			//@ assert step > t ==> !CommitmentExistsInTree(RootHash, label, step)
 		}
 
 	}
+	//@ assert idx == len(steps)
+	//@ assert 0<= idx2 && idx2 <len(steps)
+	//@ assert steps[idx2] == tStar
 
-	return 0, nil
+	return 0, nil /*@, processedTStar@*/
 }
 
 type MonitoringMapEntry struct {
@@ -200,6 +253,7 @@ type MonitoringMapEntry struct {
 // @ requires resp.Inv()
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version, _)
+// @ requires resp.Full_tree_head.RootHash != nil
 func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res *proofs.UpdateValue, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -244,7 +298,7 @@ func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, m
 	return nil, nil
 }
 
-// TODO: Prove me
+// TODO: Prove this
 // @ requires query1.Label === query2.Label
 // @ requires resp1.Full_tree_head.RootHash === resp2.Full_tree_head.RootHash
 // @ requires resp1.Version != resp2.Version
