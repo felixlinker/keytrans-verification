@@ -5,6 +5,8 @@ import (
 	"errors"
 )
 
+// ##(--hyperMode extended)
+
 /*@
 pred (t *PrefixTree) Inv() {
 	acc(t) && (t != nil ==> t.InvRec())
@@ -23,23 +25,22 @@ pred (t PrefixTree) InvRec() {
 }
 @*/
 
-//@ requires t != nil
-//@ requires acc(t.Inv(), _)
-//@ decreases
-//@ pure
+// @ requires t != nil
+// @ requires acc(t.Inv(), _)
+// @ decreases
+// @ pure
 func (t *PrefixTree) GetValue() *[sha256.Size]byte {
 	return /*@ unfolding acc(t.Inv(), _) in unfolding acc(t.InvRec(), _) in @*/ t.Value
 }
 
-//@ requires t != nil
-//@ requires acc(t.Inv(), _)
-//@ requires t.GetValue() != nil
-//@ decreases
-//@ pure
+// @ requires t != nil
+// @ requires acc(t.Inv(), _)
+// @ requires t.GetValue() != nil
+// @ decreases
+// @ pure
 func (t *PrefixTree) GetValueArray() [sha256.Size]byte {
 	return /*@ unfolding acc(t.Inv(), _) in unfolding acc(t.InvRec(), _) in @*/ *t.Value
 }
-
 
 // Recursive prefix tree data structure
 type PrefixTree struct {
@@ -59,7 +60,7 @@ type PrefixTree struct {
 // ascending by steps.Step.Vrf_output and that coPathNodes is sorted ascending
 // too. prefix will be initially empty and reflects the current position in the
 // prefix tree.
-//@ ensures err != nil ==> tree != nil && tree.Inv()
+// @ ensures err != nil ==> tree != nil && tree.Inv()
 func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNodes []NodeValue) (tree *PrefixTree, nextSteps []CompleteBinaryLadderStep, nextNodes []NodeValue, err error) {
 	tree = nil
 	nextSteps = steps
@@ -174,7 +175,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 // Construct a prefix tree from a prefix proof and the provided binary ladder
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
-//@ ensures err != nil ==> tree != nil && tree.Inv() && tree.GetValue() != nil
+// @ ensures err != nil ==> tree != nil && tree.Inv() && tree.GetValue() != nil
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
 	tree = &PrefixTree{}
 	if len(fullLadder) < len(prf.Results) {
@@ -193,9 +194,9 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 	return
 }
 
-//@ requires tree != nil ==> tree.Inv()
-//@ ensures  tree != nil ==> tree.Inv()
-//@ ensures  err != nil && tree != nil ==> tree.GetValue() != nil
+// @ requires tree != nil ==> tree.Inv()
+// @ ensures  tree != nil ==> tree.Inv()
+// @ ensures  err != nil && tree != nil ==> tree.GetValue() != nil
 func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 	hashContent = make([]byte, sha256.Size+1)
 	if tree == nil {
@@ -219,9 +220,9 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 }
 
 // Recursively compute all hashes of a prefix tree.
-//@ requires tree != nil ==> tree.Inv()
-//@ ensures  tree != nil ==> tree.Inv()
-//@ ensures  tree != nil && err != nil ==> tree.GetValue() != nil && len(tree.GetValueArray()) == len(hash) && (forall i int :: { hash[i] } 0 <= i && i < len(hash) ==> (tree.GetValueArray())[i] == hash[i])
+// @ requires tree != nil ==> tree.Inv()
+// @ ensures  tree != nil ==> tree.Inv()
+// @ ensures  tree != nil && err != nil ==> tree.GetValue() != nil && len(tree.GetValueArray()) == len(hash) && (forall i int :: { hash[i] } 0 <= i && i < len(hash) ==> (tree.GetValueArray())[i] == hash[i])
 func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 	if tree == nil {
 		return [sha256.Size]byte{}, errors.New("cannot hash empty node")

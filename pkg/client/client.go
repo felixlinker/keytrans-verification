@@ -6,6 +6,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
+// ##(--hyperMode extended)
+
 type TreeHead struct {
 	Tree_size uint64
 	Signature []byte
@@ -76,6 +78,9 @@ pred (s SearchResponse) Inv() {
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ preserves acc(query.Inv(), p) && acc(resp.Inv(), p)
+// @ requires resp.Version != nil
+// @ requires acc(resp.Version, _)
+// @ requires *resp.Version>= 0
 // @ ensures err == nil ==> acc(res) && res.Inv()
 // @ trusted
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
@@ -90,8 +95,9 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("prefix roots provided")
 	}
-
-	ladderIndices := proofs.FullBinaryLadderSteps(uint64(*resp.Version))
+	//@ ghost var idx int
+	//@ ghost var t2 uint64 =uint64(*resp.Version) + 1
+	ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(uint64(*resp.Version) /*@, t2 @*/)
 	if len(resp.Binary_ladder) != len(ladderIndices) {
 		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("length of binary ladder does not match greatest version")
@@ -99,6 +105,8 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 
 	trees := make([]*proofs.PrefixTree, 0, len(resp.Search.Prefix_proofs))
 	//@ fold acc(resp.Inv(), p)
+
+	//Here, we assume that the tree is already built
 
 	//@ invariant acc(resp.Inv(), p)
 	// invariant unfolding acc(resp.Search.Inv(), p/2) in 0 <= i && i <= len(resp.Search.Prefix_proofs)
@@ -139,8 +147,6 @@ func (st *UserState) CreateInclusionLadder(targetVersion *uint32, vrfs proofs.VR
 	return ladder
 }
 
-//TODO:=============Copy it back to client.go after verifying=================
-
 //Lemma : Merkle Binding
 // This Merkle binding theorem is needed for showing that the commitment is in the tree state
 // It is also one of the important lemmas we need to show that the commitment we get is consistent
@@ -153,85 +159,75 @@ ghost
 opaque
 decreases
 pure
+//Queries1 == Queries2 ==> Same results ==> deterministic
 func CommitmentExistsInTree(RootHash []byte, label []byte, Version uint64) bool
+
+
+// func deterministicFunc(label, view, version) (error)
+// Use low or rel
+
 @*/
 
+// Can we treat this as a proven lemma?
 type PT interface {
 	// Returns non-nil if we can prove that the prefix tree contains a key for the
 	// label and version pair provided. Returns nil if we can prove that the
 	// prefix tree does not contain a key for the label and version pair provided.
 	// Returns error in any other case.
 
+	//ensures low(RootHash) ==> (rel(RootHash, 0) == rel(RootHash, 1))
+	// ensures low(RootHash) && err == nil ==> low(res)
 	//@ requires Label != nil && len(Label) >= 0
 	//@ requires Version >= 0
 	//@ ensures err == nil ==> res != nil == CommitmentExistsInTree(RootHash, Label, Version)
+	//@ ensures low(RootHash) && low(Label) && err == nil ==> low(res)
 	//@ ensures err != nil ==> res == nil
+	//@ ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
 	GetCommitment(Label []byte, Version uint64 /*@, ghost RootHash []byte@*/) (res []byte, err error)
 }
 
-// TODO: I don't think this property is strong enough... and we need to link TStar with the element, so more cases needed...
 // @ requires acc(label)
 // @ requires len(label) > 0
 // @ requires label != nil
 // @ requires t != t2
 // @ requires t >= 0 && t2 >= 0
 // @ requires prefixTree != nil
-// @ ensures err == nil && res == -1 ==> exists step uint64 :: step <= t && !CommitmentExistsInTree(RootHash, label, step)
-// @ ensures err == nil && res == 1 ==> exists step uint64 :: step > t && CommitmentExistsInTree(RootHash, label, step)
-// Argue on TStar
-//  ensures err == nil && res == 0 && t2 > t ==> !CommitmentExistsInTree(RootHash, label, proofs.TStar_pure(t, t2))
-//
-//	ensures err == nil && res == 0 && t2 < t ==> CommitmentExistsInTree(RootHash, label, proofs.TStar_pure(t2, t))
-func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64, RootHash []byte@*/) (res int, err error /*@, ghost foundTStar bool@*/) {
+// Determinism
+// @ requires low(label)
+// @ requires low(RootHash)
+// @ requires low(t)
+// @ requires low(t2)
+// @ ensures low(t) ==> low(res)
+// @ ensures low(res)
+// @ ensures low(err==nil)
+func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64, RootHash []byte@*/) (res int, err error) {
 	steps /*@, idx2 @*/ := proofs.FullBinaryLadderSteps(t /*@, t2@*/)
-	/*@
-		assert 0 <= idx2 && idx2 < len(steps)
-		assert t < t2 ==> steps[idx2] == proofs.TStar_pure(t,t2)
-		assert t2 < t ==> steps[idx2] == proofs.TStar_pure(t2,t)
-		ghost var tStar uint64
-		if t < t2{
-			tStar = proofs.TStar_pure(t,t2)
-			assert tStar <= t2 && tStar > t
-		}else {
-			tStar = proofs.TStar_pure(t2,t)
-			assert tStar > t2 && tStar <= t
-		}
-	@*/
-
-	//@ ghost var processedTStar bool = false
+	//@ assume forall l int :: 0 <= l && l < len(steps) ==> low(steps[l])
 	//@ ghost var tStarHasCommitment bool = false
-	//@ assert tStar == steps[idx2]
 
 	//@ invariant acc(steps)
 	//@ invariant idx >= 0 && idx <= len(steps)
 	//@ invariant forall l uint64 :: l >= 0 && l < len(steps) ==> steps[l]>=0
-	//@ invariant forall j int :: 0<=j && j < idx ==>
-	//@ 				(let s := steps[j] in (s<= t ==> CommitmentExistsInTree(RootHash, label, s) && s > t ==> !CommitmentExistsInTree(RootHash,label,s)))
-	//@ invariant idx > idx2 ==> processedTStar
-	//@ invariant tStar == steps[idx2]
+	//@ invariant low(label)
+	//@ invariant low(RootHash)
+	//@ invariant err != nil ==> res == 0
+	//@ invariant low(idx)
+	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> low(steps[l])
 	for idx := 0; idx < len(steps); idx++ {
 		step := steps[idx]
 		if commitment, err := prefixTree.GetCommitment(label, step /*@,RootHash@*/); err != nil {
-			return 0, err /*@, processedTStar@*/
+			return 0, err
 		} else {
 			incl := commitment != nil
-			/*@
-			ghost if idx == idx2{
-				processedTStar = true
-				tStarHasCommitment = true
-				assert incl ==> CommitmentExistsInTree(RootHash, label, tStar)
-				assert !incl ==> !CommitmentExistsInTree(RootHash, label, tStar)
-			}
-			@*/
-			// @ assert incl == CommitmentExistsInTree(RootHash, label, step)
+			//@ assert low(err == nil)
+			//@ assert low(incl)
+			//@ assert err == nil
 			if !incl && step <= t { //Claimed Greatest is less than t
-				//@ assert !CommitmentExistsInTree(RootHash, label, step)
 				//@ assert step <= t
-				return -1, nil /*@, processedTStar@*/
+				return -1, nil
 			} else if incl && t < step { //Greatest is greater than t
-				//@ assert CommitmentExistsInTree(RootHash, label, step)
 				//@ assert step > t
-				return 1, nil /*@, processedTStar@*/
+				return 1, nil
 			} else if incl && step <= t {
 				continue
 			} else if !incl && t < step {
@@ -240,9 +236,8 @@ func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64, RootHas
 		}
 
 	}
-	//@ assert processedTStar
 
-	return 0, nil /*@, processedTStar@*/
+	return 0, nil
 }
 
 type MonitoringMapEntry struct {
@@ -256,14 +251,21 @@ type MonitoringMapEntry struct {
 // @ requires query.Inv()
 // @ requires noPerm < p
 // @ requires resp.Inv()
+// @ requires size >= 0
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version, _)
 // @ requires resp.Full_tree_head.RootHash != nil
-func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res *proofs.UpdateValue, err error) {
+// ==============Hyperproperties=============
+// @ requires low(size)
+// @ requires low(query.Label)
+// @ requires resp.Full_tree_head.RootHash != nil ==> low(resp.Full_tree_head.RootHash)
+// @ ensures res != nil && err == nil ==> low(res)
+func (st *UserState) VerifyLatestKey(size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res *proofs.UpdateValue, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
 
-	search_tree := MkImplicitBinarySearchTree(st.Size)
+	//@ assert size >= 0
+	search_tree := MkImplicitBinarySearchTree(size)
 	//@ assume acc(search_tree, p)
 	frontiers := search_tree.FrontierNodes( /*@p@*/ )
 	terminalLogEntry := -1
@@ -281,7 +283,7 @@ func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, m
 				terminalLogEntry = int(frontier)
 			}
 
-			if frontier == st.Size-1 {
+			if frontier == size-1 {
 				if LtGtOrEq != 0 {
 					return nil, errors.New("t is not the greatest version as expected")
 				}
@@ -302,10 +304,3 @@ func (st *UserState) VerifyLatestKey(query SearchRequest, resp SearchResponse, m
 
 	return nil, nil
 }
-
-// TODO: Prove this
-// @ requires query1.Label === query2.Label
-// @ requires resp1.Full_tree_head.RootHash === resp2.Full_tree_head.RootHash
-// @ requires resp1.Version != resp2.Version
-// @ ensures err1 != nil || err2 != nil
-func VerifylatestKeyWrapper(query1 SearchRequest, resp1 SearchResponse, query2 SearchRequest, resp2 SearchResponse) (err1 error, err2 error)

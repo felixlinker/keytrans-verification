@@ -6,6 +6,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
+// ##(--hyperMode extended)
+
 // This file implements Section 4, "Updating Views of the Tree"
 
 type ImplicitBinarySearchTree struct {
@@ -20,10 +22,13 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 	(t.Left != nil ==> t.Left.Inv()) &&
 	(t.Right != nil ==> t.Right.Inv())
 }
+
 @*/
 
 // Get the largest power of two smaller than tree_size
-func RootNode(tree_size uint64) uint64 {
+// @ requires tree_size >= 0
+// @ preserves low(tree_size)
+func RootNode(tree_size uint64) (res uint64) {
 	if tree_size == 1 {
 		return 0
 	}
@@ -35,12 +40,17 @@ func RootNode(tree_size uint64) uint64 {
 	return (power >> 1) - 1
 }
 
-// @ preserves tree != nil ==> tree.Inv()
+// @ preserves tree!= nil ==> tree.Inv()
+// @ preserves tree != nil ==> acc(tree) && acc(tree.Left.Inv()) && acc(tree.Right.Inv())
+// @ preserves tree != nil ==> low(tree) && low(by) && low(tree.Left) && low(tree.Right)
+// @ trusted //TODO
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	if tree == nil {
 		return
 	}
 
+	//@ assert low(tree.Left)
+	//@ assert low(tree.Right)
 	//@ unfold tree.Inv()
 	tree.Root += by
 	tree.Left.OffSet(by)
@@ -53,6 +63,7 @@ func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 // @ requires  noPerm < p
 // @ preserves acc(tree.Inv(), p)
 // @ ensures   err == nil ==> acc(path)
+// @ trusted //TODO
 func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(tree.Inv(), p)
 	if tree.Root == node {
@@ -123,6 +134,7 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 // @ preserves tree != nil ==> acc(tree.Inv(), p)
 // @ ensures   acc(path)
 // @ ensures   tree != nil ==> len(path) > 0
+// @ trusted //TODO
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	if tree == nil {
 		return
@@ -136,8 +148,12 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 	return
 }
 
+// @ requires tree_size >= 0
+// @ requires low(tree_size)
 // @ ensures tree_size != 0 ==> tree != nil
 // @ ensures tree != nil ==> tree.Inv()
+// @ ensures low(tree) ==> low(tree_size)
+// @ trusted //TODO
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	root := RootNode(tree_size)
 	if tree_size == 0 {
@@ -177,6 +193,7 @@ pred (s *UserState) Inv() {
 // @ requires noPerm < p
 // @ preserves acc(timestamps, p)
 // @ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
+// @ trusted //TODO
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	if len(timestamps) == 0 {
 		return true
@@ -205,6 +222,7 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 // since we take the timestamps from `prf`, we need full permissions to then
 // @ preserves acc(prf.Inv(), p)
 // @ ensures err == nil ==> unfolding st.Inv() in st.Size == new_head.Size()
+// @ trusted //TODO
 func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreeProof /*@, ghost p perm @*/) (err error) {
 	//@ unfold acc(prf.Inv(), p)
 	if !checkIncreasing(prf.Timestamps /*@, p/2 @*/) {

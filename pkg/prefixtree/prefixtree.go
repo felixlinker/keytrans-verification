@@ -5,6 +5,7 @@ import (
 	"errors"
 )
 
+// ##(--hyperMode extended)
 type Node struct {
 	hasData bool
 	key     uint64
@@ -26,11 +27,11 @@ ghost type BitConversion domain {
 }
 @*/
 
-//@ trusted
-//@ decreases
-//@ ensures acc(res)
-//@ ensures len(res) == len(GetBits(key))
-//@ ensures forall i int :: { res[i] } 0 <= i && i < len(res) ==> res[i] == GetBits(key)[i]
+// @ trusted
+// @ decreases
+// @ ensures acc(res)
+// @ ensures len(res) == len(GetBits(key))
+// @ ensures forall i int :: { res[i] } 0 <= i && i < len(res) ==> res[i] == GetBits(key)[i]
 func ComputeBits(key uint64) (res []bool) {
 	bs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bs, key)
@@ -112,15 +113,15 @@ ghost type Hashing domain {
 }
 @*/
 
-//@ trusted
-//@ decreases
-//@ ensures   res == hashKeyValue(key, value)
+// @ trusted
+// @ decreases
+// @ ensures   res == hashKeyValue(key, value)
 func HashData(key uint64, value int) (res int) {
 	return int(key) + value // just a stupid example
 }
 
-//@ preserves acc(n.PrefixSubtree(prefix), 1/2)
-//@ ensures   res == unfolding acc(n.PrefixSubtree(prefix), 1/2) in hashKeyValue(n.key, n.value)
+// @ preserves acc(n.PrefixSubtree(prefix), 1/2)
+// @ ensures   res == unfolding acc(n.PrefixSubtree(prefix), 1/2) in hashKeyValue(n.key, n.value)
 func HashNodeData(n *Node /*@, ghost prefix seq[bool] @*/) (res int) {
 	//@ unfold acc(n.PrefixSubtree(prefix), 1/4)
 	res = HashData(n.key, n.value)
@@ -128,9 +129,9 @@ func HashNodeData(n *Node /*@, ghost prefix seq[bool] @*/) (res int) {
 	return
 }
 
-//@ trusted
-//@ decreases
-//@ ensures   res == hashSubtrees(left, right)
+// @ trusted
+// @ decreases
+// @ ensures   res == hashSubtrees(left, right)
 func CombineSubtreeHashes(left, right int) (res int) {
 	return left + right // just a stupid example
 }
@@ -178,13 +179,14 @@ pure func (n *Node) prefixSubtreeContains(prefix seq[bool], key uint64, value in
 @*/
 
 // copath is sorted such that hashes for subtrees deeper in the prefix tree appear later in the slice
-//@ requires  noPerm < p
-//@ requires low(key)
-//@ requires low(rootHash)
-//@ preserves acc(copath, p)
-//@ preserves acc(n.PrefixTree(), p) && rootHash == n.prefixTreeHash()
-//@ ensures   res ==> n.prefixTreeContains(key, value)
-//@ ensures   res ==> low(value)
+// @ requires  noPerm < p
+// @ requires low(key)
+// @ requires low(rootHash)
+// @ requires low(copath)
+// @ preserves acc(copath, p)
+// @ preserves acc(n.PrefixTree(), p) && rootHash == n.prefixTreeHash()
+// @ ensures   res ==> n.prefixTreeContains(key, value)
+// @ ensures   res ==> low(value)
 func CheckInclusionWithoutTree(key uint64, value int, rootHash int, copath []int /*@, ghost n *Node, ghost p perm @*/) (res bool) {
 	if len(copath) != len(ComputeBits(key)) {
 		return false
@@ -262,12 +264,12 @@ func PureComputePathInjective(i int, leafHash int, copath []int, keyBits seq[boo
 @*/
 
 // recursive implementation of computing the root hash using the copath.
-//@ decreases
-//@ requires  len(copath) == len(GetBits(key))
-//@ requires  noPerm < p
-//@ preserves acc(n.PrefixTree(), p)
-//@ preserves acc(copath, p)
-//@ ensures   IsValidCoPath(hash, hashKeyValue(key, value), copath, GetBits(key))
+// @ decreases
+// @ requires  len(copath) == len(GetBits(key))
+// @ requires  noPerm < p
+// @ preserves acc(n.PrefixTree(), p)
+// @ preserves acc(copath, p)
+// @ ensures   IsValidCoPath(hash, hashKeyValue(key, value), copath, GetBits(key))
 func ComputePath(key uint64, value int, copath []int /*@, ghost n *Node, ghost p perm @*/) (hash int) {
 	//@ unfold acc(n.PrefixTree(), p)
 	hash = ComputePathSubtree(key, value, 0, copath /*@, n, seq[bool]{ }, p @*/)
@@ -276,14 +278,14 @@ func ComputePath(key uint64, value int, copath []int /*@, ghost n *Node, ghost p
 }
 
 // recursive implementation of computing the root hash using the copath.
-//@ decreases len(GetBits(key)) - i
-//@ requires  0 <= i && i <= len(GetBits(key))
-//@ requires  len(copath) == len(GetBits(key))
-//@ requires  i == len(prefix)
-//@ requires  noPerm < p
-//@ preserves n != nil ==> acc(n.PrefixSubtree(prefix), p)
-//@ preserves acc(copath, p)
-//@ ensures   hash == PureComputePath(i, hashKeyValue(key, value), copath, GetBits(key))
+// @ decreases len(GetBits(key)) - i
+// @ requires  0 <= i && i <= len(GetBits(key))
+// @ requires  len(copath) == len(GetBits(key))
+// @ requires  i == len(prefix)
+// @ requires  noPerm < p
+// @ preserves n != nil ==> acc(n.PrefixSubtree(prefix), p)
+// @ preserves acc(copath, p)
+// @ ensures   hash == PureComputePath(i, hashKeyValue(key, value), copath, GetBits(key))
 func ComputePathSubtree(key uint64, value int, i int, copath []int /*@, ghost n *Node, ghost prefix seq[bool], ghost p perm @*/) (hash int) {
 	bits := ComputeBits(key)
 	if len(bits) == i {
@@ -395,8 +397,8 @@ func UniqueCopathSubtreeLemma(key uint64, value, i int, copath []int, n *Node, p
 }
 @*/
 
-//@ trusted
-//@ ensures err != nil
+// @ trusted
+// @ ensures err != nil
 func NewError(msg string) (err error) {
 	return errors.New(msg)
 }
