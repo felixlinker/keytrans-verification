@@ -223,7 +223,7 @@ func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64, RootHas
 	//@ assume low(len(steps))
 	//@ assume forall j uint64 :: j >= 0 && j < len(steps) ==> low(steps[j])
 	//The following assert will return an error, so no assume false
-	//  assert 1 == 2
+	// assert 1 == 2
 
 	//@ ghost var processedTStar bool = false
 	//@ ghost var tStarHasCommitment bool = false

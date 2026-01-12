@@ -55,7 +55,7 @@ func RootNode(tree_size uint64) (res uint64) {
 }
 
 // @ preserves tree!= nil ==>tree.Inv()
-// @ trusted
+// @ trusted //TODO
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	if tree == nil {
 		return

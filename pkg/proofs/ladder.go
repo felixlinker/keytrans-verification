@@ -244,8 +244,10 @@ func tStar_pure_orig(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
 
 // @ requires base > 0
 // =========Hyperproperties=====
-// @ requires low(base)
-// @ ensures low(r)
+// requires low(base)
+//
+//	ensures low(r)
+//
 // =============================
 // @ ensures r >= 0
 // @ ensures IntPow2(r) <= base
@@ -282,8 +284,10 @@ func PowOf2(exp uint64) (r uint64) {
 // @ requires t1 >= 0
 // @ requires t2 > t1
 // =========Hyperproperties=====
-// @ requires low(t1) && low(t2)
-// @ ensures low(t_star)
+//
+//	requires low(t1) && low(t2)
+//	ensures low(t_star)
+//
 // =============================
 // @ ensures t_star >= 1
 // @ ensures t_star == TStar_pure(t1,t2)
@@ -296,8 +300,10 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ requires t1 > 0
 // @ requires t2 > t1
 // =========Hyperproperties=====
-// @ requires low(t1) && low(t2) && low(pick_lowest)
-// @ ensures low(t_star)
+//
+//	requires low(t1) && low(t2) && low(pick_lowest)
+//	ensures low(t_star)
+//
 // =============================
 // @ ensures t_star == tStar_pure_orig(t1,t2,pick_lowest)
 func tStar_orig(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
@@ -331,8 +337,10 @@ func tStar_orig(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 // @ requires t1>0
 // @ requires t2 > t1
 // =========Hyperproperties=====
-// @ requires low(t1) && low(t2)
-// @ ensures low(t_star)
+//
+//	requires low(t1) && low(t2)
+//	ensures low(t_star)
+//
 // =============================
 // @ ensures t_star > t1 && t_star <= t2
 // @ ensures tStar_pure(t1, t2) == t_star
@@ -347,8 +355,10 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ requires t1 >= x_in
 // @ requires t1 < x_out
 // =========Hyperproperties=====
-// @ requires low(t1) && low(t2) && low(x_in) && low(x_out)
-// @ ensures low(r)
+// requires low(t1) && low(t2) && low(x_in) && low(x_out)
+//
+//	ensures low(r)
+//
 // =============================
 // @ ensures r > t1 && r <= t2
 // @ ensures r == tStarRec_pure(t1,t2,x_in, x_out)
@@ -724,7 +734,6 @@ func findExpTarget_link_loop(target uint64, k uint64){
 // @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
 // @ ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
 // @ ensures forall i uint64 :: 0<= i && i < len(r) ==> r[i] >= 0
-// @ trusted //TODO
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -738,7 +747,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	//@ invariant len(r) == int(k)
 	//@ invariant forall j uint64 :: 0 <= j && j < len(r) ==> r[j] == expJumpElement(j)
 	//@ invariant k == 0 || IntPow2(k - 1) <= target + 1 //Important invariant for the findExpTarget_link_loop in below
-	//@ invariant low(i)
+	// invariant low(i)
 	for i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
 		i = i * 2
@@ -816,12 +825,14 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires t2 < target && !(Log2Floor_pure(target+1) > Log2Floor_pure(t2+1)) ==> (foundTStar ==> r[currIdx] == TStar_pure( t2, target)) &&  (!foundTStar ==> isOnPath(TStar_pure(t2, target), target, x_in, x_out))
 // @ requires k == findExpLevel(target)
 // =========Hyperproperties=====
-// @ requires low(target)
-// @ requires low(r)
-// @ requires low(x_in) && low(x_out)
-// @ requires low(t2) && low(k) && low(currIdx) && low(foundTStar)
-// @ ensures low(res)
-// @ ensures low(resIdx)
+//
+//	requires low(target)
+//	requires low(r)
+//	requires low(x_in) && low(x_out)
+//	requires low(t2) && low(k) && low(currIdx) && low(foundTStar)
+//	ensures low(res)
+//	ensures low(resIdx)
+//
 // =============================
 // @ ensures acc(res)
 // @ ensures len(res) >= len(r)
@@ -830,13 +841,12 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ ensures t2 < target ==> res[resIdx] == TStar_pure(t2,target)
 // @ ensures forall l uint64 :: 0<= l && l < len(res) ==> res[l] >= 0
 // @ decreases x_out - x_in
-// @ trusted //TODO
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost k uint64, ghost currIdx int, ghost foundTStar bool@*/) (res []uint64 /*@, ghost resIdx int@*/) {
 	if x_in+1 >= x_out {
 		return r /*@, currIdx@*/
 	}
 	next := x_in + (x_out-x_in)/2
-	// @ assert low(next)
+	//  assert low(next)
 	//@ thisIdx := len(r)  //Keep track of the last element
 	r = append( /*@ perm(1/2), @*/ r, next)
 
@@ -891,16 +901,18 @@ func GetInt() (res uint64)
 @*/
 
 // @ requires target >= 0
-// @ requires low(target)
-// @ ensures low(r1)
+//
+//	requires low(target)
+//	ensures low(r1)
+//
 // @ ensures acc(r1)
 // @ ensures forall t2 uint64 :: exists idx1 uint64 :: target < t2 ==> 0 <= idx1 && idx1 < len(r1) && TStar_pure(target, t2) == r1[idx1]
 // @ ensures forall t2 uint64 :: exists idx2 uint64 ::target > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(r1) && TStar_pure(t2, target) == r1[idx2]
-// @ trusted //TODO
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	//@ t2 := GetInt()
 	//@ assume t2 != target
-	//@ assume t2 >= 0 && low(t2)
+	//@ assume t2 >= 0
+	// assume low(t2)
 	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 	//@ assert target < t2 ==>  TStar_pure(target, t2) == res[idx]
 	//@ assert exists idx1 uint64 :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1]
