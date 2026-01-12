@@ -1,7 +1,5 @@
 package proofs
 
-// ##(--hyperMode extended)
-
 //TODO: Lemmas kombinieren, simplifizieren.
 
 // ===========================================================================================

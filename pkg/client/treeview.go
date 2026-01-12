@@ -6,8 +6,6 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
-// ##(--hyperMode extended)
-
 // This file implements Section 4, "Updating Views of the Tree"
 
 type ImplicitBinarySearchTree struct {
@@ -23,34 +21,45 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 	(t.Right != nil ==> t.Right.Inv())
 }
 
+pred (t *ImplicitBinarySearchTree) LowInv() {
+	 acc(t) && low(t) &&
+	(t.Left != nil ==> t.Left.LowInv()) &&
+	(t.Right != nil ==> t.Right.LowInv())
+}
 @*/
 
 // Get the largest power of two smaller than tree_size
-// @ requires tree_size >= 0
-// @ preserves low(tree_size)
+// @ requires tree_size >= 1
+// @ ensures res >= 0
+// @ requires low(tree_size)
+// @ ensures low(res)
 func RootNode(tree_size uint64) (res uint64) {
 	if tree_size == 1 {
 		return 0
 	}
 
 	var power uint64 = 1
+	var prevPower uint64 = 1
+	//@ invariant power > 0
+	//@ invariant low(tree_size)
+	//@ invariant low(power)
+	//@ invariant low(prevPower)
+	//@ invariant power - 1 < tree_size ==> prevPower < tree_size
+	//@ invariant prevPower == 1 || prevPower * 2 == power
 	for power-1 < tree_size {
-		power = power << 1
+		prevPower = power
+		power = power * 2
 	}
-	return (power >> 1) - 1
+	//@ assert prevPower > 0
+	return prevPower - 1
 }
 
-// @ preserves tree!= nil ==> tree.Inv()
-// @ preserves tree != nil ==> acc(tree) && acc(tree.Left.Inv()) && acc(tree.Right.Inv())
-// @ preserves tree != nil ==> low(tree) && low(by) && low(tree.Left) && low(tree.Right)
-// @ trusted //TODO
+// @ preserves tree!= nil ==>tree.Inv()
+// @ trusted
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	if tree == nil {
 		return
 	}
-
-	//@ assert low(tree.Left)
-	//@ assert low(tree.Right)
 	//@ unfold tree.Inv()
 	tree.Root += by
 	tree.Left.OffSet(by)
@@ -63,7 +72,6 @@ func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 // @ requires  noPerm < p
 // @ preserves acc(tree.Inv(), p)
 // @ ensures   err == nil ==> acc(path)
-// @ trusted //TODO
 func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(tree.Inv(), p)
 	if tree.Root == node {
@@ -153,16 +161,17 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 // @ ensures tree_size != 0 ==> tree != nil
 // @ ensures tree != nil ==> tree.Inv()
 // @ ensures low(tree) ==> low(tree_size)
-// @ trusted //TODO
+// @ trusted
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
-	root := RootNode(tree_size)
 	if tree_size == 0 {
 		return nil
 	} else if tree_size == 1 {
+		root := RootNode(tree_size)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
 		//@ fold tree.Inv()
 		return
 	}
+	root := RootNode(tree_size)
 
 	left := MkImplicitBinarySearchTree(root)
 	right := MkImplicitBinarySearchTree(tree_size - root - 1)
@@ -193,7 +202,7 @@ pred (s *UserState) Inv() {
 // @ requires noPerm < p
 // @ preserves acc(timestamps, p)
 // @ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
-// @ trusted //TODO
+// @ trusted
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	if len(timestamps) == 0 {
 		return true

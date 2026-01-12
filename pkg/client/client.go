@@ -159,7 +159,6 @@ ghost
 opaque
 decreases
 pure
-//Queries1 == Queries2 ==> Same results ==> deterministic
 func CommitmentExistsInTree(RootHash []byte, label []byte, Version uint64) bool
 
 
@@ -174,53 +173,91 @@ type PT interface {
 	// label and version pair provided. Returns nil if we can prove that the
 	// prefix tree does not contain a key for the label and version pair provided.
 	// Returns error in any other case.
+	//@ pred Mem()
 
 	//ensures low(RootHash) ==> (rel(RootHash, 0) == rel(RootHash, 1))
 	// ensures low(RootHash) && err == nil ==> low(res)
 	//@ requires Label != nil && len(Label) >= 0
 	//@ requires Version >= 0
 	//@ ensures err == nil ==> res != nil == CommitmentExistsInTree(RootHash, Label, Version)
-	//@ ensures low(RootHash) && low(Label) && err == nil ==> low(res)
-	//@ ensures err != nil ==> res == nil
+	//@ ensures low(RootHash) && low(Label) && low(Version) && err == nil ==> low(res)
 	//@ ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
+	//@ ensures err != nil ==> res == nil
 	GetCommitment(Label []byte, Version uint64 /*@, ghost RootHash []byte@*/) (res []byte, err error)
 }
 
+//Queries1 == Queries2 ==> Same results ==> deterministic
+
+// CheckGreatest verifies if t is the greatest version
+// Returns:
+//
+//	-1: Greatest version < t (found hole at or below t), the greatest version does not exist so far
+//	 0: t is the greatest version
+//	 1: Greatest version > t (found commitment above t), violates t being the greatest version
+//
 // @ requires acc(label)
 // @ requires len(label) > 0
 // @ requires label != nil
 // @ requires t != t2
 // @ requires t >= 0 && t2 >= 0
 // @ requires prefixTree != nil
-// Determinism
+
+// Low conditions for determinism
+
 // @ requires low(label)
 // @ requires low(RootHash)
 // @ requires low(t)
 // @ requires low(t2)
-// @ ensures low(t) ==> low(res)
 // @ ensures low(res)
-// @ ensures low(err==nil)
+// @ ensures low(err == nil)
+// Correctness
+// @ ensures err == nil && res == -1 ==> exists step uint64 :: step <= t && !CommitmentExistsInTree(RootHash, label, step)
+// @ ensures err == nil && res == 1 ==> exists step uint64 :: step > t && CommitmentExistsInTree(RootHash, label, step)
+// Uniqueness of the FBLS
+// @ ensures err == nil && res == 0 && t2 > t ==> !CommitmentExistsInTree(RootHash, label, proofs.TStar_pure(t, t2))
+// @ ensures err == nil && res == 0 && t2 < t ==> CommitmentExistsInTree(RootHash, label, proofs.TStar_pure(t2, t))
 func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64, RootHash []byte@*/) (res int, err error) {
 	steps /*@, idx2 @*/ := proofs.FullBinaryLadderSteps(t /*@, t2@*/)
-	//@ assume forall l int :: 0 <= l && l < len(steps) ==> low(steps[l])
+	//TODO: We need to get rid of these assumes
+
+	//@ assume low(len(steps))
+	//@ assume forall j uint64 :: j >= 0 && j < len(steps) ==> low(steps[j])
+	//The following assert will return an error, so no assume false
+	//  assert 1 == 2
+
+	//@ ghost var processedTStar bool = false
 	//@ ghost var tStarHasCommitment bool = false
 
+	/*@
+		assert 0 <= idx2 && idx2 < len(steps)
+		ghost var tStar uint64
+		if t < t2{
+			tStar = proofs.TStar_pure(t,t2)
+			assert tStar <= t2 && tStar > t
+		}else {
+			tStar = proofs.TStar_pure(t2,t)
+			assert tStar > t2 && tStar <= t
+		}
+	@*/
+
 	//@ invariant acc(steps)
-	//@ invariant idx >= 0 && idx <= len(steps)
-	//@ invariant forall l uint64 :: l >= 0 && l < len(steps) ==> steps[l]>=0
+	//@ invariant 0 <= idx && idx <= len(steps)
+	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> steps[l] >= 0
+	//@ invariant low(len(steps))
+	//@ invariant forall j uint64 :: j >= 0 && j < len(steps) ==> low(steps[j])
 	//@ invariant low(label)
 	//@ invariant low(RootHash)
-	//@ invariant err != nil ==> res == 0
 	//@ invariant low(idx)
-	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> low(steps[l])
+	//@ invariant steps[idx2] == tStar
+	//@ invariant forall j int :: 0 <= j && j < idx ==>
+	//@ 	(steps[j] <= t ==> CommitmentExistsInTree(RootHash, label, steps[j])) &&
+	//@ 	(steps[j] > t ==> !CommitmentExistsInTree(RootHash, label, steps[j]))
 	for idx := 0; idx < len(steps); idx++ {
 		step := steps[idx]
 		if commitment, err := prefixTree.GetCommitment(label, step /*@,RootHash@*/); err != nil {
 			return 0, err
 		} else {
 			incl := commitment != nil
-			//@ assert low(err == nil)
-			//@ assert low(incl)
 			//@ assert err == nil
 			if !incl && step <= t { //Claimed Greatest is less than t
 				//@ assert step <= t
@@ -228,11 +265,13 @@ func CheckGreatest(prefixTree PT, label []byte, t uint64 /*@, t2 uint64, RootHas
 			} else if incl && t < step { //Greatest is greater than t
 				//@ assert step > t
 				return 1, nil
-			} else if incl && step <= t {
+			} /* else if incl && step <= t {
 				continue
 			} else if !incl && t < step {
 				continue
-			}
+			}*/
+			//@ assert (step <= t ==> CommitmentExistsInTree(RootHash, label, step))
+			//@ assert (step > t ==> !CommitmentExistsInTree(RootHash, label, step))
 		}
 
 	}
