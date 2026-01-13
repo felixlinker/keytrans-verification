@@ -21,11 +21,6 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 	(t.Right != nil ==> t.Right.Inv())
 }
 
-pred (t *ImplicitBinarySearchTree) LowInv() {
-	 acc(t) && low(t) &&
-	(t.Left != nil ==> t.Left.LowInv()) &&
-	(t.Right != nil ==> t.Right.LowInv())
-}
 @*/
 
 // Get the largest power of two smaller than tree_size
@@ -157,10 +152,10 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 }
 
 // @ requires tree_size >= 0
-// @ requires low(tree_size)
 // @ ensures tree_size != 0 ==> tree != nil
 // @ ensures tree != nil ==> tree.Inv()
-// @ ensures low(tree) ==> low(tree_size)
+// @ requires low(tree_size)
+// @ ensures low(tree)
 // @ trusted
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	if tree_size == 0 {
@@ -202,7 +197,7 @@ pred (s *UserState) Inv() {
 // @ requires noPerm < p
 // @ preserves acc(timestamps, p)
 // @ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
-// @ trusted
+// @ trusted //TODO
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	if len(timestamps) == 0 {
 		return true
