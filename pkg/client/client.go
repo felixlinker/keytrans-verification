@@ -1,7 +1,6 @@
 package client
 
 import (
-	"crypto/sha256"
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
@@ -166,8 +165,18 @@ type PT interface {
 }
 
 type PTImpl struct {
-	Tree       *proofs.PrefixTree
-	VrfOutputs map[uint64][sha256.Size]byte // Cached VRF outputs for each version
+	Tree *proofs.PrefixTree
+	// VrfOutputs map[uint64][sha256.Size]byte // Cached VRF outputs for each version
+}
+
+// @ requires Label != nil && len(Label) >= 0
+// @ requires Version >= 0
+// @ ensures err == nil ==> res != nil == CommitmentExistsInTree(RootHash, Label, Version)
+// @ ensures low(RootHash) && low(Label) && low(Version) && err == nil ==> low(res)
+// @ ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
+// @ ensures err != nil ==> res == nil
+func (prefixTree *PTImpl) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
+	return nil, nil
 }
 
 func ToPrefixTree(Label []byte, frontier uint64) (prefixTree PT, err error) {
@@ -193,48 +202,95 @@ func ToPrefixTree(Label []byte, frontier uint64) (prefixTree PT, err error) {
 // @ requires low(label)
 // @ requires low(prefixTree)
 // @ requires low(RootHash)
-// Uniqueness of the FBLS
+// Uniqueness of the FBLS, must use rel() to do it.
 // Goal:
 // @ ensures low(err == nil) && low(res == 0) ==> low(t)
-func CheckGreatest(prefixTree PT, label []byte, t uint64, RootHash []byte) (res int, err error) {
+func CheckGreatest(prefixTree PT, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64) (res int, newTerminalLogEntry int, err error) {
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
 	//TODO: We need to get rid of these assumes
 	//The following assert will return an error, so no assume false
 	// assert 1 == 2
+	resultRes := 0
+	var resultErr error = nil
+	determined := false // Flag to track if we've found our answer
 
 	//@ invariant acc(steps)
 	//@ invariant 0 <= idx && idx <= len(steps)
 	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> steps[l] >= 0
 	//@ invariant low(label)
 	//@ invariant low(RootHash)
-	//@ invariant low(idx)
 	for idx := 0; idx < len(steps); idx++ {
-		step := steps[idx]
-		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
-		// assert 1 == 2
-		if err != nil {
-			return 0, err
-		} else {
-			incl := commitment != nil
-			//@ assert low(incl)
-			//@ assert low(step) && low(t)
-			//@ assert low(step <= t)  // Should follow from low(step) && low(t)
-			//@ assert low(t < step)
+		if !determined {
+			step := steps[idx]
+			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 
-			if !incl && step <= t { //Claimed Greatest is less than t
-				//@ assert low(commitment == nil)  // From PT postcondition
-				//@ assert step <= t
-				return -1, nil
-			} else if incl && t < step { //Greatest is greater than t
-				//@ assert low(commitment != nil)
-				//@ assert step > t
-				return 1, nil
+			if err != nil {
+				resultRes = 0
+				resultErr = err
+				determined = true
+			} else {
+				incl := commitment != nil
+
+				if !incl && step <= t { // Claimed Greatest is less than t
+					//@ assert step <= t
+					resultRes = -1
+					resultErr = nil
+					determined = true
+				} else if incl && t < step { // Greatest is greater than t
+					//@ assert step > t
+					resultRes = 1
+					resultErr = nil
+					determined = true
+				}
 			}
 		}
+		//To avoid Early termination: if determined is true, we just continue looping without doing anything
+	}
+	LtGtOrEq := resultRes
+	err = resultErr
+	newTerminalLogEntry = terminalLogEntry
 
+	if err != nil {
+		return 0, terminalLogEntry, err
+	} else {
+		if LtGtOrEq == 1 {
+			return 0, terminalLogEntry, errors.New("not the greatest version as expected")
+		}
+		if LtGtOrEq == 0 && terminalLogEntry == -1 {
+			newTerminalLogEntry = int(frontier)
+		}
+		if frontier == size-1 {
+			if LtGtOrEq != 0 {
+				return 0, newTerminalLogEntry, errors.New("t is not the greatest version as expected")
+			}
+		}
 	}
 
-	return 0, nil
+	return LtGtOrEq, newTerminalLogEntry, nil
+}
+
+func GreatestVersionContradiction(LtGtOrEq int, error_from_check error, size uint64, frontier uint64, terminalLogEntry int) (decision bool, err error, terminalLogEntryIsFrontier bool) {
+	terminalLogEntryIsFrontier = false
+
+	if error_from_check != nil {
+		return false, error_from_check, terminalLogEntryIsFrontier
+	} else {
+		if LtGtOrEq == 1 {
+			decision = false
+			err = errors.New("not the greatest version as expected")
+		}
+		if LtGtOrEq == 0 && terminalLogEntry == -1 {
+			terminalLogEntryIsFrontier = true
+		}
+
+		if frontier == size-1 {
+			if LtGtOrEq != 0 {
+				decision = false
+				err = errors.New("t is not the greatest version as expected")
+			}
+		}
+	}
+	return decision, err, terminalLogEntryIsFrontier
 }
 
 type MonitoringMapEntry struct {
@@ -284,32 +340,17 @@ func (st *UserState) VerifyLatestKey(size uint64, query SearchRequest, resp Sear
 		Prefix_tree, err := ToPrefixTree(query.Label, frontier)
 		if err != nil {
 			return false, err
-		} else {
-			//ladder := st.CreateInclusionLadder(t, prefixtree_proof)
-			//if LtGtOrEq, err := ladder.CompareToTheGreatest(query.Label, tVal); err != nil {
-			LtGtOrEq, err := CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash)
-			if err != nil {
-				return false, err
-			} else {
-				if LtGtOrEq == 1 {
-					return false, errors.New("not the greatest version as expected")
-				}
-				if LtGtOrEq == 0 && terminalLogEntry == -1 {
-					terminalLogEntry = int(frontier)
-				}
-
-				if frontier == size-1 {
-					if LtGtOrEq != 0 {
-						return false, errors.New("t is not the greatest version as expected")
-					}
-				}
-			}
+		}
+		_, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size)
+		if err != nil {
+			return false, err
 		}
 	}
+
 	if terminalLogEntry == -1 {
 		return false, errors.New("Claimed Version is not found.")
 	}
-	if frontiers[0] < uint64(terminalLogEntry) {
+	if frontiers[0] < uint64(terminalLogEntry) && err == nil {
 		//TODO: Need also to check if it's in contact monitoring mode, omitted because it's not so important in the proof
 		entry := MonitoringMapEntry{
 			Position: uint64(len(frontiers) - 1),
@@ -319,5 +360,5 @@ func (st *UserState) VerifyLatestKey(size uint64, query SearchRequest, resp Sear
 	}
 
 	//@ assert 1 == 2
-	return true, nil
+	return true, err
 }
