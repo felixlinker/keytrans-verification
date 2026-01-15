@@ -21,6 +21,7 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 	(t.Right != nil ==> t.Right.Inv())
 }
 
+
 @*/
 
 // Get the largest power of two smaller than tree_size
@@ -50,18 +51,14 @@ func RootNode(tree_size uint64) (res uint64) {
 }
 
 // @ preserves tree!= nil ==>tree.Inv()
-// @ trusted //TODO
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
-	if tree == nil {
-		return
+	if tree != nil {
+		//@ unfold tree.Inv()
+		tree.Root += by
+		tree.Left.OffSet(by)
+		tree.Right.OffSet(by)
+		//@ fold tree.Inv()
 	}
-	//@ unfold tree.Inv()
-	tree.Root += by
-	tree.Left.OffSet(by)
-	tree.Right.OffSet(by)
-
-	//@ fold tree.Inv()
-	return
 }
 
 // @ requires  noPerm < p
@@ -133,33 +130,30 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 //		return
 //	}
 //
+
 // @ requires  noPerm < p
 // @ preserves tree != nil ==> acc(tree.Inv(), p)
 // @ ensures   acc(path)
 // @ ensures   tree != nil ==> len(path) > 0
-// @ trusted //TODO
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
-	if tree == nil {
-		return
+	if tree != nil {
+		//@ unfold acc(tree.Inv(), p)
+		path = []uint64{tree.Root}
+		subtreePath := tree.Right.FrontierNodes( /*@ p @*/ )
+		path = append( /*@ p, @*/ path, subtreePath...)
+		//@ fold acc(tree.Inv(), p)
 	}
 
-	//@ unfold acc(tree.Inv(), p)
-	path = []uint64{tree.Root}
-	subtreePath := tree.Right.FrontierNodes( /*@ p @*/ )
-	path = append( /*@ p, @*/ path, subtreePath...)
-	//@ fold acc(tree.Inv(), p)
 	return
 }
 
 // @ requires tree_size >= 0
 // @ ensures tree_size != 0 ==> tree != nil
 // @ ensures tree != nil ==> tree.Inv()
-// @ requires low(tree_size)
-// @ ensures low(tree)
-// @ trusted
+// @ trusted//TODO
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	if tree_size == 0 {
-		return nil
+		return
 	} else if tree_size == 1 {
 		root := RootNode(tree_size)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
@@ -197,27 +191,24 @@ pred (s *UserState) Inv() {
 // @ requires noPerm < p
 // @ preserves acc(timestamps, p)
 // @ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
-// @ trusted //TODO
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
-	if len(timestamps) == 0 {
-		return true
-	}
-
-	tmp := timestamps[0]
-
-	//@ invariant 0 <= k && k <= len(timestamps)
-	//@ invariant acc(timestamps, p)
-	//@ invariant forall i int :: { timestamps[i] } 0 <= i && i < k ==> timestamps[i] <= tmp
-	//@ invariant forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < k ==> timestamps[i] <= timestamps[j]
-	for k := 0; k < len(timestamps); k++ {
-		v := timestamps[k]
-		if tmp > v {
-			return false
+	res = true
+	if len(timestamps) > 0 {
+		tmp := timestamps[0]
+		//@ invariant 0 <= k && k <= len(timestamps)
+		//@ invariant acc(timestamps, p)
+		//@ invariant res ==> forall i int :: { timestamps[i] } 0 <= i && i < k ==> timestamps[i] <= tmp
+		//@ invariant res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < k ==> timestamps[i] <= timestamps[j]
+		for k := 0; k < len(timestamps); k++ {
+			v := timestamps[k]
+			if tmp > v {
+				res = false
+			}
+			tmp = v
 		}
-		tmp = v
 	}
 
-	return true
+	return res
 }
 
 // @ requires  noPerm < p

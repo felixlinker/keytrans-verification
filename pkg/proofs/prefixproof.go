@@ -5,8 +5,6 @@ import (
 	"errors"
 )
 
-// ##(--hyperMode extended)
-
 /*@
 pred (t *PrefixTree) Inv() {
 	acc(t) && (t != nil ==> t.InvRec())

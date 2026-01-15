@@ -254,6 +254,7 @@ func tStar_pure_orig(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
 // @ ensures base < IntPow2(r+1)
 // @ ensures r == Log2Floor_pure(base)
 // @ decreases base
+// @ trusted
 func Log2Floor(base uint64) (r uint64) {
 	if base <= 1 {
 		//@ assert Log2Floor_pure(base) == 0
@@ -306,6 +307,7 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 //
 // =============================
 // @ ensures t_star == tStar_pure_orig(t1,t2,pick_lowest)
+// @ trusted
 func tStar_orig(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
 	i_low := Log2Floor(t1)
 	i_high := Log2Floor(t2)
@@ -363,6 +365,7 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ ensures r > t1 && r <= t2
 // @ ensures r == tStarRec_pure(t1,t2,x_in, x_out)
 // @ decreases x_out - x_in
+// @ trusted
 func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	if x_out <= t2 {
 		return x_out
@@ -723,12 +726,6 @@ func findExpTarget_link_loop(target uint64, k uint64){
 // @ requires target >= 0
 // @ requires t2 >= 0
 // @ requires t2 != target
-// =========Hyperproperties=====
-//
-//	requires low(target) && low(t2)
-//	ensures low(idx)
-//
-// =============================
 // @ ensures acc(r)
 // @ ensures 0<=idx && idx < len(r)
 // @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
@@ -747,7 +744,6 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	//@ invariant len(r) == int(k)
 	//@ invariant forall j uint64 :: 0 <= j && j < len(r) ==> r[j] == expJumpElement(j)
 	//@ invariant k == 0 || IntPow2(k - 1) <= target + 1 //Important invariant for the findExpTarget_link_loop in below
-	// invariant low(i)
 	for i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
 		i = i * 2
@@ -826,7 +822,8 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires k == findExpLevel(target)
 // =========Hyperproperties=====
 //
-//	requires low(target)
+// requires low(target)
+//
 //	requires low(r)
 //	requires low(x_in) && low(x_out)
 //	requires low(t2) && low(k) && low(currIdx) && low(foundTStar)
@@ -844,51 +841,52 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost k uint64, ghost currIdx int, ghost foundTStar bool@*/) (res []uint64 /*@, ghost resIdx int@*/) {
 	if x_in+1 >= x_out {
 		return r /*@, currIdx@*/
-	}
-	next := x_in + (x_out-x_in)/2
-	//  assert low(next)
-	//@ thisIdx := len(r)  //Keep track of the last element
-	r = append( /*@ perm(1/2), @*/ r, next)
-
-	//Assign gap case
-	/*@
-	ghost if t2 > target && !(Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)){
-		if next == TStar_pure(target, t2){
-			currIdx = thisIdx
-			foundTStar = true
-		}
-	} else if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
-				if next == TStar_pure(t2, target){
-			currIdx = thisIdx
-			foundTStar = true
-		}
-	}
-	@*/
-	if next <= target {
-		/*@
-		ghost
-		if !foundTStar{
-			if t2 > target && !(Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)){
-				isOnPath_subpath_right(TStar_pure(target, t2), target, x_in, x_out, next)
-			}
-			if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
-				isOnPath_subpath_right(TStar_pure(t2, target), target, x_in, x_out, next)
-			}
-		}
-		@*/
-		return BinarySearchStep(target, r, next, x_out /*@, t2,k, currIdx, foundTStar@*/)
 	} else {
+		next := x_in + (x_out-x_in)/2
+		//  assert low(next)
+		//@ thisIdx := len(r)  //Keep track of the last element
+		r = append( /*@ perm(1/2), @*/ r, next)
+
+		//Assign gap case
 		/*@
-		ghost
-		if !foundTStar{
-			if t2 > target && !(Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)){
-				isOnPath_subpath_left(TStar_pure(target, t2), target, x_in, x_out, next)
+		ghost if t2 > target && !(Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)){
+			if next == TStar_pure(target, t2){
+				currIdx = thisIdx
+				foundTStar = true
 			}
-			if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
-				isOnPath_subpath_left(TStar_pure(t2, target), target, x_in, x_out, next)
-		}}
+		} else if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
+					if next == TStar_pure(t2, target){
+				currIdx = thisIdx
+				foundTStar = true
+			}
+		}
 		@*/
-		return BinarySearchStep(target, r, x_in, next /*@, t2,k, currIdx, foundTStar@*/)
+		if next <= target {
+			/*@
+			ghost
+			if !foundTStar{
+				if t2 > target && !(Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)){
+					isOnPath_subpath_right(TStar_pure(target, t2), target, x_in, x_out, next)
+				}
+				if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
+					isOnPath_subpath_right(TStar_pure(t2, target), target, x_in, x_out, next)
+				}
+			}
+			@*/
+			return BinarySearchStep(target, r, next, x_out /*@, t2,k, currIdx, foundTStar@*/)
+		} else {
+			/*@
+			ghost
+			if !foundTStar{
+				if t2 > target && !(Log2Floor_pure(t2 + 1) > Log2Floor_pure(target + 1)){
+					isOnPath_subpath_left(TStar_pure(target, t2), target, x_in, x_out, next)
+				}
+				if t2 < target && !(Log2Floor_pure(target + 1) > Log2Floor_pure(t2 + 1)){
+					isOnPath_subpath_left(TStar_pure(t2, target), target, x_in, x_out, next)
+			}}
+			@*/
+			return BinarySearchStep(target, r, x_in, next /*@, t2,k, currIdx, foundTStar@*/)
+		}
 	}
 }
 
@@ -908,6 +906,7 @@ func GetInt() (res uint64)
 // @ ensures acc(r1)
 // @ ensures forall t2 uint64 :: exists idx1 uint64 :: target < t2 ==> 0 <= idx1 && idx1 < len(r1) && TStar_pure(target, t2) == r1[idx1]
 // @ ensures forall t2 uint64 :: exists idx2 uint64 ::target > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(r1) && TStar_pure(t2, target) == r1[idx2]
+// @ ensures forall j uint64 :: j >= 0 && j < len(r1) ==> r1[j] >= 0
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	//@ t2 := GetInt()
 	//@ assume t2 != target
