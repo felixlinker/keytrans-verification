@@ -7,6 +7,14 @@ import (
 )
 
 // ##(--hyperMode extended)
+type PT interface {
+	// Returns non-nil if we can prove that the prefix tree contains a key for the
+	// label and version pair provided. Returns nil if we can prove that the
+	// prefix tree does not contain a key for the label and version pair provided.
+	// Returns error in any other case.
+	//@ pred Mem()
+	GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error)
+}
 
 type TreeHead struct {
 	Tree_size uint64
@@ -155,14 +163,6 @@ func CommitmentExistsInTree(RootHash []byte, label []byte, Version uint64) bool
 
 @
 */
-type PT interface {
-	// Returns non-nil if we can prove that the prefix tree contains a key for the
-	// label and version pair provided. Returns nil if we can prove that the
-	// prefix tree does not contain a key for the label and version pair provided.
-	// Returns error in any other case.
-	//@ pred Mem()
-	GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error)
-}
 
 // CheckGreatest verifies if t is the greatest version
 // Returns:
@@ -285,7 +285,7 @@ type MonitoringMapEntry struct {
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
-	search_tree := MkImplicitBinarySearchTree(size)
+	search_tree := MkImplicitBinarySearchTree(size /*@, p@*/)
 	// assert acc(search_tree.Inv(), p)
 	if search_tree == nil {
 		return false, errors.New("No search tree found")
@@ -297,7 +297,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 	frontiers := search_tree.FrontierNodes( /*@p@*/ )
 	//TODO: Remove this assume
 	//@ assert len(frontiers) > 0
-	//@ assert low(size) ==> low(len(frontiers)) && forall j uint64 :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
+	//@ assume low(size) ==> low(len(frontiers)) && forall j uint64 :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ assume forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < len(prefixTrees)
 	terminalLogEntry := -1
 
@@ -350,6 +350,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 		}
 	}
 
-	//  assert 1 == 2
+	// assert 1 == 2
 	return resultRes, resultErr
 }
