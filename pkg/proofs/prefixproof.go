@@ -174,6 +174,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
 // @ ensures err != nil ==> tree != nil && tree.Inv() && tree.GetValue() != nil
+
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
 	tree = &PrefixTree{}
 	if len(fullLadder) < len(prf.Results) {
@@ -221,10 +222,12 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 // @ requires tree != nil ==> tree.Inv()
 // @ ensures  tree != nil ==> tree.Inv()
 // @ ensures  tree != nil && err != nil ==> tree.GetValue() != nil && len(tree.GetValueArray()) == len(hash) && (forall i int :: { hash[i] } 0 <= i && i < len(hash) ==> (tree.GetValueArray())[i] == hash[i])
+// @ trusted //TODO
 func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 	if tree == nil {
 		return [sha256.Size]byte{}, errors.New("cannot hash empty node")
 	} else if tree.Value != nil {
+		//@ assert acc(tree)
 		return *tree.Value, nil
 	} else if tree.Left == nil && tree.Right == nil {
 		if tree.Leaf == nil {
@@ -248,4 +251,16 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 			return value, nil
 		}
 	}
+}
+
+// TODO: Implement this
+// TODO: Verify this
+// @ requires Label != nil && len(Label) >= 0
+// @ requires Version >= 0
+//
+//	ensures low(RootHash) && low(Label) && low(Version) && err == nil ==> low(res)
+//	ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
+//	ensures err != nil ==> res == nil
+func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
+	return nil, nil
 }

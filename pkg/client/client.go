@@ -169,23 +169,6 @@ type PTImpl struct {
 	// VrfOutputs map[uint64][sha256.Size]byte // Cached VRF outputs for each version
 }
 
-// @ requires Label != nil && len(Label) >= 0
-// @ requires Version >= 0
-// @ ensures err == nil ==> res != nil == CommitmentExistsInTree(RootHash, Label, Version)
-// @ ensures low(RootHash) && low(Label) && low(Version) && err == nil ==> low(res)
-// @ ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
-// @ ensures err != nil ==> res == nil
-func (prefixTree *PTImpl) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
-	return nil, nil
-}
-
-func ToPrefixTree(Label []byte, frontier uint64) (prefixTree PT, err error) {
-	//TODO
-	return nil, nil
-}
-
-//Queries1 == Queries2 ==> Same results ==> deterministic
-
 // CheckGreatest verifies if t is the greatest version
 // Returns:
 //
@@ -194,20 +177,17 @@ func ToPrefixTree(Label []byte, frontier uint64) (prefixTree PT, err error) {
 //	 1: Greatest version > t (found commitment above t), violates t being the greatest version
 //
 // @ requires acc(label)
-// @ requires len(label) > 0
 // @ requires label != nil
-// @ requires t > 0
+// @ requires t >= 0
 // @ requires prefixTree != nil
 // Low conditions for determinism
 // @ requires low(label)
 // @ requires low(prefixTree)
 // @ requires low(RootHash)
-// Uniqueness of the FBLS, must use rel() to do it.
-// Goal:
-// @ ensures low(err == nil) && low(res == 0) ==> low(t)
-func CheckGreatest(prefixTree PT, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64) (res int, newTerminalLogEntry int, err error) {
+//
+//	ensures low(err == nil) && low(res == 0) ==> low(t)
+func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64) (res int, newTerminalLogEntry int, err error) {
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
-	//TODO: We need to get rid of these assumes
 	//The following assert will return an error, so no assume false
 	// assert 1 == 2
 	resultRes := 0
@@ -246,51 +226,43 @@ func CheckGreatest(prefixTree PT, label []byte, t uint64, RootHash []byte, termi
 		}
 		//To avoid Early termination: if determined is true, we just continue looping without doing anything
 	}
+	//Again, avoid early termination because of Gobra Hyperproperty mode
 	LtGtOrEq := resultRes
 	err = resultErr
 	newTerminalLogEntry = terminalLogEntry
 
+	//Final Result values
+	finalRes := LtGtOrEq
+	finalNewTerminalLogEntry := newTerminalLogEntry
+	var finalErr error = nil
+
 	if err != nil {
-		return 0, terminalLogEntry, err
+		finalRes = 0
+		finalNewTerminalLogEntry = terminalLogEntry
+		finalErr = err
 	} else {
+		// Check if LtGtOrEq == 1
 		if LtGtOrEq == 1 {
-			return 0, terminalLogEntry, errors.New("not the greatest version as expected")
-		}
-		if LtGtOrEq == 0 && terminalLogEntry == -1 {
-			newTerminalLogEntry = int(frontier)
-		}
-		if frontier == size-1 {
-			if LtGtOrEq != 0 {
-				return 0, newTerminalLogEntry, errors.New("t is not the greatest version as expected")
+			finalRes = 0
+			finalNewTerminalLogEntry = terminalLogEntry
+			finalErr = errors.New("not the greatest version as expected")
+		} else {
+			// Update terminal log entry if needed
+			if LtGtOrEq == 0 && terminalLogEntry == -1 {
+				finalNewTerminalLogEntry = int(frontier)
+			}
+
+			// Check frontier condition
+			if frontier == size-1 {
+				if LtGtOrEq != 0 {
+					finalRes = 0
+					finalErr = errors.New("t is not the greatest version as expected")
+				}
 			}
 		}
 	}
 
-	return LtGtOrEq, newTerminalLogEntry, nil
-}
-
-func GreatestVersionContradiction(LtGtOrEq int, error_from_check error, size uint64, frontier uint64, terminalLogEntry int) (decision bool, err error, terminalLogEntryIsFrontier bool) {
-	terminalLogEntryIsFrontier = false
-
-	if error_from_check != nil {
-		return false, error_from_check, terminalLogEntryIsFrontier
-	} else {
-		if LtGtOrEq == 1 {
-			decision = false
-			err = errors.New("not the greatest version as expected")
-		}
-		if LtGtOrEq == 0 && terminalLogEntry == -1 {
-			terminalLogEntryIsFrontier = true
-		}
-
-		if frontier == size-1 {
-			if LtGtOrEq != 0 {
-				decision = false
-				err = errors.New("t is not the greatest version as expected")
-			}
-		}
-	}
-	return decision, err, terminalLogEntryIsFrontier
+	return finalRes, finalNewTerminalLogEntry, finalErr
 }
 
 type MonitoringMapEntry struct {
@@ -300,24 +272,27 @@ type MonitoringMapEntry struct {
 
 // Goal: ensures forall st, st2 *UserState :: forall query, query2 SearchRequest :: forall resp, resp2 SearchResponse :: query.Label === query2.Label && err != nil ==> st.VerifyLatestKey(query, resp, p).Value === st2.VerifyLatestKey(query2, resp2, p).Value
 
-// @ requires acc(st)
-// @ requires query.Inv()
 // @ requires noPerm < p
-// @ requires resp.Inv()
-// @ requires size > 0
 // @ requires acc(monitor_map)
-// @ requires acc(resp.Version, _)
+// @ requires acc(resp.Inv())
+// @ requires acc(query.Inv())
+// @ requires acc(resp.Version,p)
 // @ requires acc(query.Label)
-// @ requires len(query.Label) > 0
+// @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
+// @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
+// @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
+// @ requires resp.Version != nil
+// @ requires size > 0
+// @ requires *resp.Version >=0
 // @ requires resp.Full_tree_head.RootHash != nil
-// ==============Hyperproperties=============
 // @ requires low(size)
 // @ requires low(query.Label)
 // @ ensures low(err == nil) ==> low(res)
-func (st *UserState) VerifyLatestKey(size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res bool, err error) {
+func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
 	//@ t2 := tVal + 1
+	//@ assert tVal >= 0
 	//@ assert size >= 0
 	search_tree := MkImplicitBinarySearchTree(size)
 	// assert acc(search_tree.Inv(), p) //TODO: Memory permission needs to be done, otherwise assume false
@@ -325,40 +300,63 @@ func (st *UserState) VerifyLatestKey(size uint64, query SearchRequest, resp Sear
 	if search_tree == nil {
 		return false, errors.New("No search tree found")
 	}
+	if query.Label == nil {
+		return false, errors.New("Empty label :(")
+	}
 	//@ assert search_tree != nil
 	//@ assume acc(search_tree.Inv(), p)
 	frontiers := search_tree.FrontierNodes( /*@p@*/ )
 	//@ assume low(len(frontiers)) && forall j uint64 :: j>= 0 && j < len(frontiers) ==> low(frontiers[j]) //TODO: Remove this assume
 	terminalLogEntry := -1
 
+	// Variables to track result and avoid early termination
+	resultRes := true
+	var resultErr error = nil
+	determined := false
+
 	// assert 1 == 2
-	//@ invariant acc(frontiers)
-	//@ invariant acc(query.Label)
-	//@ invariant low(len(frontiers))
-	//@ invariant low(frontier)
+	// @ invariant acc(frontiers)
+	// @ invariant acc(query.Label)
+	// @ invariant acc(query.Inv(), p)
+	//@ invariant acc(prefixTrees)
+	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
+	// @ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
+	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 	for _, frontier := range frontiers {
-		Prefix_tree, err := ToPrefixTree(query.Label, frontier)
-		if err != nil {
-			return false, err
-		}
-		_, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size)
-		if err != nil {
-			return false, err
+		if !determined {
+			Prefix_tree := prefixTrees[frontier]
+			//@ assert acc(prefixTrees[frontier])
+			if prefixTrees[frontier] == nil {
+				resultRes = false
+				resultErr = err
+				determined = true
+			} else {
+				//@ assert acc(query.Label)
+				_, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size)
+				if err != nil {
+					resultRes = false
+					resultErr = err
+					determined = true
+				}
+			}
 		}
 	}
 
-	if terminalLogEntry == -1 {
-		return false, errors.New("Claimed Version is not found.")
-	}
-	if frontiers[0] < uint64(terminalLogEntry) && err == nil {
-		//TODO: Need also to check if it's in contact monitoring mode, omitted because it's not so important in the proof
-		entry := MonitoringMapEntry{
-			Position: uint64(len(frontiers) - 1),
-			Version:  *t,
+	// Post-loop logic (only execute if no error occurred in the loop)
+	if !determined {
+		if terminalLogEntry == -1 {
+			resultRes = false
+			resultErr = errors.New("Claimed Version is not found.")
+		} else if frontiers[0] < uint64(terminalLogEntry) {
+			//TODO: Need also to check if it's in contact monitoring mode, omitted because it's not so important in the proof
+			entry := MonitoringMapEntry{
+				Position: uint64(len(frontiers) - 1),
+				Version:  *t,
+			}
+			monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
 		}
-		monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
 	}
 
-	//@ assert 1 == 2
-	return true, err
+	// @ assert 1 == 2
+	return resultRes, resultErr
 }

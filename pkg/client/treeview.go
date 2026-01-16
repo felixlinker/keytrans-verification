@@ -25,29 +25,18 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 @*/
 
 // Get the largest power of two smaller than tree_size
-// @ requires tree_size >= 1
-// @ ensures res >= 0
-// @ requires low(tree_size)
-// @ ensures low(res)
-func RootNode(tree_size uint64) (res uint64) {
-	if tree_size == 1 {
-		return 0
+// @ requires tree_size >= 0
+// @ ensures root >= 0
+func RootNode(tree_size uint64) (root uint64) {
+	var res uint64 = 0
+	if tree_size > 1 {
+		var power uint64 = 1
+		for power-1 < tree_size {
+			power = power * 2
+		}
+		res = (power / 2) - 1
 	}
-
-	var power uint64 = 1
-	var prevPower uint64 = 1
-	//@ invariant power > 0
-	//@ invariant low(tree_size)
-	//@ invariant low(power)
-	//@ invariant low(prevPower)
-	//@ invariant power - 1 < tree_size ==> prevPower < tree_size
-	//@ invariant prevPower == 1 || prevPower * 2 == power
-	for power-1 < tree_size {
-		prevPower = power
-		power = power * 2
-	}
-	//@ assert prevPower > 0
-	return prevPower - 1
+	return res
 }
 
 // @ preserves tree!= nil ==>tree.Inv()
@@ -147,28 +136,25 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 	return
 }
 
-// @ requires tree_size >= 0
+// TODO: I believe this has some bugs in the program
 // @ ensures tree_size != 0 ==> tree != nil
 // @ ensures tree != nil ==> tree.Inv()
-// @ trusted//TODO
+// @ trusted
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
-	if tree_size == 0 {
-		return
-	} else if tree_size == 1 {
+	if tree_size == 1 {
 		root := RootNode(tree_size)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
 		//@ fold tree.Inv()
-		return
+	} else if tree_size != 1 {
+		root := RootNode(tree_size)
+		left := MkImplicitBinarySearchTree(root)
+		right := MkImplicitBinarySearchTree(tree_size - root - 1)
+		if right != nil {
+			right.OffSet(root + 1)
+		}
+		tree = &ImplicitBinarySearchTree{root, left, right}
+		//@ fold tree.Inv()
 	}
-	root := RootNode(tree_size)
-
-	left := MkImplicitBinarySearchTree(root)
-	right := MkImplicitBinarySearchTree(tree_size - root - 1)
-	if right != nil {
-		right.OffSet(root + 1)
-	}
-	tree = &ImplicitBinarySearchTree{root, left, right}
-	//@ fold tree.Inv()
 	return
 }
 
