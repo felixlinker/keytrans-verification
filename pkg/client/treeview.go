@@ -22,19 +22,37 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 }
 
 
+pred (t *ImplicitBinarySearchTree) IsLow() {
+	acc(t) &&
+	low(t.Root) &&
+	low(t.Left) &&
+	low(t.Right) &&
+	(t.Left != nil ==> t.Left.IsLow()) &&
+	(t.Right != nil ==> t.Right.IsLow())
+}
+
+
 @*/
 
 // Get the largest power of two smaller than tree_size
 // @ requires tree_size >= 0
+// @ requires low(tree_size)
 // @ ensures root >= 0
+// @ ensures tree_size >1 ==> root < tree_size
+// @ ensures low(root)
 func RootNode(tree_size uint64) (root uint64) {
 	var res uint64 = 0
-	if tree_size > 1 {
+	if tree_size >= 1 {
 		var power uint64 = 1
+		var prev uint64 = 1
+		//@ invariant low(power) && low(tree_size) && low(prev)
+		//@ invariant prev - 1 < tree_size
+		//@ invariant power >=1 && prev >=1
 		for power-1 < tree_size {
+			prev = power
 			power = power * 2
 		}
-		res = (power / 2) - 1
+		res = prev - 1
 	}
 	return res
 }
@@ -132,20 +150,28 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 		path = append( /*@ p, @*/ path, subtreePath...)
 		//@ fold acc(tree.Inv(), p)
 	}
-
 	return
 }
 
-// TODO: I believe this has some bugs in the program
+// @ requires tree_size >= 0
+// @ requires low(tree_size)
+// @ ensures tree_size == 0 ==> tree == nil
 // @ ensures tree_size != 0 ==> tree != nil
-// @ ensures tree != nil ==> tree.Inv()
-// @ trusted
+// @ ensures tree == nil ==> low(tree)
+// @ ensures tree != nil ==> tree.Inv() && tree.IsLow()
+// @ ensures tree != nil ==> tree.IsLow()
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
-	if tree_size == 1 {
+	if tree_size == 0 {
+		tree = nil
+		//@ assert low(tree)
+	} else if tree_size == 1 {
 		root := RootNode(tree_size)
+		//@ assert low(root)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
 		//@ fold tree.Inv()
-	} else if tree_size != 1 {
+		//@ fold tree.IsLow()
+		//@ assert acc(tree)
+	} else if tree_size > 1 {
 		root := RootNode(tree_size)
 		left := MkImplicitBinarySearchTree(root)
 		right := MkImplicitBinarySearchTree(tree_size - root - 1)
@@ -154,7 +180,10 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 		}
 		tree = &ImplicitBinarySearchTree{root, left, right}
 		//@ fold tree.Inv()
+		//@ fold tree.IsLow()
+		//@ assert acc(tree)
 	}
+
 	return
 }
 

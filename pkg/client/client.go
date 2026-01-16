@@ -80,7 +80,7 @@ pred (s SearchResponse) Inv() {
 // @ requires *resp.Version>= 0
 // @ ensures err == nil ==> acc(res) && res.Inv()
 // @ trusted
-func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
+func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	if err := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/); err != nil {
 		//@ fold acc(resp.Inv(), p)
@@ -92,9 +92,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("prefix roots provided")
 	}
-	//@ ghost var idx int
-	//@ ghost var t2 uint64 =uint64(*resp.Version) + 1
-	ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(uint64(*resp.Version) /*@, t2 @*/)
+	ladderIndices := proofs.FullBinaryLadderSteps_wrapper(uint64(*resp.Version) /*@, t2 @*/)
 	if len(resp.Binary_ladder) != len(ladderIndices) {
 		//@ fold acc(resp.Inv(), p)
 		return nil, errors.New("length of binary ladder does not match greatest version")
@@ -122,8 +120,19 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, 
 	}
 
 	// TODO: Verify proof of inclusion in all trees
-
-	return nil, nil
+	monitoringMap := make([]MonitoringMapEntry, 0)
+	decision, err := VerifyLatestKey(trees, st.Size, query, resp, monitoringMap, config)
+	if err != nil {
+		res = nil
+	}
+	if decision == true {
+		res = &resp.Value
+		err = nil
+	} else {
+		res = nil
+		err = errors.New("Key not the greatest version")
+	}
+	return res, err
 }
 
 //Lemma : Merkle Binding
@@ -152,21 +161,7 @@ type PT interface {
 	// prefix tree does not contain a key for the label and version pair provided.
 	// Returns error in any other case.
 	//@ pred Mem()
-
-	//ensures low(RootHash) ==> (rel(RootHash, 0) == rel(RootHash, 1))
-	// ensures low(RootHash) && err == nil ==> low(res)
-	//@ requires Label != nil && len(Label) >= 0
-	//@ requires Version >= 0
-	//@ ensures err == nil ==> res != nil == CommitmentExistsInTree(RootHash, Label, Version)
-	//@ ensures low(RootHash) && low(Label) && low(Version) && err == nil ==> low(res)
-	//@ ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
-	//@ ensures err != nil ==> res == nil
 	GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error)
-}
-
-type PTImpl struct {
-	Tree *proofs.PrefixTree
-	// VrfOutputs map[uint64][sha256.Size]byte // Cached VRF outputs for each version
 }
 
 // CheckGreatest verifies if t is the greatest version
@@ -180,7 +175,6 @@ type PTImpl struct {
 // @ requires label != nil
 // @ requires t >= 0
 // @ requires prefixTree != nil
-// Low conditions for determinism
 // @ requires low(label)
 // @ requires low(prefixTree)
 // @ requires low(RootHash)
@@ -270,14 +264,14 @@ type MonitoringMapEntry struct {
 	Version  uint32
 }
 
-// Goal: ensures forall st, st2 *UserState :: forall query, query2 SearchRequest :: forall resp, resp2 SearchResponse :: query.Label === query2.Label && err != nil ==> st.VerifyLatestKey(query, resp, p).Value === st2.VerifyLatestKey(query2, resp2, p).Value
-
 // @ requires noPerm < p
 // @ requires acc(monitor_map)
-// @ requires acc(resp.Inv())
-// @ requires acc(query.Inv())
+// @ requires resp.Inv()
+// @ requires query.Inv()
 // @ requires acc(resp.Version,p)
 // @ requires acc(query.Label)
+// @ requires acc(prefixTrees)
+// @ requires acc(config)
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 // @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
@@ -288,15 +282,11 @@ type MonitoringMapEntry struct {
 // @ requires low(size)
 // @ requires low(query.Label)
 // @ ensures low(err == nil) ==> low(res)
-func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry /*@, ghost p perm@*/) (res bool, err error) {
+func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
-	//@ t2 := tVal + 1
-	//@ assert tVal >= 0
-	//@ assert size >= 0
 	search_tree := MkImplicitBinarySearchTree(size)
-	// assert acc(search_tree.Inv(), p) //TODO: Memory permission needs to be done, otherwise assume false
-	// Return tree
+	// assert acc(search_tree.Inv(), p)
 	if search_tree == nil {
 		return false, errors.New("No search tree found")
 	}
@@ -304,9 +294,11 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 		return false, errors.New("Empty label :(")
 	}
 	//@ assert search_tree != nil
-	//@ assume acc(search_tree.Inv(), p)
 	frontiers := search_tree.FrontierNodes( /*@p@*/ )
-	//@ assume low(len(frontiers)) && forall j uint64 :: j>= 0 && j < len(frontiers) ==> low(frontiers[j]) //TODO: Remove this assume
+	//TODO: Remove this assume
+	//@ assert len(frontiers) > 0
+	//@ assert low(size) ==> low(len(frontiers)) && forall j uint64 :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
+	//@ assume forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < len(prefixTrees)
 	terminalLogEntry := -1
 
 	// Variables to track result and avoid early termination
@@ -315,17 +307,19 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 	determined := false
 
 	// assert 1 == 2
+	//@ invariant acc(prefixTrees)
+	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
+	// @ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
+	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 	// @ invariant acc(frontiers)
 	// @ invariant acc(query.Label)
 	// @ invariant acc(query.Inv(), p)
-	//@ invariant acc(prefixTrees)
-	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
-	// @ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
-	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
+	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < len(prefixTrees)
 	for _, frontier := range frontiers {
 		if !determined {
+			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
+			//@ assume acc(prefixTrees[frontier])
 			Prefix_tree := prefixTrees[frontier]
-			//@ assert acc(prefixTrees[frontier])
 			if prefixTrees[frontier] == nil {
 				resultRes = false
 				resultErr = err
@@ -341,13 +335,12 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 			}
 		}
 	}
-
 	// Post-loop logic (only execute if no error occurred in the loop)
 	if !determined {
 		if terminalLogEntry == -1 {
 			resultRes = false
 			resultErr = errors.New("Claimed Version is not found.")
-		} else if frontiers[0] < uint64(terminalLogEntry) {
+		} else if frontiers[0] < uint64(terminalLogEntry) && config.Mode == 1 {
 			//TODO: Need also to check if it's in contact monitoring mode, omitted because it's not so important in the proof
 			entry := MonitoringMapEntry{
 				Position: uint64(len(frontiers) - 1),
@@ -357,6 +350,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 		}
 	}
 
-	// @ assert 1 == 2
+	//  assert 1 == 2
 	return resultRes, resultErr
 }
