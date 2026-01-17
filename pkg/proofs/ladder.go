@@ -899,10 +899,6 @@ func GetInt() (res uint64)
 @*/
 
 // @ requires target >= 0
-//
-//	requires low(target)
-//	ensures low(r1)
-//
 // @ ensures acc(r1)
 // @ ensures forall t2 uint64 :: exists idx1 uint64 :: target < t2 ==> 0 <= idx1 && idx1 < len(r1) && TStar_pure(target, t2) == r1[idx1]
 // @ ensures forall t2 uint64 :: exists idx2 uint64 ::target > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(r1) && TStar_pure(t2, target) == r1[idx2]

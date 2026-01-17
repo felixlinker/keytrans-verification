@@ -47,28 +47,20 @@ func RootNode(tree_size uint64) (root uint64) {
 	return res
 }
 
-// @ requires  noPerm < p
 // @ requires low(by)
-// @ requires tree!= nil ==>acc(tree.Inv(), p)
-// @ ensures tree!= nil ==>acc(tree.Inv(), p)
+// @ requires tree!= nil ==>tree.Inv()
 // @ ensures low(by)
 // @ ensures tree == nil ==> low(tree)
-// @ ensures tree != nil ==> (unfolding acc(tree.Inv(),p) in low(tree.Root))
+// @ ensures tree != nil ==> (unfolding tree.Inv() in low(tree.Root))
 // @ trusted
-func (tree *ImplicitBinarySearchTree) OffSet(by uint64 /*@,ghost p perm @*/) {
+func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	if tree != nil {
-		//@ unfold acc(tree.Inv(),p)
-		//@ assert low(by)
+		//@ unfold tree.Inv()
 		tree.Root += by
-		//@ assert tree.Left == nil ==> low(tree.Left)
-		//@ assert tree.Left!= nil ==> acc(tree.Left.Inv(), p)
-		tree.Left.OffSet(by /*@,p @*/)
-		//@ assert tree.Right == nil ==> low(tree.Right)
-		//@ assert tree.Right!= nil ==> acc(tree.Right.Inv(),p)
-		tree.Right.OffSet(by /*@,p @*/)
-		//@ fold acc(tree.Inv(),p)
+		tree.Left.OffSet(by)
+		tree.Right.OffSet(by)
+		//@ fold tree.Inv()
 	}
-	//@ assert tree == nil ==> low(tree)
 	return
 }
 
@@ -158,44 +150,30 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 	return
 }
 
-// @ requires noPerm < p
 // @ requires tree_size >= 0
 // @ requires low(tree_size)
-// @ requires tree == nil ==> low(tree)
 // @ ensures tree_size == 0 ==> tree == nil
 // @ ensures tree_size != 0 ==> tree != nil
-// @ ensures tree == nil ==> low(tree)
 // @ ensures tree != nil ==> tree.Inv()
-// @ ensures tree != nil ==> acc(tree.Inv(),p)
-// @ ensures tree != nil ==> unfolding acc(tree.Inv(),p) in low(tree.Root)
-func MkImplicitBinarySearchTree(tree_size uint64 /*@,ghost p perm@*/) (tree *ImplicitBinarySearchTree) {
+// @ ensures tree == nil ==> low(tree)
+func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	if tree_size == 0 {
 		tree = nil
 		//@ assert low(tree)
 	} else if tree_size == 1 {
 		root := RootNode(tree_size)
-		//@ assert low(root)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
 		//@ fold tree.Inv()
-		//@ assert acc(tree.Inv(), p)
-		//@ assert unfolding acc(tree.Inv(),p) in low(tree.Root)
 	} else if tree_size > 1 {
 		root := RootNode(tree_size)
-		left := MkImplicitBinarySearchTree(root /*@, p@*/)
-		//@ assert left == nil ==> low(left)
-		//@ assert left != nil ==> unfolding acc(left.Inv(),p) in low(left.Root)
-		right := MkImplicitBinarySearchTree(tree_size - root - 1 /*@, p@*/)
+		left := MkImplicitBinarySearchTree(root)
+		right := MkImplicitBinarySearchTree(tree_size - root - 1)
 		if right != nil {
-			right.OffSet(root + 1 /*@, p@*/)
+			right.OffSet(root + 1)
 		}
-		//@ assert right == nil ==> low(right)
-		//@ assert right != nil ==> unfolding acc(right.Inv(),p) in low(right.Root)
 		tree = &ImplicitBinarySearchTree{root, left, right}
-		//@ fold acc(tree.Inv(),p)
-		//@ assert unfolding acc(left.Inv(),p)  in low(tree.Root)
+		//@ fold tree.Inv()
 	}
-	//@ assert tree == nil ==> low(tree)
-	//@ assert tree != nil ==> unfolding acc(tree.Inv(),p) in low(tree.Root)
 
 	return
 }

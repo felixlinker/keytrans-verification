@@ -1,8 +1,11 @@
 package proofs
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
+
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
 
 /*@
@@ -260,39 +263,88 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 //	ensures low(RootHash) && low(Label) && low(Version) && err == nil ==> low(res)
 //	ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
 //	ensures err != nil ==> res == nil
+//
+// @ trusted
 func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
 	if tree == nil {
 		res = nil
 		err = errors.New("The prefix tree is empty.")
 	}
 	//Compute the VRF output for the label-version pair
-	VRFInput := VRFInput{
+	VRFInput := crypto.VrfInput{
 		Label:   Label,
-		Version: int(Version),
+		Version: uint32(Version),
 	}
-	vrfOutput := VRF_hash(nil, VRFInput)
-	res, err = tree.searchForCommitment(vrfOutput[:], 0)
+	//@ fold VRFInput.Inv()
+	vrfOutput := crypto.VRF_hash(nil, VRFInput)
+	vrfOutputSlice := make([]byte, sha256.Size)
+	for i := 0; i < sha256.Size; i++ {
+		vrfOutputSlice[i] = vrfOutput[i]
+	}
+	res, err = tree.SearchForCommitment(vrfOutputSlice, 0)
 	return
 }
 
-func (tree *PrefixTree) searchForCommitment(vrfOutput []byte, depth int) (res []byte, err error) {
-	return nil, nil
-}
+// @preserves tree!= nil ==> tree.Inv()
+func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte, error) {
+	// Nil tree means non-inclusion (path doesn't exist)
+	if tree == nil {
+		return nil, nil
+	}
 
-// VRF_hash computes the VRF output for the given input
-// In a real implementation, this would use the actual VRF algorithm
-// @ trusted
-// @ preserves acc(sk) && acc(input.Label)
-func VRF_hash(sk []byte, input VRFInput) [sha256.Size]byte {
-	h := sha256.New()
-	h.Write(input.Label)
-	versionBytes := make([]byte, 4)
-	versionBytes[0] = byte(input.Version)
-	versionBytes[1] = byte(input.Version >> 8)
-	versionBytes[2] = byte(input.Version >> 16)
-	versionBytes[3] = byte(input.Version >> 24)
-	h.Write(versionBytes)
-	var result [sha256.Size]byte
-	copy(result[:], h.Sum(nil))
-	return result
+	node := tree
+	d := depth
+	maxDepth := len(vrfOutput) * 8
+
+	for d <= maxDepth {
+		if node == nil {
+			// Path doesn't exist - non-inclusion
+			return nil, nil
+		} else {
+			//@ unfold node.Inv()
+			if node.Leaf != nil {
+
+				// Reached a leaf - check if VRF output matches
+				if bytes.Equal(node.Leaf.Vrf_output[:], vrfOutput) {
+					// Inclusion: copy commitment and return
+					result := make([]byte, sha256.Size)
+					for i := 0; i < sha256.Size; i++ {
+						result[i] = node.Leaf.Commitment[i]
+					}
+					//@ fold node.Inv()
+					return result, nil
+				}
+				//@ fold node.Inv()
+				return nil, nil
+			}
+
+			if node.Left != nil && node.Right != nil {
+				// Intermediate node - navigate based on current bit
+				byteIdx := d / 8
+				bitIdx := d % 8
+				bit := (vrfOutput[byteIdx] >> bitIdx) & 1
+
+				if bit == 1 {
+					node = node.Right
+				} else {
+					node = node.Left
+				}
+				d++
+				//@ fold node.Inv()
+				continue
+			}
+
+		}
+
+		if node.Value != nil {
+			// Copath node - cannot determine inclusion/non-inclusion
+			//@ fold node.Inv()
+			return nil, errors.New("cannot determine: reached copath node")
+		}
+
+		// Invalid node state
+		return nil, errors.New("invalid tree node state")
+	}
+
+	return nil, errors.New("exceeded maximum tree depth")
 }

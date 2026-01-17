@@ -148,10 +148,8 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 // It is also one of the important lemmas we need to show that the commitment we get is consistent
 // We use the following paper to derive the following lemma
 // Paper: https://arxiv.org/pdf/2501.10802
-//TODO: If we can formally verify that using Gobra without using the paper, then we will have better ground to argue that the stuff is formally verified. Relying on the paper itself will be somehow risky
 
-/*
-@
+/*@
 
 // func deterministicFunc(label, view, version) (error)
 // Use low or rel
@@ -159,13 +157,14 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 @
 */
 
-// CheckGreatest verifies if t is the greatest version
-// Returns:
-//
-//	-1: Greatest version < t (found hole at or below t), the greatest version does not exist so far
-//	 0: t is the greatest version
-//	 1: Greatest version > t (found commitment above t), violates t being the greatest version
-//
+/*
+CheckGreatest verifies if t is the greatest version
+ Returns:
+
+	-1: Greatest version < t (found hole at or below t), the greatest version does not exist so far
+	 0: t is the greatest version
+	 1: Greatest version > t (found commitment above t), violates t being the greatest version
+*/
 // @ requires acc(label)
 // @ requires label != nil
 // @ requires t >= 0
@@ -174,9 +173,13 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 // @ requires low(prefixTree)
 // @ requires low(RootHash)
 //
-//	ensures low(err == nil) && low(res == 0) ==> low(t)
+// @ ensures low(err == nil) && low(res == 0) && low(newTerminalLogEntry != -1)==> low(t)
 func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64) (res int, newTerminalLogEntry int, err error) {
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
+	//@ assert acc(steps)
+	//TODO: What property do we want to have for steps?
+	// Is this property actually necessary?
+
 	//The following assert will return an error, so no assume false
 	// assert 1 == 2
 	resultRes := 0
@@ -192,7 +195,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 		if !determined {
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
-
 			if err != nil {
 				resultRes = 0
 				resultErr = err
@@ -201,20 +203,22 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				incl := commitment != nil
 
 				if !incl && step <= t { // Claimed Greatest is less than t
-					//@ assert step <= t
 					resultRes = -1
 					resultErr = nil
 					determined = true
+					// assert low(incl) && low(step)==> low(t)
 				} else if incl && t < step { // Greatest is greater than t
-					//@ assert step > t
 					resultRes = 1
 					resultErr = nil
 					determined = true
+					// assert low(incl)&& low(step) ==> low(t)
 				}
+				// assert low(incl) && low(step) ==> low(t)
 			}
 		}
 		//To avoid Early termination: if determined is true, we just continue looping without doing anything
 	}
+
 	//Again, avoid early termination because of Gobra Hyperproperty mode
 	LtGtOrEq := resultRes
 	err = resultErr
@@ -250,7 +254,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			}
 		}
 	}
-
+	//@ assert low(frontier == size-1) && low(LtGtOrEq == 0) ==> low(t)
 	return finalRes, finalNewTerminalLogEntry, finalErr
 }
 
@@ -275,12 +279,13 @@ type MonitoringMapEntry struct {
 // @ requires *resp.Version >=0
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires low(size)
-// @ requires low(query.Label)
-// @ ensures low(err == nil) ==> low(res)
+// @ preserves low(query.Label)
+//
+//	ensures low(err == nil) && low(res) ==> unfolding acc(resp.Inv(),p) in low(*resp.Version) //TODO: Need to fix the permission error
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
-	search_tree := MkImplicitBinarySearchTree(size /*@, p@*/)
+	search_tree := MkImplicitBinarySearchTree(size)
 	// assert acc(search_tree.Inv(), p)
 	if search_tree == nil {
 		return false, errors.New("No search tree found")
@@ -295,25 +300,30 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 	//@ assume low(size) ==> low(len(frontiers)) && forall j uint64 :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ assume forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < len(prefixTrees)
 	terminalLogEntry := -1
+	//@assert low(terminalLogEntry) //This holds trivially
 
 	// Variables to track result and avoid early termination
 	resultRes := true
+	var greatest int = -2
 	var resultErr error = nil
 	determined := false
 
 	// assert 1 == 2
 	//@ invariant acc(prefixTrees)
-	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
-	// @ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
-	// @ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
-	// @ invariant acc(frontiers)
-	// @ invariant acc(query.Label)
-	// @ invariant acc(query.Inv(), p)
+	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
+	//@ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
+	//@ invariant acc(frontiers)
+	//@ invariant acc(query.Label)
+	//@ invariant acc(query.Inv(), p)
+	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < len(prefixTrees)
+	//@ invariant low(size) ==> low(len(frontiers)) && forall j uint64 :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
+	//@ invariant low(resultErr == nil) ==> low(err == nil)
+	//@ invariant low(err == nil) && low(!determined) && low(greatest == 0) ==> low(resultRes) && low(tVal)
 	for _, frontier := range frontiers {
 		if !determined {
 			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
-			//@ assume acc(prefixTrees[frontier])
+			//@ assert acc(prefixTrees[frontier])
 			Prefix_tree := prefixTrees[frontier]
 			if prefixTrees[frontier] == nil {
 				resultRes = false
@@ -321,7 +331,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 				determined = true
 			} else {
 				//@ assert acc(query.Label)
-				_, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size)
+				greatest, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size)
 				if err != nil {
 					resultRes = false
 					resultErr = err
@@ -330,13 +340,13 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 			}
 		}
 	}
+	//@ assert low(resultErr == nil) && low(determined) && low(greatest==0) ==> low(resultRes) && low(tVal)
 	// Post-loop logic (only execute if no error occurred in the loop)
 	if !determined {
 		if terminalLogEntry == -1 {
 			resultRes = false
 			resultErr = errors.New("Claimed Version is not found.")
 		} else if frontiers[0] < uint64(terminalLogEntry) && config.Mode == 1 {
-			//TODO: Need also to check if it's in contact monitoring mode, omitted because it's not so important in the proof
 			entry := MonitoringMapEntry{
 				Position: uint64(len(frontiers) - 1),
 				Version:  *t,
@@ -345,6 +355,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 		}
 	}
 
-	// assert 1 == 2
+	//@ assert 1 == 2
 	return resultRes, resultErr
 }
