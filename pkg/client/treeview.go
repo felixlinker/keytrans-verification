@@ -54,6 +54,7 @@ func RootNode(tree_size uint64) (root uint64) {
 // @ ensures low(by)
 // @ ensures tree == nil ==> low(tree)
 // @ ensures tree != nil ==> (unfolding acc(tree.Inv(),p) in low(tree.Root))
+// @ trusted
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64 /*@,ghost p perm @*/) {
 	if tree != nil {
 		//@ unfold acc(tree.Inv(),p)

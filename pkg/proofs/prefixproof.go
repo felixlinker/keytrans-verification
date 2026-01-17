@@ -261,5 +261,38 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 //	ensures low(RootHash) && low(Label) && low(Version) ==> low(err == nil)
 //	ensures err != nil ==> res == nil
 func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
+	if tree == nil {
+		res = nil
+		err = errors.New("The prefix tree is empty.")
+	}
+	//Compute the VRF output for the label-version pair
+	VRFInput := VRFInput{
+		Label:   Label,
+		Version: int(Version),
+	}
+	vrfOutput := VRF_hash(nil, VRFInput)
+	res, err = tree.searchForCommitment(vrfOutput[:], 0)
+	return
+}
+
+func (tree *PrefixTree) searchForCommitment(vrfOutput []byte, depth int) (res []byte, err error) {
 	return nil, nil
+}
+
+// VRF_hash computes the VRF output for the given input
+// In a real implementation, this would use the actual VRF algorithm
+// @ trusted
+// @ preserves acc(sk) && acc(input.Label)
+func VRF_hash(sk []byte, input VRFInput) [sha256.Size]byte {
+	h := sha256.New()
+	h.Write(input.Label)
+	versionBytes := make([]byte, 4)
+	versionBytes[0] = byte(input.Version)
+	versionBytes[1] = byte(input.Version >> 8)
+	versionBytes[2] = byte(input.Version >> 16)
+	versionBytes[3] = byte(input.Version >> 24)
+	h.Write(versionBytes)
+	var result [sha256.Size]byte
+	copy(result[:], h.Sum(nil))
+	return result
 }

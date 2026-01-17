@@ -152,11 +152,6 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 
 /*
 @
-ghost
-opaque
-decreases
-pure
-func CommitmentExistsInTree(RootHash []byte, label []byte, Version uint64) bool
 
 // func deterministicFunc(label, view, version) (error)
 // Use low or rel
