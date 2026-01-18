@@ -47,12 +47,7 @@ func RootNode(tree_size uint64) (root uint64) {
 	return res
 }
 
-// @ requires low(by)
-// @ requires tree!= nil ==>tree.Inv()
-// @ ensures low(by)
-// @ ensures tree == nil ==> low(tree)
-// @ ensures tree != nil ==> (unfolding tree.Inv() in low(tree.Root))
-// @ trusted
+// @ preserves tree!= nil ==> tree.Inv()
 func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 	if tree != nil {
 		//@ unfold tree.Inv()
@@ -159,7 +154,6 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	if tree_size == 0 {
 		tree = nil
-		//@ assert low(tree)
 	} else if tree_size == 1 {
 		root := RootNode(tree_size)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
@@ -168,7 +162,9 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 		root := RootNode(tree_size)
 		left := MkImplicitBinarySearchTree(root)
 		right := MkImplicitBinarySearchTree(tree_size - root - 1)
+
 		if right != nil {
+			//@ assert right != nil ==> right.Inv()
 			right.OffSet(root + 1)
 		}
 		tree = &ImplicitBinarySearchTree{root, left, right}

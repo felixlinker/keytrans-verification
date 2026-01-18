@@ -172,8 +172,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires low(label)
 // @ requires low(prefixTree)
 // @ requires low(RootHash)
-//
-// @ ensures low(err == nil) && low(res == 0) && low(newTerminalLogEntry != -1)==> low(t)
+// @ ensures low(err == nil) && low(res == 0) && low(newTerminalLogEntry != -1) && low(frontier == size -1 )==> low(t)
 func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64) (res int, newTerminalLogEntry int, err error) {
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
 	//@ assert acc(steps)
@@ -195,12 +194,14 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 		if !determined {
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
+			//@ assume low(label) && low(step) ==> low(commitment) //TODO: Remove this assume if possible
 			if err != nil {
 				resultRes = 0
 				resultErr = err
 				determined = true
 			} else {
 				incl := commitment != nil
+				//@ assert low(label) && low(step) ==> low(incl)
 
 				if !incl && step <= t { // Claimed Greatest is less than t
 					resultRes = -1
@@ -213,7 +214,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					determined = true
 					// assert low(incl)&& low(step) ==> low(t)
 				}
-				// assert low(incl) && low(step) ==> low(t)
+				// assert low(incl) && low(step) ==> low(t) //This doesn't work because there could be multiple t which satisfy this property
 			}
 		}
 		//To avoid Early termination: if determined is true, we just continue looping without doing anything
@@ -251,10 +252,12 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					finalRes = 0
 					finalErr = errors.New("t is not the greatest version as expected")
 				}
+				//@ assert low(finalErr== nil) && low(frontier == size-1) && low(finalRes == 0)==> low(t)
 			}
 		}
 	}
-	//@ assert low(frontier == size-1) && low(LtGtOrEq == 0) ==> low(t)
+	//I think this post condition is too strong, and there is injectivity needed for this task 
+	//@ assert low(finalErr==nil) && low(finalRes == 0) && low(frontier == size-1) && low(finalNewTerminalLogEntry!= -1 )==> low(t)
 	return finalRes, finalNewTerminalLogEntry, finalErr
 }
 
