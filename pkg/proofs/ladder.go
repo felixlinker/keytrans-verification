@@ -611,8 +611,41 @@ func isOnPath_subpath_right(v uint64, target uint64, x_in uint64,x_out uint64, n
 }
 // ==============================================================================================
 // ==============================================================================================
+ghost
+requires t1 > 0
+requires t1 < t2
+requires x_in <= t1 && t1 < x_out
+requires x_out <= t2  // Base case condition!
+ensures tStarRec_pure(t1,t2,x_in,x_out) == x_out
+decreases
+pure func tStarRec_returns_xout(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64 {
+    return 0
+}
 
+ghost
+requires t1 > 0
+requires t1 < t2
+requires x_in <= t1 && t1 < x_out
+requires t2 < x_out
+requires x_in + 1 < x_out
+requires let next := x_in + (x_out-x_in)/2 in next > t1 && t2 >= next
+ensures tStarRec_pure(t1,t2,x_in,x_out) == x_in + (x_out-x_in)/2
+decreases
+pure func tStarRec_returns_next(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64 {
+    return let next := x_in + (x_out-x_in)/2 in
+           tStarRec_returns_xout(t1, t2, x_in, next)
+}
 
+ghost
+requires x_in < x_out
+requires x_in <= t1 && t1 < x_out
+requires x_in + 1 < x_out
+requires let next := x_in + (x_out-x_in)/2 in next > t1
+ensures isOnPath(x_in + (x_out-x_in)/2, t1, x_in, x_out)
+decreases
+pure func midpoint_isOnPath(t1 uint64, x_in uint64, x_out uint64) uint64 {
+    return 0
+}
 
 //tStarRec returns a midpoint on path when t2 < x_out given same bucket
 // The is generally the step case where we go left or right
@@ -636,7 +669,9 @@ func tStarRec_isOnPath(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64{
 			// Need to check t2 < next
 			(t2 < next ?
 				// t2 >= next means tStarRec will return next a midpoint
-				tStarRec_isOnPath(t1,t2,x_in,next) : 0))
+				tStarRec_isOnPath(t1,t2,x_in,next) :
+				     let _ := tStarRec_returns_next(t1, t2, x_in, x_out) in
+   					 let _ := midpoint_isOnPath(t1, x_in, x_out) in next))
 }
 
 
@@ -730,7 +765,9 @@ func findExpTarget_link_loop(target uint64, k uint64){
 // @ ensures 0<=idx && idx < len(r)
 // @ ensures target < t2 ==> r[idx] == TStar_pure(target,t2)
 // @ ensures t2 < target ==> r[idx] == TStar_pure(t2,target)
-// @ ensures forall i uint64 :: 0<= i && i < len(r) ==> r[i] >= 0
+// @ ensures target < t2 ==> target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
+// @ ensures t2 < target ==> t2 < TStar_pure(t2,target) && TStar_pure(t2,target) <= target
+// @ ensures forall i int :: 0<= i && i < len(r) ==> r[i] >= 0
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -742,13 +779,14 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	//@ invariant k >= 0
 	//@ invariant i == IntPow2(k)
 	//@ invariant len(r) == int(k)
-	//@ invariant forall j uint64 :: 0 <= j && j < len(r) ==> r[j] == expJumpElement(j)
+	//@ invariant forall j uint64 ::forall l int :: 0 <= l && l < len(r) && uint64(l) == j ==> r[l] == expJumpElement(j)
+	//@ invariant forall l int :: 0<= l && l < len(r) ==> r[l] >= 0
 	//@ invariant k == 0 || IntPow2(k - 1) <= target + 1 //Important invariant for the findExpTarget_link_loop in below
 	for i-1 <= target {
 		r = append( /*@ perm(1/2), @*/ r, i-1)
 		i = i * 2
 		//@ k = k+1
-		//@ assert i-1 == expJumpElement(k)
+		//@ assert i-1 == expJumpElement(k) && i-1 >= 0
 	}
 
 	// i is now the smallest power of two s.t. i-1 is larger than target
@@ -790,7 +828,6 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 		}
 	}
 	@*/
-
 	r /*@, idx @*/ = BinarySearchStep(target, r, x_in, x_out /*@, t2,k , idx, foundTStar@*/)
 
 	return r /*@, idx@*/
@@ -804,9 +841,9 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires k >=1
 // @ requires 0 <= currIdx && currIdx < len(r)
 // @ requires len(r) >= int(k) + 1
-// @ requires forall i uint64 :: 0 <= i && i < k ==> r[i] == expJumpElement(i)
+// @ requires forall i uint64 :: forall j int :: 0 <= i && i < k && j == int(i) ==> r[j] == expJumpElement(i)
 // @ requires r[k] == expJumpElement(k)
-//@ requires forall l uint64 :: 0<= l && l < len(r) ==> r[l] >= 0
+//@ requires forall l int :: 0<= l && l < len(r) ==> r[l] >= 0
 // The elements are on path of the binary search as soon as t2 and target are in the same bucket!
 // ============= Case 1: t2 > target =============
 // Either we have found TStar and the index shows that the element is TStar
@@ -820,23 +857,12 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires t2 < target && Log2Floor_pure(target+1) > Log2Floor_pure(t2+1) ==> (foundTStar && r[currIdx] == TStar_pure(t2, target))
 // @ requires t2 < target && !(Log2Floor_pure(target+1) > Log2Floor_pure(t2+1)) ==> (foundTStar ==> r[currIdx] == TStar_pure( t2, target)) &&  (!foundTStar ==> isOnPath(TStar_pure(t2, target), target, x_in, x_out))
 // @ requires k == findExpLevel(target)
-// =========Hyperproperties=====
-//
-// requires low(target)
-//
-//	requires low(r)
-//	requires low(x_in) && low(x_out)
-//	requires low(t2) && low(k) && low(currIdx) && low(foundTStar)
-//	ensures low(res)
-//	ensures low(resIdx)
-//
-// =============================
 // @ ensures acc(res)
 // @ ensures len(res) >= len(r)
 // @ ensures 0<= resIdx && resIdx < len(res)
 // @ ensures target < t2 ==> res[resIdx] == TStar_pure(target, t2)
 // @ ensures t2 < target ==> res[resIdx] == TStar_pure(t2,target)
-// @ ensures forall l uint64 :: 0<= l && l < len(res) ==> res[l] >= 0
+// @ ensures forall l int :: 0<= l && l < len(res) ==> res[l] >= 0
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost k uint64, ghost currIdx int, ghost foundTStar bool@*/) (res []uint64 /*@, ghost resIdx int@*/) {
 	if x_in+1 >= x_out {
@@ -900,9 +926,9 @@ func GetInt() (res uint64)
 
 // @ requires target >= 0
 // @ ensures acc(r1)
-// @ ensures forall t2 uint64 :: exists idx1 uint64 :: target < t2 ==> 0 <= idx1 && idx1 < len(r1) && TStar_pure(target, t2) == r1[idx1]
-// @ ensures forall t2 uint64 :: exists idx2 uint64 ::target > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(r1) && TStar_pure(t2, target) == r1[idx2]
-// @ ensures forall j uint64 :: j >= 0 && j < len(r1) ==> r1[j] >= 0
+// @ ensures forall t2 uint64 :: exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(r1) && TStar_pure(target, t2) == r1[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
+// @ ensures forall t2 uint64 :: exists idx2 int ::target > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(r1) && TStar_pure(t2, target) == r1[idx2] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
+// @ ensures forall j int :: j >= 0 && j < len(r1) ==> r1[j] >= 0
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	//@ t2 := GetInt()
 	//@ assume t2 != target
@@ -910,11 +936,11 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	// assume low(t2)
 	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 	//@ assert target < t2 ==>  TStar_pure(target, t2) == res[idx]
-	//@ assert exists idx1 uint64 :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1]
-	//@ assume forall t2 uint64 :: exists idx1 uint64 :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1]
+	//@ assert exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
+	//@ assume forall t2 uint64 :: exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
 	//@ assert target > t2 ==>  TStar_pure(t2, target) == res[idx]
-	//@ assert exists idx1 uint64 :: target > t2 && t2 >= 0 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(t2,target) == res[idx1]
-	//@ assume forall t2 uint64 :: exists idx1 uint64 :: target > t2 && t2 >= 0 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(t2,target) == res[idx1]
+	//@ assert exists idx1 int :: target > t2 && t2 >= 0 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(t2,target) == res[idx1] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
+	//@ assume forall t2 uint64 :: exists idx1 int :: target > t2 && t2 >= 0 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(t2,target) == res[idx1] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
 	return res
 }
 

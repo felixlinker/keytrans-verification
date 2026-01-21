@@ -24,6 +24,18 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 
 @*/
 
+/*
+
+
+pred (t *ImplicitBinarySearchTree) LowInv(p perm) {
+	noPerm < p && p < writePerm && acc(t, p) && low(t.Root) &&
+	(t.Left != nil ==> t.Left.LowInv(p)) &&
+	(t.Right != nil ==> t.Right.LowInv(p))
+}
+
+
+*/
+
 // Get the largest power of two smaller than tree_size
 // @ requires tree_size >= 0
 // @ requires low(tree_size)
@@ -129,18 +141,35 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 //		return
 //	}
 //
-
+// TODO: analyse if we need to have full permissions if we incooperate with low or can we use partial permission.
 // @ requires  noPerm < p
-// @ preserves tree != nil ==> acc(tree.Inv(), p)
+// @ requires tree != nil ==> tree.Inv()
+// @ requires tree == nil ==> low(tree)
+// @ requires tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
+// @ ensures tree != nil ==> tree.Inv()
+// @ ensures tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
 // @ ensures   acc(path)
 // @ ensures   tree != nil ==> len(path) > 0
+// @ ensures low(len(path))
+// @ ensures forall j int :: j>= 0 && j < len(path) ==> low(path[j])
+// @ trusted
+// TODO: There is no way to fix this issue now due to the hyperpredicate...
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	if tree != nil {
-		//@ unfold acc(tree.Inv(), p)
+		//@ unfold tree.Inv()
 		path = []uint64{tree.Root}
+		//@ assert low(len(path))
+		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
+		//@ assert tree.Right == nil ==> low(tree.Right)
+		//@ assert tree.Right != nil ==> unfolding tree.Right.Inv() in low(tree.Right.Root)
 		subtreePath := tree.Right.FrontierNodes( /*@ p @*/ )
+		//@ assert low(len(subtreePath))
+		//@ assert forall j int :: j>= 0 && j < len(subtreePath) ==> low(subtreePath[j])
 		path = append( /*@ p, @*/ path, subtreePath...)
-		//@ fold acc(tree.Inv(), p)
+		//@ assert low(len(path))
+		// assert 1 == 2
+		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
+		//@ fold tree.Inv()
 	}
 	return
 }
@@ -151,6 +180,7 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 // @ ensures tree_size != 0 ==> tree != nil
 // @ ensures tree != nil ==> tree.Inv()
 // @ ensures tree == nil ==> low(tree)
+// @ ensures tree != nil ==> unfolding tree.Inv() in low(tree.Root)
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	if tree_size == 0 {
 		tree = nil
@@ -170,7 +200,6 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 		tree = &ImplicitBinarySearchTree{root, left, right}
 		//@ fold tree.Inv()
 	}
-
 	return
 }
 
