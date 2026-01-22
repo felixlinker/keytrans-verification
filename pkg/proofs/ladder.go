@@ -921,7 +921,7 @@ ghost
 ensures res > 0
 decreases
 pure
-func GetInt() (res uint64)
+func GetUInt64() (res uint64)
 @*/
 
 /*@
@@ -942,7 +942,7 @@ func TStar_wrapper(r1 []uint64, target uint64, t2 uint64) bool{
 // @ ensures forall t2 uint64 :: {TStar_wrapper(r1, target, t2)} TStar_wrapper(r1, target, t2)
 // @ ensures forall t2 uint64 :: {TStar_wrapper(r1,t2,target)} TStar_wrapper(r1,t2,target)
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
-	//@ t2 := GetInt()
+	//@ t2 := GetUInt64()
 	//@ assume t2 != target
 	//@ assume t2 >= 0
 	// assume low(t2)
