@@ -6,7 +6,7 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
-// ##(--hyperMode extended) //--enableExperimentalHyperFeatures)
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 type PT interface {
 	// Returns non-nil if we can prove that the prefix tree contains a key for the
@@ -174,7 +174,7 @@ CheckGreatest verifies if t is the greatest version
 //@ requires low(label)
 //@ requires low(prefixTree)
 //@ requires low(RootHash)
-// requires rel(t,0) != rel(t,1)
+//@ requires rel(t,0) != rel(t,1)
 //  requires rel(prefixTree, 0) == rel(prefixTree,1)
 //  requires rel(RootHash,0)== rel(RootHash,1)
 // ensures rel(res == 0, 0) == rel(res == 0, 1) && rel(err == nil, 0) == rel(err== nil, 1) ==> rel(t,0) == rel(t,1)
@@ -182,27 +182,36 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ assert t >= 0
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
 	//@ assert acc(steps)
-	//TODO: Remove those assumes when Gobra fixed
-	//@ assume forall t2 uint64 :: exists idx1 int :: t < t2 ==> 0 <= idx1 && idx1 < len(steps) && t < proofs.TStar_pure(t, t2) && proofs.TStar_pure(t, t2) <= t2 && proofs.TStar_pure(t, t2) == steps[idx1]
-	//@ assume forall t2 uint64 :: exists idx2 int :: t > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(steps) && proofs.TStar_pure(t2, t) == steps[idx2] && t2 < proofs.TStar_pure(t2, t) && proofs.TStar_pure(t2, t) <= t
+	//Postcondition from the FBLS
+	// assert forall t2 uint64 :: exists idx1 int :: t < t2 ==> 0 <= idx1 && idx1 < len(steps) && t < proofs.TStar_pure(t, t2) && proofs.TStar_pure(t, t2) <= t2 && proofs.TStar_pure(t, t2) == steps[idx1]
+	// assert forall t2 uint64 :: exists idx2 int :: t > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(steps) && proofs.TStar_pure(t2, t) == steps[idx2] && t2 < proofs.TStar_pure(t2, t) && proofs.TStar_pure(t2, t) <= t
 
-	// assert rel(t,1) >= 0
-	//@ tDummy := proofs.GetInt()
-	//@ assert exists idx1 int :: t < tDummy ==> 0 <= idx1 && idx1 < len(steps) && t < proofs.TStar_pure(t, tDummy) && proofs.TStar_pure(t, tDummy) <= tDummy && proofs.TStar_pure(t, tDummy) == steps[idx1]
+	// @ assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t, t2)} proofs.TStar_wrapper(steps,t, t2)
+	// @ assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t2, t)} proofs.TStar_wrapper(steps,t2,t)
 
-	// assert rel(t,0) > rel(t,1)  ==> exists idx2 int :: 0 <= idx2 && idx2 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,0)[idx2]
+	// Replace it using rel(t,0), rel(t,1) and rel(steps,0), rel(steps,1)
 
-	// assert exists idx2 int :: rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,0)[idx2]
+	// assert exists idx2 int :: rel(t,0) > rel(t,1)  ==>  0 <= idx2 && idx2 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,0)[idx2]
+	//@ assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
 	// assert  exists idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx3 && idx3 < len(rel(steps,1)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,1)[idx3]
+	//@ inhale acc(rel(steps,1), 1)
+	//@ assert proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1))
 
 	// exists idx1 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps,0)[idx1]
+	//@ assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
 	// exists idx4 int :: rel(t,0) < rel(t,1) ==> 0 <= idx4 && idx4 < len(rel(steps,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps,1)[idx4]
+	//@ assert proofs.TStar_wrapper(rel(steps,1), rel(t,1), rel(t,0))
 
-	//TODO: Bounds
-	// exists idx2, idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps,1)[idx3] == rel(steps,0)[idx2]
-	// exists idx1, idx4 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]
+	if size == 0 || t >= size || frontier >= size {
+		return 0, terminalLogEntry, errors.New("version out of bounds")
+	}
 
-	// exists idx1, idx4 int :: rel(t,0) != rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]
+	//Replace with rel(steps,0) and rel(steps,1) with bound
+	//@ assert exists idx2, idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps,1)[idx3] == rel(steps,0)[idx2] && rel(t,1) <= rel(steps,1)[idx3] && rel(steps,1)[idx3] < rel(t,0)
+	//@ assert exists idx2, idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps,1)[idx3] == rel(steps,0)[idx2] && rel(t,1) <= rel(steps,0)[idx2] && rel(steps,0)[idx2] < rel(t,0)
+
+	//@ assert exists idx1, idx4 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]&& rel(t,0) <= rel(steps,1)[idx4] && rel(steps,1)[idx4] < rel(t,1)
+	//@ assert exists idx1, idx4 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]&& rel(t,0) <=rel(steps,0)[idx1] && rel(steps,0)[idx1] < rel(t,1)
 
 	// !low(t) ==> exists idx1, idx4 int :: 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]
 	/*
@@ -211,7 +220,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 		ghost if !low(t){
 			assert exists idx0, idx1 int :: 0 <= idx0 && idx0 < len(rel(steps,0)) && 0 <= idx1 && idx1 < len(rel(steps,1)) && rel(steps,1)[idx1] == rel(steps,0)[idx0]
 			assume 0 <= idx0 && idx0 < len(rel(steps,0)) && 0 <= idx1 && idx1 < len(rel(steps,1)) && rel(steps,1)[idx1] == rel(steps,0)[idx0]
-		}
+			}
 	*/
 
 	//The following assert will return an error, so no assume false
@@ -228,7 +237,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> steps[l] >= 0
 	//@ invariant low(label)
 	//@ invariant low(RootHash)
-
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]

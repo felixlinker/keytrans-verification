@@ -940,7 +940,7 @@ func TStar_wrapper(r1 []uint64, target uint64, t2 uint64) bool{
 // @ ensures forall t2 uint64 :: exists idx2 int ::target > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(r1) && TStar_pure(t2, target) == r1[idx2] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
 // @ ensures forall j int :: j >= 0 && j < len(r1) ==> r1[j] >= 0
 // @ ensures forall t2 uint64 :: {TStar_wrapper(r1, target, t2)} TStar_wrapper(r1, target, t2)
-// @ ensures forall t2 uint64 :: {TStar_wrapper(r1,target,t2)} TStar_wrapper(r1,t2,target)
+// @ ensures forall t2 uint64 :: {TStar_wrapper(r1,t2,target)} TStar_wrapper(r1,t2,target)
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	//@ t2 := GetInt()
 	//@ assume t2 != target
