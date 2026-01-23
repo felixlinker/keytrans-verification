@@ -187,27 +187,23 @@ CheckGreatest verifies if t is the greatest version
 	 0: t is the greatest version
 	 1: Greatest version > t (found commitment above t), violates t being the greatest version
 */
-//@ requires noPerm < p
-//@ requires acc(label, p)
-//@ requires label != nil
-//@ requires t >= 0
-//@ requires prefixTree != nil
-//@ requires low(label)
-//@ requires low(prefixTree)
-//@ requires low(RootHash)
-//@ requires rel(t,0) != rel(t,1)
-// ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)
+
+// @ requires noPerm < p
+// @ requires acc(label, p)
+// @ requires label != nil
+// @ requires t >= 0
+// @ requires prefixTree != nil
+// @ requires low(label)
+// @ requires low(prefixTree)
+// @ requires low(RootHash)
+// @ requires rel(t,0) != rel(t,1)
+// @ ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)
 func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64 /*@, ghost p perm@*/) (res int, newTerminalLogEntry int, err error) {
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
 	//Postcondition from the FBLS
 	//@ assert acc(steps)
 	// assert forall t2 uint64 :: exists idx1 int :: t < t2 ==> 0 <= idx1 && idx1 < len(steps) && t < proofs.TStar_pure(t, t2) && proofs.TStar_pure(t, t2) <= t2 && proofs.TStar_pure(t, t2) == steps[idx1]
 	// assert forall t2 uint64 :: exists idx2 int :: t > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(steps) && proofs.TStar_pure(t2, t) == steps[idx2] && t2 < proofs.TStar_pure(t2, t) && proofs.TStar_pure(t2, t) <= t
-
-	//TODO: Move these checks to the VerifyLatestKey function
-	/*if size == 0 || t >= size || frontier >= size {
-		return 0, terminalLogEntry, errors.New("version out of bounds")
-	}*/
 
 	// @ assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t, t2)} proofs.TStar_wrapper(steps,t, t2)
 	// @ assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t2, t)} proofs.TStar_wrapper(steps,t2,t)
@@ -261,7 +257,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> steps[l] >= 0
 	//@ invariant low(label)
 	//@ invariant low(RootHash)
-	//@ invariant determined ==> exists idx int :: rel(steps,0)[idx] != rel(steps,1)[idx] //Unsound example, ignore for now I think
+	// invariant exists idx int :: rel(steps,0)[idx] != rel(steps,1)[idx] //Unsound example, ignore for now I think
+	//@ invariant determined ==> rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
@@ -270,24 +267,28 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			//@ assume low(label) && low(step) && rel(err==nil,0)==rel(err==nil, 1) ==> low(commitment) //Hiding
 			//@ assume BytesEqual(rel(label,0), rel(label,1)) && rel(step,0)==rel(step,1) && BytesEqual(rel(RootHash,0),rel(RootHash,1)) ==> BytesEqual(rel(commitment,0), rel(commitment,1)) && rel(err, 0) == rel(err,1) //Binding
 			// assert 1==2 //So far, no assume false and I'm happy
-			// assert rel(label,0)==rel(label,1) && rel(step,0)==rel(step,1) ==> rel(commitment,0)==rel(commitment,1)
+			//@ assert !BytesEqual(rel(commitment,0), rel(commitment,1))
 			if err != nil {
 				resultRes = 0
 				resultErr = err
 				determined = true
+				break
 			} else {
 				incl := commitment != nil
 				// assert rel(label,0)==rel(label,1) && rel(step,0)==rel(step,1) ==> rel(incl,0)==rel(incl,1)
+				//@ assert !BytesEqual(rel(commitment,0), rel(commitment,1)) ==> rel(incl,0) != rel(incl,1)
 				if !incl && step <= t { // Claimed Greatest is less than t
 					resultRes = -1
 					resultErr = nil
 					determined = true
 					// assert low(incl) && low(step)==> low(t)
+					break
 				} else if incl && t < step { // Greatest is greater than t
 					resultRes = 1
 					resultErr = nil
 					determined = true
 					// assert low(incl)&& low(step) ==> low(t)
+					break
 				}
 				// assert low(incl) && low(step) ==> low(t) //This doesn't work because there could be multiple t which satisfy this property
 			}
@@ -329,13 +330,13 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					finalErr = errors.New("t is not the greatest version as expected")
 				}
 				//Injectivity missing!
-				// assert finalErr == nil && frontier == size-1 && finalRes == 0 && low(finalErr== nil) && low(frontier == size-1) && low(finalRes == 0)==> low(t)
+				//@ assert finalErr == nil && frontier == size-1 && finalRes == 0 && low(finalErr== nil) && low(frontier == size-1) && low(finalRes == 0)==> low(t)
 			}
 		}
 	}
 	// assert 1 == 2
 	//I think this post condition is too strong, and there is injectivity needed for this task
-	// assert rel(finalErr==nil,0) == rel(finalErr==nil,1)  && res(finalRes == 0,0)==rel(finalErr==nil,1)  && rel(frontier == size-1,0)==rel(frontier == size-1,1) ==> rel(t,0) == rel(t,1)
+	//@ assert rel(finalRes,0) != rel(finalRes,1) && rel(finalErr==nil,0) != rel(finalErr==nil,1)
 	return finalRes, finalNewTerminalLogEntry, finalErr
 }
 
