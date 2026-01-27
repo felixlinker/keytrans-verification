@@ -929,8 +929,8 @@ ghost
 decreases
 requires acc(r1)
 pure
-func TStar_wrapper(r1 []uint64, target uint64, t2 uint64) bool{
-	return exists idx int :: {r1[idx]} target < t2 && target >= 0 ==> 0 <= idx && idx < len(r1) && TStar_pure(target, t2) == r1[idx]&& target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
+func TStar_wrapper(r1 []uint64, t1 uint64, t2 uint64) bool{
+	return exists idx int :: {r1[idx]} t1 < t2 && t1 >= 0 ==> 0 <= idx && idx < len(r1) && TStar_pure(t1, t2) == r1[idx]&& t1 <  TStar_pure(t1,t2)  && TStar_pure(t1,t2) <= t2
 }
 @*/
 
@@ -945,7 +945,6 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	//@ t2 := GetUInt64()
 	//@ assume t2 != target
 	//@ assume t2 >= 0
-	// assume low(t2)
 	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 	//@ assert target < t2 ==>  TStar_pure(target, t2) == res[idx]
 	//@ assert exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
