@@ -12,13 +12,19 @@ import (
 //Compare the bytes of the arrays
 ghost
 decreases
-requires acc(r1, _)
-requires acc(r2,_)
+requires p > noPerm
+requires acc(r1, p)
+requires acc(r2,p)
 pure
-func BytesEqual(r1 []byte, r2 []byte) bool {
+func BytesEqual(r1 []byte, r2 []byte, p perm) bool {
 	return len(r1) == len(r2) && forall i int :: 0<=i && i < len(r1) ==> r1[i] ==r2[i]
 }
 
+
+
+pred LowInv(s []byte){
+	 low(len(s)) && forall i int :: 0<= i && i < len(s) ==> low(s[i])
+}
 @*/
 
 type PT interface {
@@ -197,7 +203,7 @@ CheckGreatest verifies if t is the greatest version
 //
 //	requires low(prefixTree)
 //
-// @ requires low(RootHash)
+// @ requires LowInv(RootHash)
 // @ requires rel(t,0) != rel(t,1)
 // @ ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)
 // @ ensures frontier == size - 1 ==>  rel(err==nil, 0) != rel(err==nil, 1) || rel(res==0, 0) != rel(res==0, 1)
@@ -246,8 +252,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <= rel(steps[idx4],1) && rel(steps[idx4],1) < rel(t,1)
 	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <=rel(steps[idx1],0) && rel(steps[idx1],0) < rel(t,1)
 
-	//@ assert !low(t) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)
-	// assert 1==2
+	// assert !low(t) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0) && rel(steps[idx4],1)==proofs.
 
 	resultRes := 0
 	var resultErr error = nil
@@ -259,16 +264,25 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant 0 <= idx && idx <= len(steps)
 	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> steps[l] >= 0
 	//@ invariant low(label)
-	//@ invariant low(RootHash)
+	//@ invariant LowInv(RootHash)
 	// invariant !low(resultRes) || !low(resultErr==nil)
 	for idx := 0; idx < len(steps); idx++ {
 		step := steps[idx]
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
-		// Assume hiding and binding.
-		//@ assume low(label) && low(step) && rel(err==nil,0)==rel(err==nil, 1) ==> low(commitment) //Injectivity
-		//@ assert rel(step,0) != rel(step,1) ==> !BytesEqual(rel(commitment,0), rel(commitment,1))
-		//@ assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1))
-		//@ assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1))
+		// Assume injectivity
+		//@ assume acc(commitment) && LowInv(commitment)
+		//@ assume low(label) && low(step) && rel(err==nil,0)==rel(err==nil, 1) ==> LowInv(commitment) //Injectivity
+		//@ assert false
+		//@ assert rel(step,0) != rel(step,1) ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
+		/*@
+			ghost if rel(t,1) < rel(t,0){
+				assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p )
+				assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1),p)
+			}
+		@*/
+		//@ assert 1 == 2
+		// assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p)
+		// assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
 		if err != nil {
 			resultRes = 0
 			resultErr = err
@@ -276,8 +290,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			break
 		} else {
 			incl := commitment != nil
-			//@ assert !BytesEqual(rel(commitment,0), rel(commitment,1)) ==> rel(incl,0) != rel(incl,1)
-			//@ assert  BytesEqual(rel(commitment,0), rel(commitment,1)) ==> rel(incl, 0) == rel(incl,1)
+			//@ assert !BytesEqual(rel(commitment,0), rel(commitment,1),p) ==> rel(incl,0) != rel(incl,1)
+			//@ assert  BytesEqual(rel(commitment,0), rel(commitment,1),p) ==> rel(incl, 0) == rel(incl,1)
 			if !incl && step <= t { // Claimed Greatest is less than t
 				resultRes = -1
 				resultErr = nil
@@ -358,7 +372,8 @@ type MonitoringMapEntry struct {
 // @ requires query.Label != nil
 // @ requires low(query.Label)
 // @ requires rel(resp.Version, 0) != rel(resp.Version,1)
-// @ ensures rel(err==nil,0) != rel(err==nil,1) || rel(res,0) != rel(res,1)
+//
+//	ensures rel(err==nil,0) != rel(err==nil,1) || rel(res,0) != rel(res,1)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
