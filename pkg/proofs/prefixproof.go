@@ -294,13 +294,13 @@ func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte
 
 	for d <= maxDepth {
 		if node == nil {
-			// Path doesn't exist - non-inclusion
+			// Path doesn't exist: non-inclusion
 			return nil, nil
 		} else {
 			//@ unfold node.Inv()
 			if node.Leaf != nil {
 
-				// Reached a leaf - check if VRF output matches
+				// Reached a leaf: check if VRF output matches
 				if bytes.Equal(node.Leaf.Vrf_output[:], vrfOutput) {
 					// Inclusion: copy commitment and return
 					result := make([]byte, sha256.Size)
@@ -315,7 +315,6 @@ func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte
 			}
 
 			if node.Left != nil && node.Right != nil {
-				// Intermediate node - navigate based on current bit
 				byteIdx := d / 8
 				bitIdx := d % 8
 				bit := (vrfOutput[byteIdx] >> bitIdx) & 1

@@ -194,12 +194,18 @@ CheckGreatest verifies if t is the greatest version
 // @ requires t >= 0
 // @ requires prefixTree != nil
 // @ requires low(label)
-// @ requires low(prefixTree)
+//
+//	requires low(prefixTree)
+//
 // @ requires low(RootHash)
 // @ requires rel(t,0) != rel(t,1)
 // @ ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)
+// @ ensures frontier == size - 1 ==>  rel(err==nil, 0) != rel(err==nil, 1) || rel(res==0, 0) != rel(res==0, 1)
 func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64 /*@, ghost p perm@*/) (res int, newTerminalLogEntry int, err error) {
+	//steps/*@, idx@*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,0)*/) //Das andere
+	//steps2 /*, idx2*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,1)*/)
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
+
 	//Postcondition from the FBLS
 	//@ assert acc(steps)
 	// assert forall t2 uint64 :: exists idx1 int :: t < t2 ==> 0 <= idx1 && idx1 < len(steps) && t < proofs.TStar_pure(t, t2) && proofs.TStar_pure(t, t2) <= t2 && proofs.TStar_pure(t, t2) == steps[idx1]
@@ -215,7 +221,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	// refute len(rel(steps,0)) == len(rel(steps,1)) ==> exists idx int :: 0 <= idx && idx < len(rel(steps,0)) ==> rel(steps,0)[idx] != rel(steps,1)[idx]
 	// assert  exists idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx3 && idx3 < len(rel(steps,1)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,1)[idx3]
 	// assert proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1))
-	// exhale acc(rel(steps,1), 1/12)
 	//@ assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1)), 1)
 
 	// exists idx1 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps,0)[idx1]
@@ -226,20 +231,23 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	//Replace with rel(steps,0) and rel(steps,1) with bound
 	// assume acc(rel(steps,1), p) // Will cause an error in this case, a java concurrency error...
-	// TODO: I don't think there is any way to make this code provable besides digging into the Gobra code and fix the encoding.
-	//@ inhale acc(rel(steps,1),1/12)
-	//@ assert exists idx2, idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps,1)[idx3] == rel(steps,0)[idx2] && rel(t,1) <= rel(steps,1)[idx3] && rel(steps,1)[idx3] < rel(t,0)
-	//@ assert exists idx2, idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps,1)[idx3] == rel(steps,0)[idx2] && rel(t,1) <= rel(steps,0)[idx2] && rel(steps,0)[idx2] < rel(t,0)
+	//@ idx1 := GetInt()
+	//@ idx2 := GetInt()
+	//@ idx3 := GetInt()
+	//@ idx4 := GetInt()
+	//@ assume rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps[idx3],1) == rel(steps[idx2],0) && rel(t,1) <= rel(steps[idx3],1) && rel(steps[idx3],1) < rel(t,0)
+	//@ assume rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <= rel(steps[idx4],1) && rel(steps[idx4],1) < rel(t,1)
 
-	//@ assert exists idx1, idx4 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]&& rel(t,0) <= rel(steps,1)[idx4] && rel(steps,1)[idx4] < rel(t,1)
-	//@ assert exists idx1, idx4 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]&& rel(t,0) <=rel(steps,0)[idx1] && rel(steps,0)[idx1] < rel(t,1)
+	//@ assert rel(t,0) > rel(t,1) ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps[idx3],1) == rel(steps[idx2],0) && rel(t,1) <= rel(steps[idx2],0) && rel(steps[idx2],0) < rel(t,0)
+	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <=rel(steps[idx1],0) && rel(steps[idx1],0) < rel(t,1)
 
 	//Move existential quantifier to the right side of the implication
 
-	//@ assert rel(t,0) < rel(t,1) ==> exists idx1, idx4 int :: 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]&& rel(t,0) <= rel(steps,1)[idx4] && rel(steps,1)[idx4] < rel(t,1)
-	//@ assert rel(t,0) < rel(t,1) ==> exists idx1, idx4 int :: 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]&& rel(t,0) <=rel(steps,0)[idx1] && rel(steps,0)[idx1] < rel(t,1)
+	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <= rel(steps[idx4],1) && rel(steps[idx4],1) < rel(t,1)
+	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <=rel(steps[idx1],0) && rel(steps[idx1],0) < rel(t,1)
 
-	//@ assert !low(t) ==> exists idx1, idx4 int :: 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps,1)[idx4] == rel(steps,0)[idx1]
+	//@ assert !low(t) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)
+	// assert 1==2
 
 	resultRes := 0
 	var resultErr error = nil
@@ -252,14 +260,12 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> steps[l] >= 0
 	//@ invariant low(label)
 	//@ invariant low(RootHash)
-	// invariant exists idx int :: rel(steps,0)[idx] != rel(steps,1)[idx] //Unsound example, ignore for now I think
-	//@ invariant !low(resultRes) || !low(resultErr==nil)
+	// invariant !low(resultRes) || !low(resultErr==nil)
 	for idx := 0; idx < len(steps); idx++ {
 		step := steps[idx]
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 		// Assume hiding and binding.
-		//@ assume low(label) && low(step) && rel(err==nil,0)==rel(err==nil, 1) ==> low(commitment) //Hiding
-		//@ assume low(label) && low(step) && BytesEqual(rel(RootHash,0),rel(RootHash,1)) ==> BytesEqual(rel(commitment,0), rel(commitment,1)) && rel(err, 0) == rel(err,1) //Binding
+		//@ assume low(label) && low(step) && rel(err==nil,0)==rel(err==nil, 1) ==> low(commitment) //Injectivity
 		//@ assert rel(step,0) != rel(step,1) ==> !BytesEqual(rel(commitment,0), rel(commitment,1))
 		//@ assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1))
 		//@ assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1))
@@ -288,7 +294,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 		//To avoid Early termination: if determined is true, we just continue looping without doing anything
 	}
 
-	// assert 1 == 2
 	//Again, avoid early termination because of Gobra Hyperproperty mode
 	LtGtOrEq := resultRes
 	err = resultErr
@@ -350,9 +355,10 @@ type MonitoringMapEntry struct {
 // @ requires *resp.Version >=0
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires low(size)
+// @ requires query.Label != nil
 // @ requires low(query.Label)
 // @ requires rel(resp.Version, 0) != rel(resp.Version,1)
-// @ ensures rel(err==nil,0) != rel(err==nil,1) && rel(res,0) != rel(res,1)
+// @ ensures rel(err==nil,0) != rel(err==nil,1) || rel(res,0) != rel(res,1)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -362,16 +368,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 	resultRes := true
 	var greatest int = -2
 	var resultErr error = nil
-	if search_tree == nil {
-		resultRes = false
-		resultErr = errors.New("No search tree found")
-		//return false, errors.New("No search tree found")
-	}
-	if query.Label == nil && err == nil {
-		resultRes = false
-		resultErr = errors.New("No search tree found")
-		//return false, errors.New("Empty label :(")
-	}
 	//@ assert search_tree != nil
 	//@ assert search_tree != nil ==> search_tree.Inv()
 	frontiers := search_tree.FrontierNodes( /*@p@*/ )
@@ -391,6 +387,8 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ invariant low(resultErr == nil) ==> low(err == nil)
 	// invariant low(err == nil) && low(!determined) && low(greatest == 0) ==> low(resultRes) && low(tVal)
+	//@ invariant rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1) || (resultRes && resultErr == nil)
+	// invariant frontier == size - 1 ==> rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
 	for _, frontier := range frontiers {
 		//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
 		//@ assert acc(prefixTrees[frontier])
@@ -412,14 +410,30 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 				//return false, errors.New("version out of bounds")
 			}
 			greatest, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size /*@,p@*/)
+			// assert rel(greatest,0) != rel(greatest,1) || rel(err== nil, 0) != rel(err==nil, 1)
+			// assert frontier == size - 1 ==>  rel(err==nil, 0) != rel(err==nil, 1) || rel(greatest==0, 0) != rel(greatest==0, 1)
 			if err != nil {
 				resultRes = false
 				resultErr = err
+				// assert rel(err==nil, 0) != rel(err==nil, 1) ==> rel(resultErr==nil, 0) != rel(resultErr==nil,1)
 				//determined = true
 				break
+			} else if greatest == 1 {
+				// Greater version exists
+				resultRes = false
+				resultErr = errors.New("greater version exists")
+				// assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
+				break
+			} else if greatest == -1 && frontier == size-1 {
+				resultRes = false
+				resultErr = errors.New("version not found at last frontier")
+				// assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
+				break
 			}
+			//@ assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
 		}
 	}
+	// assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1) || (resultRes && resultErr == nil)
 
 	// assert low(resultErr == nil) && low(determined) && low(greatest==0) ==> low(resultRes) && low(tVal)
 	// Post-loop logic (only execute if no error occurred in the loop)
@@ -434,7 +448,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query Search
 		}
 		monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
 	}
-
 	// assert false
 	return resultRes, resultErr
 }

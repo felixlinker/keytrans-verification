@@ -22,6 +22,10 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 }
 
 
+//TODO
+decreases
+//requires acc(tree.Inv(), _)
+pure func (tree *ImplicitBinarySearchTree) IsLow() bool
 @*/
 
 /*
@@ -152,6 +156,7 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 // @ ensures   tree != nil ==> len(path) > 0
 // @ ensures low(len(path))
 // @ ensures forall j int :: j>= 0 && j < len(path) ==> low(path[j])
+// @ ensures tree.IsLow() ==> low(len(path)) && forall i int :: 0<= i && i< len(path) &&  low(path[i])
 // @ trusted
 // TODO: There is no way to fix this issue now due to the hyperpredicate...
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
