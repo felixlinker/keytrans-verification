@@ -20,6 +20,17 @@ func BytesEqual(r1 []byte, r2 []byte, p perm) bool {
 	return len(r1) == len(r2) && forall i int :: 0<=i && i < len(r1) ==> r1[i] ==r2[i]
 }
 
+ghost
+decreases
+requires p > noPerm
+requires acc(r1, p)
+requires acc(r2,p)
+pure
+func BytesNotEqual(r1 []byte, r2 []byte, p perm) bool {
+	return !(len(r1) == len(r2) && forall i int :: 0<=i && i < len(r1) ==> r1[i] ==r2[i])
+}
+
+
 
 
 pred LowInv(s []byte){
@@ -64,6 +75,9 @@ requires acc(f.Inv(), _)
 pure func (f FullTreeHead) Size() uint64 {
 	return unfolding acc(f.Inv(), _) in f.Tree_head.Tree_size
 }
+
+
+
 @*/
 
 type SearchRequest struct {
@@ -200,6 +214,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires t >= 0
 // @ requires prefixTree != nil
 // @ requires low(label)
+// @ requires acc(RootHash)
 //
 //	requires low(prefixTree)
 //
@@ -261,19 +276,19 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	// Fixed iteration observation ==> assumes ==> arbitrary loop iteration
 
 	//@ invariant acc(steps)
-	//@ invariant 0 <= idx && idx <= len(steps)
-	//@ invariant forall l int :: 0 <= l && l < len(steps) ==> steps[l] >= 0
+	//@ invariant step >= 0
 	//@ invariant low(label)
 	//@ invariant LowInv(RootHash)
+	//@ invariant acc(RootHash)
+	//@ invariant rel(t, 0) != rel(t,1)
 	// invariant !low(resultRes) || !low(resultErr==nil)
-	for idx := 0; idx < len(steps); idx++ {
-		step := steps[idx]
+	for _, step := range steps {
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 		// Assume injectivity
-		//@ assume acc(commitment) && LowInv(commitment)
-		//@ assume low(label) && low(step) && rel(err==nil,0)==rel(err==nil, 1) ==> LowInv(commitment) //Injectivity
+		//@ assume acc(commitment)
+		//@ assume low(label) && low(step) &&  low(len(RootHash)) && (forall i int :: 0<= i && i < len(RootHash) && low(RootHash[i])) && rel(err==nil,0)==rel(err==nil, 1) ==> BytesEqual(rel(commitment,0), rel(commitment,1), p) //Injectivity
+		//@ assert rel(t,0)!= rel(t,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 		//@ assert false
-		//@ assert rel(step,0) != rel(step,1) ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
 		/*@
 			ghost if rel(t,1) < rel(t,0){
 				assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p )
