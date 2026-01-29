@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/sha256"
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
@@ -141,6 +142,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	}
 
 	trees := make([]*proofs.PrefixTree, 0, len(resp.Search.Prefix_proofs))
+	rootHashes := make([]*[sha256.Size]byte, 0, len(resp.Search.Prefix_roots))
 	//@ fold acc(resp.Inv(), p)
 
 	//Here, we assume that the tree is already built
@@ -149,6 +151,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	// invariant unfolding acc(resp.Search.Inv(), p/2) in 0 <= i && i <= len(resp.Search.Prefix_proofs)
 	//@ invariant 0 <= i && i <= len(resp.Search.Prefix_proofs)
 	//@ invariant acc(trees)
+	//@ invariant acc(rootHashes)
 	for i := 0; i < len(resp.Search.Prefix_proofs); i++ {
 		//@ unfold acc(resp.Inv(), p)
 		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
@@ -157,13 +160,15 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 			return nil, err
 		} else {
 			trees = append( /*@ perm(1/2), @*/ trees, tree)
+
+			rootHashes = append( /*@ perm(1/2), @*/ rootHashes, tree.Value)
 		}
 		//@ fold acc(resp.Inv(), p)
 	}
 
 	// TODO: Verify proof of inclusion in all trees
 	monitoringMap := make([]MonitoringMapEntry, 0)
-	decision, err := VerifyLatestKey(trees, st.Size, query, resp, monitoringMap, config)
+	decision, err := VerifyLatestKey(trees, rootHashes, st.Size, query, resp, monitoringMap, config)
 	if err != nil {
 		res = nil
 	}
@@ -191,13 +196,22 @@ pure
 func GetInt() (res int)
 @*/
 
-/*@
-
+/*
 // func deterministicFunc(label, view, version) (error)
 // Use low or rel
-
-@
 */
+
+/*@
+// We need a lemma for functional correctness.
+
+ghost
+requires acc(RootHash, _)
+requires acc(label, _)
+decreases
+pure
+func VersionExists(tree *proofs.PrefixTree, label []byte, version uint64, RootHash []byte) bool
+// return tree.Value == RootHash && tree.Contains(VRF(label, version))
+@*/
 
 /*
 CheckGreatest verifies if t is the greatest version
@@ -207,7 +221,7 @@ CheckGreatest verifies if t is the greatest version
 	 0: t is the greatest version
 	 1: Greatest version > t (found commitment above t), violates t being the greatest version
 */
-
+//TODO: We need to somehow grab the value of the root from the tree and see if the hash root is equal
 // @ requires noPerm < p
 // @ requires acc(label, p)
 // @ requires label != nil
@@ -287,6 +301,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 		// Assume injectivity
 		//@ assume acc(commitment)
 		//@ assume low(label) && low(step) &&  low(len(RootHash)) && (forall i int :: 0<= i && i < len(RootHash) && low(RootHash[i])) && rel(err==nil,0)==rel(err==nil, 1) ==> BytesEqual(rel(commitment,0), rel(commitment,1), p) //Injectivity
+		//@ assume err == nil ==> (commitment == nil && !VersionExists(prefixTree, label, step, RootHash )) || (commitment != nil && VersionExists(prefixTree, label, step, RootHash)) //Functional Correctness
 		//@ assert rel(t,0)!= rel(t,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 		//@ assert false
 		/*@
@@ -375,6 +390,7 @@ type MonitoringMapEntry struct {
 // @ requires acc(resp.Version,p)
 // @ requires acc(query.Label,p)
 // @ requires acc(prefixTrees,p)
+// @ requires acc(prefixRootHash, p)
 // @ requires acc(config,p)
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 // @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
@@ -389,7 +405,7 @@ type MonitoringMapEntry struct {
 // @ requires rel(resp.Version, 0) != rel(resp.Version,1)
 //
 //	ensures rel(err==nil,0) != rel(err==nil,1) || rel(res,0) != rel(res,1)
-func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
+func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
 	search_tree := MkImplicitBinarySearchTree(size)
