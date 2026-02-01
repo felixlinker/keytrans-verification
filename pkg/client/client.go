@@ -302,24 +302,28 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])
 	//@ invariant forall i int :: {steps[i]} 0<= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant rel(t, 0) != rel(t,1)
-	// invariant !low(resultRes) || !low(resultErr==nil)
+	// invariant rel(step,0) != rel(step,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 	for _, step := range steps {
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 		// Assume injectivity
 		//@ assume acc(commitment)
-		//@ assume err == nil ==> (commitment != nil) == VersionExists(label, step, RootHash)
-		//@ assume err == nil ==> (commitment == nil) == !VersionExists(label, step, RootHash) //Functional Correctness
+		//@ assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> (commitment != nil) == VersionExists(label, step, RootHash)
+		//@ assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> (commitment == nil) == !VersionExists(label, step, RootHash) //Functional Correctness
 		//@ assume low(step) && low(err == nil) ==> low(commitment == nil)
-		//@ assert rel(t,0)!= rel(t,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
-		//@ assert false
+		// See Issue #991
+		//@ ghost var t0 uint64 = rel(t,0)
+		//@ ghost var t1 uint64 = rel(t,1)
 		/*@
-		ghost if rel(t,1) < rel(t,0){
+		ghost if t1 < t0{
+			assert acc(rel(commitment,0),p)
+			assert acc(rel(commitment,1),p)
 			assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p)
 			assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
 			}
 		@*/
 		//@ assert 1 == 2
 		// assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p)
+		//@ assert false
 		// assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
 		if err != nil {
 			resultRes = 0
@@ -344,8 +348,10 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			}
 		}
 		//To avoid Early termination: if determined is true, we just continue looping without doing anything
+		//@ assert rel(t,0)!= rel(t,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 	}
 
+	//TODO: I think the following is still not very optimal, so I'd move it back to the VerifyLatestKey
 	//Again, avoid early termination because of Gobra Hyperproperty mode
 	LtGtOrEq := resultRes
 	err = resultErr
