@@ -18,7 +18,7 @@ requires acc(r1, p)
 requires acc(r2,p)
 pure
 func BytesEqual(r1 []byte, r2 []byte, p perm) bool {
-	return len(r1) == len(r2) && forall i int :: 0<=i && i < len(r1) ==> r1[i] ==r2[i]
+	return len(r1) == len(r2) && forall i int :: {r1[i], r2[i]} 0<=i && i < len(r1) ==> r1[i] ==r2[i]
 }
 
 ghost
@@ -28,15 +28,21 @@ requires acc(r1, p)
 requires acc(r2,p)
 pure
 func BytesNotEqual(r1 []byte, r2 []byte, p perm) bool {
-	return !(len(r1) == len(r2) && forall i int :: 0<=i && i < len(r1) ==> r1[i] ==r2[i])
+	return !(len(r1) == len(r2) && forall i int :: {r1[i], r2[i]} 0<=i && i < len(r1) ==> r1[i] ==r2[i])
 }
 
 
 
-
-pred LowInv(s []byte){
-	 low(len(s)) && forall i int :: 0<= i && i < len(s) ==> low(s[i])
+pred ByteLowInv(s []byte){
+	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
+
+
+pred UIntLowInv(s []uint64){
+	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
+}
+
+
 @*/
 
 type PT interface {
@@ -202,14 +208,12 @@ func GetInt() (res int)
 */
 
 /*@
-// We need a lemma for functional correctness.
+// We need a lemma for functional correctness. This consists of determinism
 
 ghost
-requires acc(RootHash, _)
-requires acc(label, _)
 decreases
 pure
-func VersionExists(tree *proofs.PrefixTree, label []byte, version uint64, RootHash []byte) bool
+func VersionExists(label []byte, version uint64, RootHash []byte) (r bool)
 // return tree.Value == RootHash && tree.Contains(VRF(label, version))
 @*/
 
@@ -223,21 +227,18 @@ CheckGreatest verifies if t is the greatest version
 */
 //TODO: We need to somehow grab the value of the root from the tree and see if the hash root is equal
 // @ requires noPerm < p
-// @ requires acc(label, p)
 // @ requires label != nil
 // @ requires t >= 0
-// @ requires prefixTree != nil
-// @ requires low(label)
+// @ requires prefixTree != nil ==> prefixTree.Inv()
+// @ requires acc(label)
+// @ requires low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i]))
 // @ requires acc(RootHash)
-//
-//	requires low(prefixTree)
-//
-// @ requires LowInv(RootHash)
+//@ requires low(len(RootHash)) && (forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==>  low(RootHash[i]))
 // @ requires rel(t,0) != rel(t,1)
 // @ ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)
 // @ ensures frontier == size - 1 ==>  rel(err==nil, 0) != rel(err==nil, 1) || rel(res==0, 0) != rel(res==0, 1)
 func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64 /*@, ghost p perm@*/) (res int, newTerminalLogEntry int, err error) {
-	//steps/*@, idx@*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,0)*/) //Das andere
+	//steps/*, idx*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,0)*/) //Das andere
 	//steps2 /*, idx2*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,1)*/)
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
 
@@ -281,33 +282,40 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <= rel(steps[idx4],1) && rel(steps[idx4],1) < rel(t,1)
 	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <=rel(steps[idx1],0) && rel(steps[idx1],0) < rel(t,1)
 
-	// assert !low(t) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0) && rel(steps[idx4],1)==proofs.
-
+	// assert !low(t) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)
 	resultRes := 0
 	var resultErr error = nil
+	//@ assert acc(steps)
 
-	// idx0 != idx1 and idx0 == idx1 ==> differences, with assume
+	// step0 != step1 and idx0 == idx1 ==> differences, with assume
 	// Fixed iteration observation ==> assumes ==> arbitrary loop iteration
 
-	//@ invariant acc(steps)
-	//@ invariant step >= 0
-	//@ invariant low(label)
-	//@ invariant LowInv(RootHash)
+	//Using pred to do low and acc sucks because it will always return an issue with permission error
+	//Apparently, there will be an issue with acc(s1) && acc(s2) will lead to permission error than using line by line .....
+
 	//@ invariant acc(RootHash)
+	//@ invariant acc(label)
+	//@ invariant acc(steps)
+	//@ invariant low(len(RootHash))
+	//@ invariant low(len(label))
+	//@ invariant forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i])
+	//@ invariant forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])
+	//@ invariant forall i int :: {steps[i]} 0<= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant rel(t, 0) != rel(t,1)
 	// invariant !low(resultRes) || !low(resultErr==nil)
 	for _, step := range steps {
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 		// Assume injectivity
 		//@ assume acc(commitment)
-		//@ assume low(label) && low(step) &&  low(len(RootHash)) && (forall i int :: 0<= i && i < len(RootHash) && low(RootHash[i])) && rel(err==nil,0)==rel(err==nil, 1) ==> BytesEqual(rel(commitment,0), rel(commitment,1), p) //Injectivity
-		//@ assume err == nil ==> (commitment == nil && !VersionExists(prefixTree, label, step, RootHash )) || (commitment != nil && VersionExists(prefixTree, label, step, RootHash)) //Functional Correctness
+		//@ assume err == nil ==> (commitment != nil) == VersionExists(label, step, RootHash)
+		//@ assume err == nil ==> (commitment == nil) == !VersionExists(label, step, RootHash) //Functional Correctness
+		//@ assume low(step) && low(err == nil) ==> low(commitment == nil)
 		//@ assert rel(t,0)!= rel(t,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 		//@ assert false
 		/*@
-			ghost if rel(t,1) < rel(t,0){
-				assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p )
-				assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1),p)
+		ghost if rel(t,1) < rel(t,0){
+			assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p)
+			assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
 			}
 		@*/
 		//@ assert 1 == 2
@@ -399,6 +407,7 @@ type MonitoringMapEntry struct {
 // @ requires size > 0
 // @ requires *resp.Version >=0
 // @ requires resp.Full_tree_head.RootHash != nil
+// @ requires resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash)
 // @ requires low(size)
 // @ requires query.Label != nil
 // @ requires low(query.Label)
@@ -427,6 +436,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 	//@ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
 	//@ invariant acc(frontiers)
+	//@ invariant acc(resp.Full_tree_head.RootHash)
 	//@ invariant acc(query.Label, p)
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
@@ -455,6 +465,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 				break
 				//return false, errors.New("version out of bounds")
 			}
+			//@ assert acc(resp.Full_tree_head.RootHash)
 			greatest, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size /*@,p@*/)
 			// assert rel(greatest,0) != rel(greatest,1) || rel(err== nil, 0) != rel(err==nil, 1)
 			// assert frontier == size - 1 ==>  rel(err==nil, 0) != rel(err==nil, 1) || rel(greatest==0, 0) != rel(greatest==0, 1)
