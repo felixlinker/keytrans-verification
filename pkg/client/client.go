@@ -32,7 +32,6 @@ func BytesNotEqual(r1 []byte, r2 []byte, p perm) bool {
 }
 
 
-
 pred ByteLowInv(s []byte){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
@@ -233,14 +232,25 @@ CheckGreatest verifies if t is the greatest version
 // @ requires acc(label)
 // @ requires low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i]))
 // @ requires acc(RootHash)
-//@ requires low(len(RootHash)) && (forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==>  low(RootHash[i]))
+// @ requires low(len(RootHash)) && (forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==>  low(RootHash[i]))
 // @ requires rel(t,0) != rel(t,1)
-// @ ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)
-// @ ensures frontier == size - 1 ==>  rel(err==nil, 0) != rel(err==nil, 1) || rel(res==0, 0) != rel(res==0, 1)
-func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, terminalLogEntry int, frontier uint64, size uint64 /*@, ghost p perm@*/) (res int, newTerminalLogEntry int, err error) {
+// ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)
+func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost p perm@*/) (res int, err error) {
 	//steps/*, idx*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,0)*/) //Das andere
 	//steps2 /*, idx2*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,1)*/)
+
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
+
+	//@ ghost var t0 uint64 = rel(t,0)
+	//@ ghost var t1 uint64 = rel(t,1)
+	//@ ghost var TStar uint64
+	/*@
+	ghost if t0 < t1{
+		TStar = proofs.TStar_pure(t0,t1)
+	}else{
+		TStar = proofs.TStar_pure(t1,t0)
+	}
+	@*/
 
 	//Postcondition from the FBLS
 	//@ assert acc(steps)
@@ -254,7 +264,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	// assert exists idx2 int :: rel(t,0) > rel(t,1)  ==>  0 <= idx2 && idx2 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,0)[idx2]
 	//@ assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
-	// refute len(rel(steps,0)) == len(rel(steps,1)) ==> exists idx int :: 0 <= idx && idx < len(rel(steps,0)) ==> rel(steps,0)[idx] != rel(steps,1)[idx]
 	// assert  exists idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx3 && idx3 < len(rel(steps,1)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,1)[idx3]
 	// assert proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1))
 	//@ assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1)), 1)
@@ -302,29 +311,21 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])
 	//@ invariant forall i int :: {steps[i]} 0<= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant rel(t, 0) != rel(t,1)
-	// invariant rel(step,0) != rel(step,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+	// we need something for already diverged
+	// invariant (rel(resultRes, 0) != rel(resultRes, 1) || rel(resultErr==nil, 0) != rel(resultErr==nil, 1)) || (resultRes == 0 && resultErr == nil)
 	for _, step := range steps {
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
-		// Assume injectivity
-		//@ assume acc(commitment)
-		//@ assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> (commitment != nil) == VersionExists(label, step, RootHash)
-		//@ assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> (commitment == nil) == !VersionExists(label, step, RootHash) //Functional Correctness
-		//@ assume low(step) && low(err == nil) ==> low(commitment == nil)
+		// Assume injectivity and Functional correctness
+		//@ assume rel(step,0) == rel(step,1)  ==> rel(err == nil, 0)==rel(err ==nil,1) && (rel(err,0) == nil && rel(err, 1)==nil ==> rel(commitment==nil,0) == rel(commitment == nil,1))
+
+		//@ ghost var step0 uint64 = rel(step,0)
+		//@ ghost var step1 uint64 = rel(step,1)
+
+		//Argue on TStar
+
+		//Lets'write the most important ideas
 		// See Issue #991
-		//@ ghost var t0 uint64 = rel(t,0)
-		//@ ghost var t1 uint64 = rel(t,1)
-		/*@
-		ghost if t1 < t0{
-			assert acc(rel(commitment,0),p)
-			assert acc(rel(commitment,1),p)
-			assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p)
-			assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
-			}
-		@*/
-		//@ assert 1 == 2
-		// assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) != step ==> BytesEqual(rel(commitment,0), rel(commitment,1), p)
-		//@ assert false
-		// assert rel(step,0) == rel(step,1) && proofs.TStar_pure(rel(t,1), rel(t,0)) == step ==> !BytesEqual(rel(commitment,0), rel(commitment,1), p)
+
 		if err != nil {
 			resultRes = 0
 			resultErr = err
@@ -332,66 +333,69 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			break
 		} else {
 			incl := commitment != nil
-			//@ assert !BytesEqual(rel(commitment,0), rel(commitment,1),p) ==> rel(incl,0) != rel(incl,1)
-			//@ assert  BytesEqual(rel(commitment,0), rel(commitment,1),p) ==> rel(incl, 0) == rel(incl,1)
+			/*@
+			ghost if step == TStar{
+				//step is now between t0 and t1, so the path must differ
+				ghost if t0 < t1{
+					assert rel(t < step,0)
+					assert !rel(t < step, 1)
+					assert !rel(step <= t, 0)
+					assert rel(step <=t , 1)
+					ghost if incl{
+						// Branch 2: incl && t < step
+						assert rel(incl && t< step,0) != rel(incl && t < step, 1)
+					}else {
+						assert rel(!incl && step <= t, 0)!= rel(!incl && step <= t, 1)
+					}
+
+				} else {
+				 	//Symmetric, now between t1 and t0
+					assert !rel(t< step,0)
+					assert rel(t < step, 1)
+					assert rel(step <= t, 0)
+					assert !rel(step <=t , 1)
+
+					ghost if incl{
+						assert rel(incl && t< step,0) != rel(incl && t < step, 1)
+					} else{
+						assert rel(!incl && step <= t ,0) != rel(!incl && step <=t, 1)
+					}
+				}
+					assert rel(!incl && step <=t, 0) != rel(!incl && step <=t, 0) || rel(incl && t < step, 0) != rel(incl&& t < step,1)
+
+			}
+
+			@*/
+
 			if !incl && step <= t { // Claimed Greatest is less than t
 				resultRes = -1
 				resultErr = nil
 				//determined = true
+				/*@
+				ghost if step == TStar{
+					assert rel(resultRes,0)!= rel(resultRes,1)
+				}
+				@*/
 				break
 			} else if incl && t < step { // Greatest is greater than t
 				//@ assert rel(incl,0) != rel(incl,1) || rel(t < step,0) != rel(t < step,1)
 				resultRes = 1
 				resultErr = nil
 				//determined = true
+				/*@
+				ghost if step == TStar{
+					assert rel(resultRes,0)!= rel(resultRes,1)
+				}
+				@*/
 				break
 			}
+			//Neither branch taken
 		}
 		//To avoid Early termination: if determined is true, we just continue looping without doing anything
 		//@ assert rel(t,0)!= rel(t,1) ==> rel(resultRes, 0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 	}
 
-	//TODO: I think the following is still not very optimal, so I'd move it back to the VerifyLatestKey
-	//Again, avoid early termination because of Gobra Hyperproperty mode
-	LtGtOrEq := resultRes
-	err = resultErr
-	newTerminalLogEntry = terminalLogEntry
-
-	//Final Result values
-	finalRes := LtGtOrEq
-	finalNewTerminalLogEntry := newTerminalLogEntry
-	var finalErr error = nil
-
-	if err != nil {
-		finalRes = 0
-		finalNewTerminalLogEntry = terminalLogEntry
-		finalErr = err
-	} else {
-		// Check if LtGtOrEq == 1
-		if LtGtOrEq == 1 {
-			finalRes = 0
-			finalNewTerminalLogEntry = terminalLogEntry
-			finalErr = errors.New("not the greatest version as expected")
-		} else {
-			// Update terminal log entry if needed
-			if LtGtOrEq == 0 && terminalLogEntry == -1 {
-				finalNewTerminalLogEntry = int(frontier)
-			}
-
-			// Check frontier condition
-			if frontier == size-1 {
-				if LtGtOrEq != 0 {
-					finalRes = 0
-					finalErr = errors.New("t is not the greatest version as expected")
-				}
-				//Injectivity missing!
-				//@ assert finalErr == nil && frontier == size-1 && finalRes == 0 && low(finalErr== nil) && low(frontier == size-1) && low(finalRes == 0)==> low(t)
-			}
-		}
-	}
-	//Final assert
-	//@ assert rel(finalRes,0) != rel(finalRes,1) || rel(finalErr==nil,0) != rel(finalErr==nil,1)
-	return finalRes, finalNewTerminalLogEntry, finalErr
+	return resultRes, resultErr
 }
 
 type MonitoringMapEntry struct {
@@ -427,7 +431,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	// assert acc(search_tree.Inv(), p)
 	// Variables to track result and avoid early termination
 	resultRes := true
-	var greatest int = -2
 	var resultErr error = nil
 	//@ assert search_tree != nil
 	//@ assert search_tree != nil ==> search_tree.Inv()
@@ -464,6 +467,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 			//determined = true
 			break
 		} else {
+			rootHash := prefixRootHash[frontier]
 			//@ assert acc(query.Label)
 			if size == 0 || tVal >= size || frontier >= size {
 				resultRes = false
@@ -471,31 +475,31 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 				break
 				//return false, errors.New("version out of bounds")
 			}
-			//@ assert acc(resp.Full_tree_head.RootHash)
-			greatest, terminalLogEntry, err = CheckGreatest(Prefix_tree, query.Label, tVal, resp.Full_tree_head.RootHash, terminalLogEntry, frontier, size /*@,p@*/)
-			// assert rel(greatest,0) != rel(greatest,1) || rel(err== nil, 0) != rel(err==nil, 1)
-			// assert frontier == size - 1 ==>  rel(err==nil, 0) != rel(err==nil, 1) || rel(greatest==0, 0) != rel(greatest==0, 1)
+			LtGtOrEq, err := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size /*@,p@*/)
 			if err != nil {
 				resultRes = false
 				resultErr = err
-				// assert rel(err==nil, 0) != rel(err==nil, 1) ==> rel(resultErr==nil, 0) != rel(resultErr==nil,1)
-				//determined = true
 				break
-			} else if greatest == 1 {
+			} else if LtGtOrEq == 1 {
 				// Greater version exists
 				resultRes = false
 				resultErr = errors.New("greater version exists")
-				// assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
 				break
-			} else if greatest == -1 && frontier == size-1 {
-				resultRes = false
-				resultErr = errors.New("version not found at last frontier")
-				// assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
-				break
+			} else if LtGtOrEq == 0 && terminalLogEntry == -1 {
+				terminalLogEntry = int(frontier)
 			}
-			//@ assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
+
+			if frontier == size-1 {
+				if LtGtOrEq != 0 {
+					resultRes = false
+					resultErr = errors.New("Greatest version is not the greatest in the last iteration")
+					break
+				}
+			}
 		}
+		//@ assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
 	}
+
 	// assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1) || (resultRes && resultErr == nil)
 
 	// assert low(resultErr == nil) && low(determined) && low(greatest==0) ==> low(resultRes) && low(tVal)
@@ -504,7 +508,8 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	if terminalLogEntry == -1 && err == nil {
 		resultRes = false
 		resultErr = errors.New("Claimed Version is not found.")
-	} else if frontiers[0] < uint64(terminalLogEntry) && config.Mode == 1 {
+	}
+	if frontiers[0] < uint64(terminalLogEntry) && config.Mode == 1 {
 		entry := MonitoringMapEntry{
 			Position: uint64(len(frontiers) - 1),
 			Version:  *t,
@@ -514,3 +519,21 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	// assert false
 	return resultRes, resultErr
 }
+
+/*
+
+	// ghost var commitment0 []byte = rel(commitment,0)
+	// ghost var commitment1 []byte = rel(commitment,1)
+
+	// assume acc(commitment0)
+	// assume acc(commitment1)
+	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> low((commitment != nil) == VersionExists(label, step, RootHash))
+	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> low((commitment == nil) == !VersionExists(label, step, RootHash))
+	//Maybe we only need this. We assume Merkle Binding
+
+	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> low(commitment == nil)
+	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> len(commitment0) == len(commitment1)
+	//TODO: Error with the memory permission...
+	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> (forall i int :: {commitment0[i], commitment1[i]} 0<= i && i < len(label) ==> commitment0[i] == commitment1[i])
+
+*/
