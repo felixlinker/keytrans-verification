@@ -234,8 +234,8 @@ CheckGreatest verifies if t is the greatest version
 // @ requires acc(RootHash)
 // @ requires low(len(RootHash)) && (forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==>  low(RootHash[i]))
 // @ requires rel(t,0) != rel(t,1)
-//@ requires low(t>=0)
-// @ ensures (rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1)) || (res == -42 && err == nil)
+// @ requires low(t>=0)
+// @ ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1) || (res == -42 && err == nil)
 func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost p perm@*/) (res int, err error) {
 	//steps/*, idx*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,0)*/) //Das andere
 	//steps2 /*, idx2*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,1)*/)
@@ -319,6 +319,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant rel(determined, 0) != rel(determined, 1) ==> (determined ==> (resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant (rel(resultRes, 0) != rel(resultRes, 1) || rel(resultErr==nil, 0) != rel(resultErr==nil, 1)) || (!determined && resultRes == -42 && resultErr == nil)
+	//@ invariant (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
 	for _, step := range steps {
 		if !determined {
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
@@ -384,6 +385,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					ghost if step == TStar{
 						// Only one execution reaches here if my assumption is correct
 						assert rel(resultRes,0)!= rel(resultRes,1)
+						assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 						}
 					@*/
 					//@ assert resultErr == nil
@@ -397,6 +399,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					ghost if step == TStar{
 						// Only one execution reaches here if my assumption is correct
 						assert rel(resultRes,0)!= rel(resultRes,1)
+						 assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 					}
 					@*/
 					//@ assert resultErr == nil
@@ -411,6 +414,9 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	}
 	//@ assert !determined ==> resultRes == -42 && resultErr == nil
 	//@ assert determined ==> rel(resultErr==nil, 0) != rel(resultErr==nil, 1) || rel(resultRes, 0) != rel(resultRes, 1)
+	//@ assert (!rel(determined,0) && !rel(determined,1)) ==> (resultRes == -42 && resultErr == nil)
+	//@ assert (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
+	//@ assert (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1)) || (resultRes == -42 && resultErr == nil)
 	//@ assert false
 	//As TStar is in the ladder and rel(resultRes,0)!= rel(resultRes,1), this always hold given on the conditions.
 
