@@ -244,16 +244,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	//@ ghost var t0 uint64 = rel(t,0)
 	//@ ghost var t1 uint64 = rel(t,1)
-	//@ ghost var TStar uint64 = 0
-	/*@
-	ghost if t0 < t1{
-		assert t0 >=0
-		TStar = proofs.TStar_pure(t0,t1)
-	}else if t1 < t0{
-		assert t1 >= 0
-		TStar = proofs.TStar_pure(t1,t0)
-	}
-	@*/
 
 	//Postcondition from the FBLS
 	//@ assert acc(steps)
@@ -277,7 +267,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	// assert proofs.TStar_wrapper(rel(steps,1), rel(t,1), rel(t,0))
 	//@ assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,1),rel(t,0)), 1)
 
-	//Replace with rel(steps,0) and rel(steps,1) with bound
+	//Remove existential quantifier to replace the statement, adding an assume with it
 	// assume acc(rel(steps,1), p) // Will cause an error in this case, a java concurrency error...
 	//@ idx1 := GetInt()
 	//@ idx2 := GetInt()
@@ -291,8 +281,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	//Move existential quantifier to the right side of the implication
 
-	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <= rel(steps[idx4],1) && rel(steps[idx4],1) < rel(t,1)
-	//@ assert rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) <=rel(steps[idx1],0) && rel(steps[idx1],0) < rel(t,1)
+	//@ assert t0 < t1 ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& t0 <= rel(steps[idx4],1) && rel(steps[idx4],1) < t1 && t0 <= rel(steps[idx1],0) && rel(steps[idx1],0) < t1
+	//@ assert t0 > t1 ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps[idx3],1) == rel(steps[idx2],0) && t1 <= rel(steps[idx3],1) && rel(steps[idx3],1) < t0 && t1 <= rel(steps[idx2],0) && rel(steps[idx2],0) < t0
 
 	resultRes := -42
 	var resultErr error = nil
@@ -314,41 +304,51 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])
 	//@ invariant forall i int :: {steps[i]} 0<= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant rel(t, 0) != rel(t,1)
+	//@ invariant 0<= idx && idx <= len(steps)
+	// Gobruh is stupid and cannot see that these invariants hold bruh
+	//@ invariant t0 < t1 ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& t0 <= rel(steps[idx4],1) && rel(steps[idx4],1) < t1 && t0 <= rel(steps[idx1],0) && rel(steps[idx1],0) < t1
+	//@ invariant t0 > t1 ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps[idx3],1) == rel(steps[idx2],0) && t1 <= rel(steps[idx3],1) && rel(steps[idx3],1) < t0 && t1 <= rel(steps[idx2],0) && rel(steps[idx2],0) < t0
 	// we need something for already diverged
-	//@ invariant !determined ==> (resultRes == -42 && resultErr == nil)
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant rel(determined, 0) != rel(determined, 1) ==> (determined ==> (resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant (rel(resultRes, 0) != rel(resultRes, 1) || rel(resultErr==nil, 0) != rel(resultErr==nil, 1)) || (!determined && resultRes == -42 && resultErr == nil)
 	//@ invariant (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
-	for _, step := range steps {
+	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
+			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 			// Assume injectivity and Functional correctness
 			//@ assume !rel(determined, 0) && !rel(determined, 1) ==> rel(step, 0) == rel(step, 1) && err == nil && rel(commitment == nil, 0) == rel(commitment == nil, 1)
 
+			//Use idx2 and idx3  where rel(steps[idx4],1) == rel(steps[idx1],0) for t0 < t1
+			//Use idx1 and idx4  where rel(steps[idx3],1) == rel(steps[idx2],0) for t1 < t0
 			if err != nil {
-				//@ assert err != nil
 				resultRes = 404
 				resultErr = err
 				determined = true
 				/*@
-				ghost if step == TStar{
-					assert err != nil
+				ghost if t0 < t1{
 					assert resultErr != nil
+					assert determined == true
+				}else if t0 > t1{
+					assert resultErr != nil
+					assert determined == true
 				}
-
+				assert determined && rel(resultErr!= nil,0) == rel(resultErr!= nil, 1) && rel(resultRes == 404,0) == rel(resultRes==404,1)
+				assert false
 				@*/
 				//break
 			} else {
 				incl := commitment != nil
-				//@ assert step == TStar ==> low(incl)
-				//TODO: Analyse those assumes
-				//@ assume step != TStar ==> !low(!incl && step <= t) && !low(incl && t < step)
+				//@ assert t0 < t1 ==> rel(steps[idx4],1) == rel(steps[idx1],0)
+				//@ assert t0 < t1 && rel(steps[idx4],1) == rel(steps[idx1],0) ==> rel(incl,0) == rel(incl,1)
+				//@ assert false
 				//I think this is actually the FBLS giving us that. This is the case which it continues.
 				/*@
-				ghost if step == TStar{
+				ghost if t0 < t1{
 					//step is now between t0 and t1, so the path must differ
 					ghost if t0 < t1{
+						assert false
 						assert rel(t < step,0)
 						assert !rel(t < step, 1)
 						assert !rel(step <= t, 0)
@@ -375,14 +375,14 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 							assert rel(!incl && step <=t, 0) != rel(!incl && step <=t, 1) || rel(incl && t < step, 0) != rel(incl&& t < step,1)
 					}
 				@*/
-				//@ assert step == TStar ==> rel(!incl && step <=t, 0) != rel(!incl && step <=t, 1) || rel(incl && t < step, 0) != rel(incl&& t < step,1)
+				//@ assert idx == idx1 ==> rel(!incl && step <=t, 0) != rel(!incl && step <=t, 1) || rel(incl && t < step, 0) != rel(incl&& t < step,1)
 
 				if !incl && step <= t { // Claimed Greatest is less than t
 					resultRes = -1
 					resultErr = nil
 					determined = true
 					/*@
-					ghost if step == TStar{
+					ghost if idx == idx2{
 						// Only one execution reaches here if my assumption is correct
 						assert rel(resultRes,0)!= rel(resultRes,1)
 						assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
@@ -390,13 +390,13 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					@*/
 					//@ assert resultErr == nil
 					//break
-					//@ assert step == TStar && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
+					//@ assert idx == idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
 				} else if incl && t < step { // Greatest is greater than t
 					resultRes = 1
 					resultErr = nil
 					determined = true
 					/*@
-					ghost if step == TStar{
+					ghost if idx==idx2{
 						// Only one execution reaches here if my assumption is correct
 						assert rel(resultRes,0)!= rel(resultRes,1)
 						 assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
@@ -404,7 +404,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					@*/
 					//@ assert resultErr == nil
 					//break
-					//@ assert step == TStar && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
+					//@ assert idx==idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
 				}
 				//Neither branch taken
 				// assert(resultErr == nil && !((!incl && step <= t) || (incl && t < step))) || rel(resultRes, 0) != rel(resultRes, 1)
