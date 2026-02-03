@@ -311,8 +311,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	// we need something for already diverged
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant rel(determined, 0) != rel(determined, 1) ==> (determined ==> (resultRes == -1 || resultRes == 1) && resultErr == nil)
-	//@ invariant (rel(resultRes, 0) != rel(resultRes, 1) || rel(resultErr==nil, 0) != rel(resultErr==nil, 1)) || (!determined && resultRes == -42 && resultErr == nil)
-	//@ invariant (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
+	// invariant (rel(resultRes, 0) != rel(resultRes, 1) || rel(resultErr==nil, 0) != rel(resultErr==nil, 1)) || (!determined && resultRes == -42 && resultErr == nil)
+	// invariant (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
@@ -340,6 +340,13 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				//break
 			} else {
 				incl := commitment != nil
+
+				//TODO:This assume is a very strong assume because this will allow that there is no branching before TStar.
+				//We can also say that forall t uint64 :: t < TStar ==> rel(step,0) ==rel(step,1)
+				//But this needs to be proven.
+				//For now, I think we can just assume that.
+				//@ assume (t0 < t1 && idx != idx1) || (t0 > t1 && idx != idx2) ==> !(!incl && step <= t) && !(incl && t < step)
+
 				//@ assert t0 < t1 ==> rel(steps[idx4],1) == rel(steps[idx1],0)
 				//@ assert t0 < t1 && rel(steps[idx4],1) == rel(steps[idx1],0) ==> rel(incl,0) == rel(incl,1)
 				/*@
@@ -358,45 +365,69 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 						}else {
 							assert rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 						}
-					} else if t0 > t1{
-
-					}
+						assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+					} else {
+						//step is now between t0 and t1, so the path must differ
+						assert rel(steps[idx3],1) == rel(steps[idx2],0)
+						ghost var TStar uint64 = rel(steps[idx2],0)
+						assert TStar == rel(steps[idx3],1)  && TStar == rel(steps[idx2],0)
+						assert t1 < TStar
+						assert !(t0 < TStar)
+						assert !(TStar <= t1)
+						assert TStar <=t0
+						ghost if incl{
+							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1)
+						}else {
+							assert rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+						}
+						assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+						}
+						assert rel(incl && t< steps[idx4] ,0) != rel(incl && t < steps[idx4], 1) || rel(!incl && steps[idx4] <= t, 0)!= rel(!incl && steps[idx4] <= t, 1)
+						assert rel(incl && t< steps[idx2] ,0) != rel(incl && t < steps[idx2], 1) || rel(!incl && steps[idx2] <= t, 0)!= rel(!incl && steps[idx2] <= t, 1)
+						assert rel(incl && t< steps[idx3] ,0) != rel(incl && t < steps[idx3], 1) || rel(!incl && steps[idx3] <= t, 0)!= rel(!incl && steps[idx3] <= t, 1)
+						assert rel(incl && t< steps[idx1] ,0) != rel(incl && t < steps[idx1], 1) || rel(!incl && steps[idx1] <= t, 0)!= rel(!incl && steps[idx1] <= t, 1)
+						//Issue lies in here: We cannot guarantee that the following holds due to the interplay.
+						//If we want to prove this, then we'll have to set up a very strong assumption, which means there is no branching before the TStar.
+						//This is possible because there shouldn't be any branching before this.
+						assert false
 				@*/
-				//@ assert idx == idx1 ==> rel(!incl && step <=t, 0) != rel(!incl && step <=t, 1) || rel(incl && t < step, 0) != rel(incl&& t < step,1)
 
 				if !incl && step <= t { // Claimed Greatest is less than t
 					resultRes = -1
 					resultErr = nil
 					determined = true
 					/*@
-					ghost if t0 < t1{
-						// Only one execution reaches here if my assumption is correct
-						ghost var TStar uint64 = rel(steps[idx4],1)
-						assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
-						assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes == -1,0)
-						assert rel(resultRes,0) != rel(resultRes,1)
-						assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
-						assert false
-					}
+						ghost if t0 < t1{
+							if !determined{
+								// Only one execution reaches here if my assumption is correct
+								ghost var TStar uint64 = rel(steps[idx4],1)
+								assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
+								assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes==-1,1)
+								assert rel(resultRes,0) != rel(resultRes,1)
+								assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+								assert false
+							}
+						}
 					@*/
-					//@ assert resultErr == nil
+					// assert resultErr == nil
 					//break
-					//@ assert idx == idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
+					// assert idx == idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
 				} else if incl && t < step { // Greatest is greater than t
 					resultRes = 1
 					resultErr = nil
 					determined = true
-					/*@
-					ghost if idx==idx2{
-						// Only one execution reaches here if my assumption is correct
-						assert rel(resultRes,0)!= rel(resultRes,1)
-						 assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
-					}
-					@*/
-					//@ assert resultErr == nil
+					/*
+						ghost if idx==idx2{
+							// Only one execution reaches here if my assumption is correct
+							assert rel(resultRes,0)!= rel(resultRes,1)
+							 assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+						}
+					*/
+					// assert resultErr == nil
 					//break
-					//@ assert idx==idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
+					// assert idx==idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
 				}
+
 				//Neither branch taken
 				// assert(resultErr == nil && !((!incl && step <= t) || (incl && t < step))) || rel(resultRes, 0) != rel(resultRes, 1)
 			}
