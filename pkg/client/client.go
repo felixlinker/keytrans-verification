@@ -294,6 +294,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	//Using pred to do low and acc sucks because it will always return an issue with permission error
 	//Apparently, there will be an issue with acc(s1) && acc(s2) will lead to permission error than using line by line .....
+	//We need always to put an assert false because we'll never know which branch Gobra is taking, leading to inconsistency errors
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
@@ -310,6 +311,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant t0 > t1 ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps[idx3],1) == rel(steps[idx2],0) && t1 < rel(steps[idx3],1) && rel(steps[idx3],1) <= t0 && t1 < rel(steps[idx2],0) && rel(steps[idx2],0) <= t0
 	// we need something for already diverged
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
+	//@ invariant !determined ==> resultRes == -42 && resultErr == nil
 	//@ invariant rel(determined, 0) != rel(determined, 1) ==> (determined ==> (resultRes == -1 || resultRes == 1) && resultErr == nil)
 	// invariant (rel(resultRes, 0) != rel(resultRes, 1) || rel(resultErr==nil, 0) != rel(resultErr==nil, 1)) || (!determined && resultRes == -42 && resultErr == nil)
 	// invariant (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
@@ -389,7 +391,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 						//Issue lies in here: We cannot guarantee that the following holds due to the interplay.
 						//If we want to prove this, then we'll have to set up a very strong assumption, which means there is no branching before the TStar.
 						//This is possible because there shouldn't be any branching before this.
-						assert false
 				@*/
 
 				if !incl && step <= t { // Claimed Greatest is less than t
@@ -397,32 +398,48 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					resultErr = nil
 					determined = true
 					/*@
-						ghost if t0 < t1{
-							if !determined{
+						ghost if t0 < t1 && (idx == idx4 || idx == idx1){
 								// Only one execution reaches here if my assumption is correct
 								ghost var TStar uint64 = rel(steps[idx4],1)
 								assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
 								assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes==-1,1)
 								assert rel(resultRes,0) != rel(resultRes,1)
 								assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
-								assert false
-							}
+								//assert false
+
+						} else if t0 > t1 && (idx == idx2 || idx == idx3){
+							ghost var TStar uint64 = rel(steps[idx2],1)
+							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
+							assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes==-1,1)
+							assert rel(resultRes,0) != rel(resultRes,1)
+							assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+							//assert false
 						}
 					@*/
-					// assert resultErr == nil
 					//break
 					// assert idx == idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
 				} else if incl && t < step { // Greatest is greater than t
 					resultRes = 1
 					resultErr = nil
 					determined = true
-					/*
-						ghost if idx==idx2{
+					/*@
+						ghost if t0 < t1 && (idx == idx4 || idx == idx1){
 							// Only one execution reaches here if my assumption is correct
-							assert rel(resultRes,0)!= rel(resultRes,1)
-							 assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+							ghost var TStar uint64 = rel(steps[idx4],1)
+							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
+							assert rel(resultRes == 1,0) && rel(resultRes != 1, 1) || rel(resultRes!= 1,0) && rel(resultRes==1,1)
+							assert rel(resultRes,0) != rel(resultRes,1)
+							assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+							//assert false
+						} else if t0 > t1 && (idx == idx2 || idx == idx3){
+							ghost var TStar uint64 = rel(steps[idx2],1)
+							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
+							assert rel(resultRes == 1,0) && rel(resultRes != 1, 1) || rel(resultRes!= 1,0) && rel(resultRes==1,1)
+							assert rel(resultRes,0) != rel(resultRes,1)
+							assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+							//assert false
 						}
-					*/
+					@*/
 					// assert resultErr == nil
 					//break
 					// assert idx==idx2 && rel(resultErr==nil, 0) != rel(resultErr==nil, 1) ==> rel(resultRes,0) != rel(resultRes,1)
