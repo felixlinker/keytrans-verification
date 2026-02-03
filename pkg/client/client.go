@@ -350,15 +350,13 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 						assert TStar == rel(steps[idx4],1) && TStar == rel(steps[idx1],0)
 						assert t0 < TStar
 						assert !(t1 < TStar)
-						assert false
-						assert !rel(TStar <= t, 0)
-						assert rel(TStar <=t , 1)
+						assert !(TStar <= t0)
+						assert TStar <=t1
 						ghost if incl{
 							// Branch 2: incl && t < step
-							assert rel(incl && t< step,0) != rel(incl && t <
-							 step, 1)
-							}else {
-								assert rel(!incl && step <= t, 0)!= rel(!incl && step <= t, 1)
+							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1)
+						}else {
+							assert rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 						}
 					} else if t0 > t1{
 
@@ -371,11 +369,15 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					resultErr = nil
 					determined = true
 					/*@
-					ghost if idx == idx2{
+					ghost if t0 < t1{
 						// Only one execution reaches here if my assumption is correct
-						assert rel(resultRes,0)!= rel(resultRes,1)
+						ghost var TStar uint64 = rel(steps[idx4],1)
+						assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
+						assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes == -1,0)
+						assert rel(resultRes,0) != rel(resultRes,1)
 						assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
-						}
+						assert false
+					}
 					@*/
 					//@ assert resultErr == nil
 					//break
