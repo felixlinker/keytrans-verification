@@ -235,7 +235,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires low(len(RootHash)) && (forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==>  low(RootHash[i]))
 // @ requires rel(t,0) != rel(t,1)
 // @ requires low(t>=0)
-// @ ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1) || (res == -42 && err == nil)
+//  ensures rel(err==nil, 0) != rel(err==nil, 1) || rel(res, 0) != rel(res, 1) || (res == -42 && err == nil)
 func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost p perm@*/) (res int, err error) {
 	//steps/*, idx*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,0)*/) //Das andere
 	//steps2 /*, idx2*/ := proofs.FullBinaryLadderSteps(t/*, rel(t,1)*/)
@@ -312,7 +312,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	// we need something for already diverged
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant !determined ==> resultRes == -42 && resultErr == nil
-	//@ invariant rel(determined, 0) != rel(determined, 1) ==> (determined ==> (resultRes == -1 || resultRes == 1) && resultErr == nil)
+	//@ invariant rel(determined, 0) != rel(determined, 1) ==> (determined ==> (resultRes == -1 || resultRes == 1) && resultErr == nil || resultErr != nil)
 	// invariant (rel(resultRes, 0) != rel(resultRes, 1) || rel(resultErr==nil, 0) != rel(resultErr==nil, 1)) || (!determined && resultRes == -42 && resultErr == nil)
 	// invariant (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
 	for idx := 0; idx < len(steps); idx++ {
@@ -337,7 +337,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					assert determined == true
 				}
 				assert determined && rel(resultErr!= nil,0) == rel(resultErr!= nil, 1) && rel(resultRes == 404,0) == rel(resultRes==404,1)
-				assert false
+				//assert false
 				@*/
 				//break
 			} else {
@@ -349,14 +349,17 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				//For now, I think we can just assume that.
 				//@ assume (t0 < t1 && idx != idx1) || (t0 > t1 && idx != idx2) ==> !(!incl && step <= t) && !(incl && t < step)
 
-				//@ assert t0 < t1 ==> rel(steps[idx4],1) == rel(steps[idx1],0)
-				//@ assert t0 < t1 && rel(steps[idx4],1) == rel(steps[idx1],0) ==> rel(incl,0) == rel(incl,1)
+				// assert t0 < t1 && rel(steps[idx4],1) == rel(steps[idx1],0) ==> rel(incl,0) == rel(incl,1)
+
 				/*@
 				ghost if t0 < t1{
 					//step is now between t0 and t1, so the path must differ
 						assert rel(steps[idx4],1) == rel(steps[idx1],0)
-						ghost var TStar uint64 = rel(steps[idx4],1)
-						assert TStar == rel(steps[idx4],1) && TStar == rel(steps[idx1],0)
+						assert 0 <= idx1 && idx1 < rel(len(steps),0)
+						//Bruh why
+						assert 0 <= idx4 && idx4 < len(rel(steps,1))
+						ghost var TStar uint64 = rel(steps[idx1],0)
+						assert TStar == rel(steps[idx4],1)
 						assert t0 < TStar
 						assert !(t1 < TStar)
 						assert !(TStar <= t0)
@@ -364,25 +367,29 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 						ghost if incl{
 							// Branch 2: incl && t < step
 							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1)
+							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 						}else {
 							assert rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 						}
 						assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 					} else {
 						//step is now between t0 and t1, so the path must differ
 						assert rel(steps[idx3],1) == rel(steps[idx2],0)
 						ghost var TStar uint64 = rel(steps[idx2],0)
-						assert TStar == rel(steps[idx3],1)  && TStar == rel(steps[idx2],0)
+						assert TStar == rel(steps[idx3],1)
 						assert t1 < TStar
 						assert !(t0 < TStar)
 						assert !(TStar <= t1)
 						assert TStar <=t0
 						ghost if incl{
 							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1)
+							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 						}else {
 							assert rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 						}
-						assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
 						}
 						assert rel(incl && t< steps[idx4] ,0) != rel(incl && t < steps[idx4], 1) || rel(!incl && steps[idx4] <= t, 0)!= rel(!incl && steps[idx4] <= t, 1)
 						assert rel(incl && t< steps[idx2] ,0) != rel(incl && t < steps[idx2], 1) || rel(!incl && steps[idx2] <= t, 0)!= rel(!incl && steps[idx2] <= t, 1)
@@ -399,16 +406,16 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					determined = true
 					/*@
 						ghost if t0 < t1 && (idx == idx4 || idx == idx1){
-								// Only one execution reaches here if my assumption is correct
-								ghost var TStar uint64 = rel(steps[idx4],1)
-								assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
-								assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes==-1,1)
-								assert rel(resultRes,0) != rel(resultRes,1)
-								assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
-								//assert false
+							// Only one execution reaches here if my assumption is correct
+							ghost var TStar uint64 = rel(steps[idx1],0)
+							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
+							assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes==-1,1)
+							assert rel(resultRes,0) != rel(resultRes,1)
+							assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
+							//assert false
 
 						} else if t0 > t1 && (idx == idx2 || idx == idx3){
-							ghost var TStar uint64 = rel(steps[idx2],1)
+							ghost var TStar uint64 = rel(steps[idx3],0)
 							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
 							assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes==-1,1)
 							assert rel(resultRes,0) != rel(resultRes,1)
@@ -425,14 +432,14 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					/*@
 						ghost if t0 < t1 && (idx == idx4 || idx == idx1){
 							// Only one execution reaches here if my assumption is correct
-							ghost var TStar uint64 = rel(steps[idx4],1)
+							ghost var TStar uint64 = rel(steps[idx1],0)
 							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
 							assert rel(resultRes == 1,0) && rel(resultRes != 1, 1) || rel(resultRes!= 1,0) && rel(resultRes==1,1)
 							assert rel(resultRes,0) != rel(resultRes,1)
 							assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil,0) != rel(resultErr==nil,1)
 							//assert false
 						} else if t0 > t1 && (idx == idx2 || idx == idx3){
-							ghost var TStar uint64 = rel(steps[idx2],1)
+							ghost var TStar uint64 = rel(steps[idx3],0)
 							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
 							assert rel(resultRes == 1,0) && rel(resultRes != 1, 1) || rel(resultRes!= 1,0) && rel(resultRes==1,1)
 							assert rel(resultRes,0) != rel(resultRes,1)
@@ -451,12 +458,21 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			//To avoid Early termination: if determined is true, we just continue looping without doing anything
 		}
 	}
+
 	//@ assert !determined ==> resultRes == -42 && resultErr == nil
-	//@ assert determined ==> rel(resultErr==nil, 0) != rel(resultErr==nil, 1) || rel(resultRes, 0) != rel(resultRes, 1)
 	//@ assert (!rel(determined,0) && !rel(determined,1)) ==> (resultRes == -42 && resultErr == nil)
-	//@ assert (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
-	//@ assert (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1)) || (resultRes == -42 && resultErr == nil)
-	//@ assert false
+
+	//The following assert is too strong. The issue is that we can only show that this works in certain index.
+	// We still cannot ensure that branching is not happening before the TStar.
+	// We definitely need to investigate more what will happen in certain cases
+	// TStar is a good point that we can show the branches are not diverging under certain circumstances
+	// However, the predictability is a bit less obvious what has happened before or after TStar.
+
+	// assert determined ==> rel(resultErr==nil, 0) != rel(resultErr==nil, 1) || rel(resultRes, 0) != rel(resultRes, 1)
+	// assert (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
+	// assert (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1)) || (resultRes == -42 && resultErr == nil)
+
+	// assert false
 	//As TStar is in the ladder and rel(resultRes,0)!= rel(resultRes,1), this always hold given on the conditions.
 
 	return resultRes, resultErr
@@ -487,6 +503,7 @@ type MonitoringMapEntry struct {
 // @ requires low(query.Label)
 // @ requires rel(resp.Version, 0) != rel(resp.Version,1)
 //
+//	Ideal goal:
 //	ensures rel(err==nil,0) != rel(err==nil,1) || rel(res,0) != rel(res,1)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
