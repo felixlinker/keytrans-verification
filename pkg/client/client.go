@@ -355,41 +355,42 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				ghost if t0 < t1{
 					//step is now between t0 and t1, so the path must differ
 						assert rel(steps[idx4],1) == rel(steps[idx1],0)
-						assert 0 <= idx1 && idx1 < rel(len(steps),0)
-						//Bruh why
-						assert 0 <= idx4 && idx4 < len(rel(steps,1))
-						ghost var TStar uint64 = rel(steps[idx1],0)
-						assert TStar == rel(steps[idx4],1)
-						assert t0 < TStar
-						assert !(t1 < TStar)
-						assert !(TStar <= t0)
-						assert TStar <=t1
+						assert 0 <= idx1 && idx1 < len(rel(steps,0)) && idx1 < len(rel(steps,1))
+						assert 0 <= idx4 && idx4 < len(rel(steps,0)) && idx4 < len(rel(steps,1))
+						//If we assign the variable, we'll have an error of memory permission. This is the reason why the code is so ugly.
+						//I'd say there is something wrong with desugaring or so, but need to use --printSIFVpr to check with this amount of code :)
+						//ghost var TStar uint64 = rel(steps[idx1],0)
+						assert rel(steps[idx1],0) == rel(steps[idx4],1)
+						assert t0 < rel(steps[idx1],0)
+						assert !(t1 < rel(steps[idx1],0))
+						assert !(rel(steps[idx1],0) <= t0)
+						assert rel(steps[idx1],0) <=t1
 						ghost if incl{
 							// Branch 2: incl && t < step
-							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1)
-							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(incl && t< rel(steps[idx1],0),0) != rel(incl && t <rel(steps[idx1],0), 1)
+							assert rel(incl && t< rel(steps[idx1],0),0) != rel(incl && t <rel(steps[idx1],0), 1) || rel(!incl && rel(steps[idx1],0) <= t, 0)!= rel(!incl && rel(steps[idx1],0) <= t, 1)
 						}else {
-							assert rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
-							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(!incl && rel(steps[idx1],0) <= t, 0)!= rel(!incl && rel(steps[idx1],0) <= t, 1)
+							assert rel(incl && t< rel(steps[idx1],0),0) != rel(incl && t <rel(steps[idx1],0), 1) || rel(!incl && rel(steps[idx1],0) <= t, 0)!= rel(!incl && rel(steps[idx1],0) <= t, 1)
 						}
-						assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+						assert rel(incl && t< rel(steps[idx1],0),0) != rel(incl && t <rel(steps[idx1],0), 1) || rel(!incl && rel(steps[idx1],0) <= t, 0)!= rel(!incl && rel(steps[idx1],0) <= t, 1)
 					} else {
 						//step is now between t0 and t1, so the path must differ
 						assert rel(steps[idx3],1) == rel(steps[idx2],0)
-						ghost var TStar uint64 = rel(steps[idx2],0)
-						assert TStar == rel(steps[idx3],1)
-						assert t1 < TStar
-						assert !(t0 < TStar)
-						assert !(TStar <= t1)
-						assert TStar <=t0
+						//ghost var TStar uint64 = rel(steps[idx2],0)
+						assert rel(steps[idx2],0) == rel(steps[idx3],1)
+						assert t1 < rel(steps[idx2],0)
+						assert !(t0 < rel(steps[idx2],0))
+						assert !(rel(steps[idx2],0) <= t1)
+						assert rel(steps[idx2],0) <=t0
 						ghost if incl{
-							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1)
-							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(incl && t< rel(steps[idx2],0),0) != rel(incl && t <rel(steps[idx2],0), 1)
+							assert rel(incl && t< rel(steps[idx2],0),0) != rel(incl && t <rel(steps[idx2],0), 1) || rel(!incl && rel(steps[idx2],0) <= t, 0)!= rel(!incl && rel(steps[idx2],0) <= t, 1)
 						}else {
-							assert rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
-							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(!incl && rel(steps[idx2],0) <= t, 0)!= rel(!incl && rel(steps[idx2],0) <= t, 1)
+							assert rel(incl && t< rel(steps[idx2],0),0) != rel(incl && t <rel(steps[idx2],0), 1) || rel(!incl && rel(steps[idx2],0) <= t, 0)!= rel(!incl && rel(steps[idx2],0) <= t, 1)
 						}
-							assert rel(incl && t< TStar,0) != rel(incl && t <TStar, 1) || rel(!incl && TStar <= t, 0)!= rel(!incl && TStar <= t, 1)
+							assert rel(incl && t< rel(steps[idx2],0),0) != rel(incl && t <rel(steps[idx2],0), 1) || rel(!incl && rel(steps[idx2],0) <= t, 0)!= rel(!incl && rel(steps[idx2],0) <= t, 1)
 						}
 						assert rel(incl && t< steps[idx4] ,0) != rel(incl && t < steps[idx4], 1) || rel(!incl && steps[idx4] <= t, 0)!= rel(!incl && steps[idx4] <= t, 1)
 						assert rel(incl && t< steps[idx2] ,0) != rel(incl && t < steps[idx2], 1) || rel(!incl && steps[idx2] <= t, 0)!= rel(!incl && steps[idx2] <= t, 1)
@@ -407,6 +408,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					/*@
 						ghost if t0 < t1 && (idx == idx4 || idx == idx1){
 							// Only one execution reaches here if my assumption is correct
+							// WHY IS HERE HAVING NO ISSUES WITH THE ASSIGNMENT BUT THERE ARE ISSUES IN THE PREVIOUS LINES???
 							ghost var TStar uint64 = rel(steps[idx1],0)
 							assert rel(!incl && TStar <= t, 0) != rel(!incl && TStar <= t, 1)
 							assert rel(resultRes == -1,0) && rel(resultRes != -1, 1) || rel(resultRes!= -1,0) && rel(resultRes==-1,1)
@@ -460,7 +462,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	}
 
 	//@ assert !determined ==> resultRes == -42 && resultErr == nil
-	//@ assert (!rel(determined,0) && !rel(determined,1)) ==> (resultRes == -42 && resultErr == nil)
+	// assert (!rel(determined,0) && !rel(determined,1)) ==> (resultRes == -42 && resultErr == nil)
 
 	//The following assert is too strong. The issue is that we can only show that this works in certain index.
 	// We still cannot ensure that branching is not happening before the TStar.
