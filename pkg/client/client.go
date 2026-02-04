@@ -320,6 +320,11 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 			// Assume injectivity and Functional correctness
+			//TODO:This assume is a very strong assume because this will allow that there is no branching before TStar.
+			//We can also say that forall t uint64 :: t < TStar ==> rel(step,0) ==rel(step,1)
+			//But this needs to be proven.
+			//For now, I think we can just assume that.
+
 			//@ assume !rel(determined, 0) && !rel(determined, 1) ==> rel(step, 0) == rel(step, 1) && err == nil && rel(commitment == nil, 0) == rel(commitment == nil, 1)
 
 			//Use idx2 and idx3  where rel(steps[idx4],1) == rel(steps[idx1],0) for t0 < t1
@@ -342,23 +347,18 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				//break
 			} else {
 				incl := commitment != nil
-
-				//TODO:This assume is a very strong assume because this will allow that there is no branching before TStar.
-				//We can also say that forall t uint64 :: t < TStar ==> rel(step,0) ==rel(step,1)
-				//But this needs to be proven.
-				//For now, I think we can just assume that.
-				//@ assume (t0 < t1 && idx != idx1) || (t0 > t1 && idx != idx2) ==> !(!incl && step <= t) && !(incl && t < step)
-
-				// assert t0 < t1 && rel(steps[idx4],1) == rel(steps[idx1],0) ==> rel(incl,0) == rel(incl,1)
-
 				/*@
 				ghost if t0 < t1{
 					//step is now between t0 and t1, so the path must differ
-						assert rel(steps[idx4],1) == rel(steps[idx1],0)
-						assert 0 <= idx1 && idx1 < len(rel(steps,0)) && idx1 < len(rel(steps,1))
-						assert 0 <= idx4 && idx4 < len(rel(steps,0)) && idx4 < len(rel(steps,1))
+						//assert rel(steps[idx4],1) == rel(steps[idx1],0)
+
+						//APPARENTLY, THE ISSUE DOES NOT LIE IN THE BOUND OF INDEX!
+						//assert 0 <= idx1 && idx1 < len(rel(steps,0)) && idx1 < len(rel(steps,1))
+						//assert 0 <= idx4 && idx4 < len(rel(steps,0)) && idx4 < len(rel(steps,1))
+
 						//If we assign the variable, we'll have an error of memory permission. This is the reason why the code is so ugly.
 						//I'd say there is something wrong with desugaring or so, but need to use --printSIFVpr to check with this amount of code :)
+
 						//ghost var TStar uint64 = rel(steps[idx1],0)
 						assert rel(steps[idx1],0) == rel(steps[idx4],1)
 						assert t0 < rel(steps[idx1],0)
@@ -376,8 +376,10 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 						assert rel(incl && t< rel(steps[idx1],0),0) != rel(incl && t <rel(steps[idx1],0), 1) || rel(!incl && rel(steps[idx1],0) <= t, 0)!= rel(!incl && rel(steps[idx1],0) <= t, 1)
 					} else {
 						//step is now between t0 and t1, so the path must differ
-						assert rel(steps[idx3],1) == rel(steps[idx2],0)
+						//assert rel(steps[idx3],1) == rel(steps[idx2],0)
+
 						//ghost var TStar uint64 = rel(steps[idx2],0)
+
 						assert rel(steps[idx2],0) == rel(steps[idx3],1)
 						assert t1 < rel(steps[idx2],0)
 						assert !(t0 < rel(steps[idx2],0))
@@ -462,6 +464,10 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	}
 
 	//@ assert !determined ==> resultRes == -42 && resultErr == nil
+	//Weaker version: Doesn't work
+	// assert (!rel(determined,0) && !rel(determined,1)) ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
+
+	//Stronger version:
 	// assert (!rel(determined,0) && !rel(determined,1)) ==> (resultRes == -42 && resultErr == nil)
 
 	//The following assert is too strong. The issue is that we can only show that this works in certain index.
@@ -474,7 +480,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	// assert (rel(determined,0) || rel(determined,1)) ==> (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1))
 	// assert (rel(resultErr==nil,0) != rel(resultErr==nil,1) || rel(resultRes,0) != rel(resultRes,1)) || (resultRes == -42 && resultErr == nil)
 
-	// assert false
+	// assert false //?
 	//As TStar is in the ladder and rel(resultRes,0)!= rel(resultRes,1), this always hold given on the conditions.
 
 	return resultRes, resultErr
@@ -602,37 +608,3 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	// assert false
 	return resultRes, resultErr
 }
-
-/*
-
-	// ghost var commitment0 []byte = rel(commitment,0)
-	// ghost var commitment1 []byte = rel(commitment,1)
-
-	// assume acc(commitment0)
-	// assume acc(commitment1)
-	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> low((commitment != nil) == VersionExists(label, step, RootHash))
-	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> low((commitment == nil) == !VersionExists(label, step, RootHash))
-	//Maybe we only need this. We assume Merkle Binding
-
-	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> low(commitment == nil)
-	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> len(commitment0) == len(commitment1)
-	//TODO: Error with the memory permission...
-	// assume low(len(label)) && (forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])) && low(step) && low(err == nil) ==> (forall i int :: {commitment0[i], commitment1[i]} 0<= i && i < len(label) ==> commitment0[i] == commitment1[i])
-// assert !low(t) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)
-
-
-
-//Symmetric, now between t1 and t0
-							assert !rel(t< step,0)
-							assert rel(t < step, 1)
-							assert rel(step <= t, 0)
-							assert !rel(step <=t , 1)
-
-							ghost if incl{
-									assert rel(incl && t< step,0) != rel(incl && t < step, 1)
-								} else{
-									assert rel(!incl && step <= t ,0) != rel(!incl && step <=t, 1)
-								}
-							}
-							assert rel(!incl && step <=t, 0) != rel(!incl && step <=t, 1) || rel(incl && t < step, 0) != rel(incl&& t < step,1)
-*/
