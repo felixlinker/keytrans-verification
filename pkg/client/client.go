@@ -193,10 +193,14 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 // We use the following paper to derive the following lemma
 // Paper: https://arxiv.org/pdf/2501.10802
 
+//Why >0 instead of >=0? Because the version 0 is always included and we assume that the version we are selecting is >=0
+// If this constraint is violated, it's very easy to be captured
+
 /*@
 ghost
 decreases
-ensures res >= 0
+ensures res > 0
+pure  //TODO: If we remove this pure, we'll get an error in the inhale statement of steps[idx3]. This is a bug in the SIF mode.
 func GetInt() (res int)
 @*/
 
@@ -330,8 +334,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant rel(t, 0) != rel(t,1)
 	// invariant !determined && idx1 < idx && idx4 < idx ==> low(t)
 	//The following invariants also work!
-	//@ invariant t0 < t1 && (idx > idx1 || idx > idx4) ==> rel(determined, 0) || rel(determined, 1)
-	//@ invariant t0 > t1 && (idx > idx2 || idx > idx3)  ==> rel(determined, 0) || rel(determined, 1)
+	//@ invariant t0 < t1 && (idx > idx1 && idx > idx4) ==> rel(determined, 0) || rel(determined, 1)
+	//@ invariant t0 > t1 && (idx > idx2 && idx > idx3)  ==> rel(determined, 0) || rel(determined, 1)
 	for idx := 0; idx < len(steps); idx++ {
 		// assume false // ==> Shows if the invariants prove the postcondition.
 		if !determined {
