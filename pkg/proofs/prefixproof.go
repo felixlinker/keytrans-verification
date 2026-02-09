@@ -261,14 +261,18 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 // @ requires Version >= 0
 // @ requires acc(Label)
 // @ requires acc(RootHash)
-// @ requires low(len(Label)) && (forall i int :: {Label[i]} 0<= i && i < len(Label) ==> low(Label[i]))
-// @ requires low(len(RootHash)) && (forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i]))
+// @ requires low(len(Label))
+// @ requires forall i int :: {Label[i]} 0<= i && i < len(Label) ==> low(Label[i])
+// @ requires low(len(RootHash))
+// @ requires forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i])
 // @ ensures acc(res)
 // @ ensures acc(RootHash)
 // @ ensures acc(Label)
-// @ ensures low(len(Label)) && (forall i int :: {Label[i]} 0<= i && i < len(Label) ==> low(Label[i]))
-// @ ensures low(len(RootHash)) && (forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i]))
-// @ ensures low(Version) ==> low(err) && low(len(res)) && (forall i int :: {res[i]} 0<= i && i < len(res) ==> low(res[i]))
+// @ ensures low(len(Label))
+// @ ensures forall i int :: {Label[i]} 0<= i && i < len(Label) ==> low(Label[i])
+// @ ensures low(len(RootHash))
+// @ ensures forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i])
+// @ ensures (low(err) && low(len(res)) && (forall i int :: {res[i]} 0<= i && i < len(res) ==> low(res[i]))) ==> low(Version)
 // @ trusted
 func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
 	if tree == nil {
