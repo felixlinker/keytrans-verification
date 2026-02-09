@@ -253,11 +253,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	//@ assume rel(t,0) != rel(t,1)
 
-	//TODO: No rel arguments if possible
-
-	//@ ghost var t0 uint64 = rel(t,0)
-	//@ ghost var t1 uint64 = rel(t,1)
-
 	//Postcondition from the FBLS
 	//@ assert acc(steps)
 	// assert forall t2 uint64 :: exists idx1 int :: t < t2 ==> 0 <= idx1 && idx1 < len(steps) && t < proofs.TStar_pure(t, t2) && proofs.TStar_pure(t, t2) <= t2 && proofs.TStar_pure(t, t2) == steps[idx1]
@@ -325,8 +320,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	//TODO: We want to remove this assumption later
 
-	//@ assume idx1 == idx4
-	//@ assume idx2 == idx3
+	//@ assume rel(idx1,0) == rel(idx1,1)
+	//@ assume rel(idx2,0) == rel(idx2,1)
 
 	/*	Idea:
 		idx1 == idx4
@@ -369,21 +364,19 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//Maybe with a special invariant and see if this works?
 	//@ invariant (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined,0) || rel(determined,1)
 	//@ invariant (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
-
-	//After rebase, maybe it would be nice to test determined || rel(idx1,0) >= idx || rel(idx1,1) >= idx ==> Linard's way
 	for idx := 0; idx < len(steps); idx++ {
 		//@ assume false // ==> Shows if the invariants prove the postcondition.
 		/*@
-			ghost if rel(t,0) < t1 && idx > rel(idx1,0) && idx > rel(idx1,1) {
+			ghost if rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1) {
 				assert rel(determined,0) || rel(determined,1)
 				//assert false
 			}
-			ghost if rel(t,0) > t1 && idx > rel(idx2,0) && idx > rel(idx2,1) {
+			ghost if rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1) {
 				assert rel(determined,0) || rel(determined,1)
 				//assert false
 			}
-			assert (rel(t,0) < t1 && idx > rel(idx1,0) && idx > rel(idx1,1)) ==>  rel(determined,0) || rel(determined,1)
-			assert (rel(t,0) > t1 && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
+			assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==>  rel(determined,0) || rel(determined,1)
+			assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
 
 
 		@*/
