@@ -363,23 +363,23 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 	//Maybe with a special invariant and see if this works?
 	//@ invariant (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined,0) || rel(determined,1)
-	//@ invariant (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
+	// invariant (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
 	for idx := 0; idx < len(steps); idx++ {
 		// assume false // ==> Shows if the invariants prove the postcondition.
 		/*@
 			assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==>  rel(determined,0) || rel(determined,1)
-			assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
+			//assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
 		@*/
 		if !determined {
 			/*@
 				assert !rel(determined, 0) && !rel(determined, 1)
 				assert !(rel(determined, 0) || rel(determined, 1))
 				assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined,0) || rel(determined,1)
-				assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
+				// assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
 			@*/
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
-			//TODO: I have no idea why there is error with the low issue.
+
 			// Assume Injectivity and Functional correctness
 			//TODO:This assume is a very strong assume because this will allow that there is no branching before TStar.
 			//We can also say that forall t uint64 :: t < TStar ==> rel(step,0) ==rel(step,1)
@@ -419,34 +419,34 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				// !incl && TStar <= rel(t,0) , incl && rel(t,0) < TStar || !incl && TStar <= rel(t,1) , incl && rel(t,1) < TStar
 
 				/*@
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],1)
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(t,0) < rel(steps[rel(idx1,1)],1)
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> !(rel(t,1) < rel(steps[rel(idx1,1)],1))
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> !(rel(steps[rel(idx1,1)],1) <= rel(t,0))
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(steps[rel(idx1,1)],1) <= rel(t,1)
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(t,0) < rel(steps[rel(idx1,1)],1)
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> !(rel(t,1) < rel(steps[rel(idx1,1)],1))
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> !(rel(steps[rel(idx1,1)],1) <= rel(t,0))
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(steps[rel(idx1,1)],1) <= rel(t,1)
 
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && incl) ==> rel(incl && t < rel(steps[rel(idx1,1)],1), 0) != rel(incl && t < rel(steps[rel(idx1,1)],1), 1)
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && !incl) ==> rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 0) != rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 1)
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && incl) ==> rel(incl && t < rel(steps[rel(idx1,1)],1), 0) != rel(incl && t < rel(steps[rel(idx1,1)],1), 1)
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && !incl) ==> rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 0) != rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 1)
 
-				// Final assertion:
-				assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> (low(incl) ==> rel(incl && t < rel(steps[rel(idx1,1)],1), 0) != rel(incl && t < rel(steps[rel(idx1,1)],1), 1) || rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 0) != rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 1))
+					// Final assertion:
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> (low(incl) ==> rel(incl && t < rel(steps[rel(idx1,1)],1), 0) != rel(incl && t < rel(steps[rel(idx1,1)],1), 1) || rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 0) != rel(!incl && rel(steps[rel(idx1,1)],1) <= t, 1))
 
 
-				//Use assume false to see which branch is taken.
-				//assert false
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(t,1) < rel(steps[rel(idx2,0)],0)
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> !(rel(t,0) < rel(steps[rel(idx2,0)],0))
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> !(rel(steps[rel(idx2,0)],0) <= rel(t,1))
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(steps[rel(idx2,0)],0) <= rel(t,0)
+					//Use assume false to see which branch is taken.
+					//assert false
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(t,1) < rel(steps[rel(idx2,0)],0)
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> !(rel(t,0) < rel(steps[rel(idx2,0)],0))
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> !(rel(steps[rel(idx2,0)],0) <= rel(t,1))
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(steps[rel(idx2,0)],0) <= rel(t,0)
 
-				// !low(incl && t < TStar):
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && incl) ==> (rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,0)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,0)],0))
+					// !low(incl && t < TStar):
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && incl) ==> (rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,0)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,0)],0))
 
-				// !low(!incl && TStar <= t):
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && !incl) ==> (!rel(incl,0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,0)],0) <= rel(t,1))
+					// !low(!incl && TStar <= t):
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && !incl) ==> (!rel(incl,0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,0)],0) <= rel(t,1))
 
-				assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> ((rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,0)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,0)],0))) || ((!rel(incl,0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,0)],0) <= rel(t,1)))
+					//assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> ((rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,0)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,0)],0))) || ((!rel(incl,0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,0)],0) <= rel(t,1)))
 				@*/
 
 				if !incl && step <= t { // Claimed Greatest is less than t
@@ -457,13 +457,13 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 						assert (rel(t,0) < rel(t,1) && idx >= rel(idx1,0) && idx >= rel(idx1,1)) ==> (!rel(incl,0) && rel(steps[rel(idx1,1)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx1,1)],0) <= rel(t,1))
 						assert (rel(t,0) < rel(t,1) && idx >= rel(idx1,0) && idx >= rel(idx1,1)) ==> rel(determined,0) || rel(determined,1)
 						assert (rel(t,0) < rel(t,1) && idx >= rel(idx1,0) && idx >= rel(idx1,1)) ==> (idx > rel(idx1,0) && idx > rel(idx1,1) ==> rel(determined,0) || rel(determined,1))
-						assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (!rel(incl,0) && rel(steps[rel(idx2,1)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,1)],0) <= rel(t,1))
-						assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
-						assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (idx > rel(idx2,0) && idx > rel(idx2,1) ==> rel(determined,0) || rel(determined,1))
+						//assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (!rel(incl,0) && rel(steps[rel(idx2,1)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,1)],0) <= rel(t,1))
+						//assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
+						//assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (idx > rel(idx2,0) && idx > rel(idx2,1) ==> rel(determined,0) || rel(determined,1))
 
 
-						assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined, 1)
-						assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined,0) || rel(determined, 1)
+						//assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined, 1)
+						//assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined,0) || rel(determined, 1)
 						//assert !determined && rel(idx1,0) < idx && rel(idx1,1) < idx ==> low(t)
 					@*/
 					//break
@@ -476,65 +476,68 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					assert (rel(t,0) < rel(t,1) && idx >= rel(idx1,0) && idx >= rel(idx1,1)) ==> rel(determined,0) || rel(determined,1)
 					assert (rel(t,0) < rel(t,1) && idx >= rel(idx1,0) && idx >= rel(idx1,1)) ==> (idx > rel(idx1,0) && idx > rel(idx1,1) ==> rel(determined,0) || rel(determined,1))
 
-					assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,1)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,1)],0))
-					assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
-					assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (idx > rel(idx2,0) && idx > rel(idx2,1) ==> rel(determined,0) || rel(determined,1))
+					//assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,1)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,1)],0))
+					//assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
+					//assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (idx > rel(idx2,0) && idx > rel(idx2,1) ==> rel(determined,0) || rel(determined,1))
 
-					assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined, 1)
+					//assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined, 1)
 					assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined,0) || rel(determined, 1)
 					// assert !determined && rel(idx1,0) < idx && rel(idx1,1) < idx ==> low(t)
 					@*/
 					//break
 				} else {
-					/*@
-					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(t,0) < rel(steps[rel(idx1,0)],0)
-					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(steps[rel(idx1,0)],0) <= rel(t,1)
-
-					// ghost if incl: (incl && rel(t,0) < TStar) && !(incl && rel(t,1) < TStar) ==> rel(determined, 0)
-					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && incl) ==> (incl && rel(t,0) < rel(steps[rel(idx1,0)],0)) && !(incl && rel(t,1) < rel(steps[rel(idx1,0)],0))
-					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && incl) ==> rel(determined, 0)
-
-					// ghost if !incl: (!incl && TStar <= rel(t,1)) && !(!incl && TStar <= rel(t,0)) ==> rel(determined, 1)
-					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && !incl) ==> (!incl && rel(steps[rel(idx1,0)],0) <= rel(t,1)) && !(!incl && rel(steps[rel(idx1,0)],0) <= rel(t,0))
-					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1) && !incl) ==> rel(determined, 1)
-
-					// Final:
-					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(determined, 0) || rel(determined, 1)
-
-					assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(t,1) < rel(steps[rel(idx2,0)],0)
-					assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(steps[rel(idx2,0)],0) <= rel(t,0)
-
-					// ghost if incl: (incl && rel(t,1) < TStar) && !(incl && rel(t,0) < TStar) ==> rel(determined, 1)
-					assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && incl) ==> (incl && rel(t,1) < rel(steps[rel(idx2,0)],0)) && !(incl && rel(t,0) < rel(steps[rel(idx2,0)],0))
-					assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && incl) ==> rel(determined, 1)
-
-					// ghost if !incl: (!incl && TStar <= rel(t,0)) && !(!incl && TStar <= rel(t,1)) ==> rel(determined, 0)
-					assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && !incl) ==> (!incl && rel(steps[rel(idx2,0)],0) <= rel(t,0)) && !(!incl && rel(steps[rel(idx2,0)],0) <= rel(t,1))
-					assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) && !incl) ==> rel(determined, 0)
-
-					// Final:
-					assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(determined, 0) || rel(determined, 1)
-
-					@*/
 
 				}
+				/*
+
+					// === Derive idx >= case from two sub-cases ===
+
+					// Sub-case A: idx == idx2 (at TStar) — use low(incl) to split
+					ghost if incl {
+						assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> (rel(t,0) < rel(steps[rel(idx2,1)],0) && rel(steps[rel(idx2,1)],0) <= rel(t,1) ==> rel(determined, 1))
+						assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(determined, 1)
+					} else {
+						assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1) ==> (rel(t,0) < rel(steps[rel(idx2,1)],0) && rel(steps[rel(idx2,1)],0) <= rel(t,1)) ==> rel(determined, 0))
+						assert (rel(t,0) > rel(t,1) && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(determined, 0)
+					}
+					assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined, 0) || rel(determined, 1)
+
+					// Sub-case B: idx > idx2 (past TStar) — from inductive hypothesis
+					assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined, 0) || rel(determined, 1)
+
+					// Combine into >=
+					assert (rel(t,0) > rel(t,1) && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined, 0) || rel(determined, 1)
+
+
+				*/
 				/*@
-					assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==>  rel(determined,0) || rel(determined,1)
-					assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
+
+					// === Same for the < case ===
+					ghost if incl {
+						assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(determined, 0)
+					} else {
+						assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(determined, 1)
+					}
+					assert (rel(t,0) < rel(t,1) && idx == rel(idx1,0) && idx == rel(idx1,1)) ==> rel(determined, 0) || rel(determined, 1)
+
+					assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined, 0) || rel(determined, 1)
+
+					assert (rel(t,0) < rel(t,1) && idx >= rel(idx1,0) && idx >= rel(idx1,1)) ==> rel(determined, 0) || rel(determined, 1)
 				@*/
 
 			}
 			/*@
 				assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==>  rel(determined,0) || rel(determined,1)
-				assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
+				//assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
 			@*/
 		}
 		/*@
 			assert (rel(t,0) < rel(t,1) && idx > rel(idx1,0) && idx > rel(idx1,1)) ==>  rel(determined,0) || rel(determined,1)
-			assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
+			//assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==>  rel(determined,0) || rel(determined,1)
 		@*/
 	}
 	//@ assert !determined ==> resultRes == 0 && resultErr == nil
+	//@ assert false
 	return resultRes, resultErr
 }
 
