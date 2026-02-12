@@ -338,9 +338,10 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant rel(t, 0) != rel(t,1)
 	//Maybe with a special invariant and see if this works?
 	// invariant (t0_le_t1 && idx > rel(idx1,0) && idx > rel(idx1,1)) ==> rel(determined,0) || rel(determined,1)
-	// invariant (t0_ge_t1 && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
+	//@ invariant let idx2I0_ge_idx := idx > rel(idx2,0) in let idx2I1_ge_idx := idx > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 	for idx := 0; idx < len(steps); idx++ {
-		//@ assume false
+		// assume false
+		//@ assert let idx2I0_ge_idx := idx > rel(idx2,0) in let idx2I1_ge_idx := idx > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 		if !determined {
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
@@ -353,23 +354,35 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				resultRes = 404
 				resultErr = err
 				determined = true
+				//@ assert false
 			} else {
 				incl := commitment != nil
 				//@ assert low(incl)
 
-				/*@ //Use assume false to see which branch is taken.
+				/*@
+				//Use assume false to see which branch is taken.
+				ghost var idx2I0_eq_idx bool = idx == rel(idx2,0)
+				ghost var idx2I1_eq_idx bool = idx == rel(idx2,1)
+				ghost if t0_ge_t1 && idx2I0_eq_idx && idx2I1_eq_idx {
+						//step is now between rel(t,0) and rel(t,1), so the path must differ
+						//assert rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0)
 
-					assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)
-					assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(t,1) < rel(steps[rel(idx2,0)],0)
-					assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> rel(steps[rel(idx2,0)],0) <= rel(t,0)
+						ghost var TStar uint64
+						TStar = rel(steps[rel(idx2,0)],0)
 
-					// !low(incl && t < TStar):
-					assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1) && incl) ==> (rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,0)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,0)],0))
-
-					// !low(!incl && TStar <= t):
-					assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1) && !incl) ==> (!rel(incl,0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,0)],0) <= rel(t,1))
-
-					assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> ((rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,0)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,0)],0))) || ((!rel(incl,0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,0)],0) <= rel(t,1)))
+						assert TStar == rel(steps[rel(idx2,1)],1)
+						assert rel(t,1) < TStar
+						assert TStar <=rel(t,0)
+						ghost if incl{
+							assert !low(incl && t < TStar)
+							//assert lowContext()
+						}else {
+							assert !low(!incl && TStar <= t)
+							//assert lowContext()
+						}
+						assert !low(incl && t< TStar) || !low(!incl && TStar <= t)
+					}
+					//assert lowContext()
 				@*/
 
 				if !incl && step <= t { // Claimed Greatest is less than t
@@ -377,54 +390,70 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					resultErr = nil
 					determined = true
 					/*@
-						assert (t0_ge_t1 && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (!rel(incl,0) && rel(steps[rel(idx2,1)],0) <= rel(t,0)) != (!rel(incl,1) && rel(steps[rel(idx2,1)],0) <= rel(t,1))
-						assert (t0_ge_t1 && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
-						assert (t0_ge_t1 && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (idx > rel(idx2,0) && idx > rel(idx2,1) ==> rel(determined,0) || rel(determined,1))
+						ghost var idx2I0_geq_idx bool = idx >= rel(idx2,0)
+						ghost var idx2I1_geq_idx bool = idx >= rel(idx2,1)
+						ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
+						ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+
+						ghost if t0_ge_t1 && (idx2I0_geq_idx && idx2I1_geq_idx){
+						 	ghost var TStar uint64 = rel(steps[rel(idx2,1)],0)
+							assert !low(!incl && TStar <= t)
+							assert rel(determined,0) || rel(determined, 1)
+							assert idx2I0_ge_idx && idx2I1_ge_idx ==> rel(determined,0) || rel(determined, 1)
+						}
 						assert (t0_ge_t1 && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined, 1)
+						//assert false
 					@*/
 				} else if incl && t < step { // Greatest is greater than t
 					resultRes = 1
 					resultErr = nil
 					determined = true
 					/*@
-						assume false
-						assert (t0_ge_t1 && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (rel(incl,0) && rel(t,0) < rel(steps[rel(idx2,1)],0)) != (rel(incl,1) && rel(t,1) < rel(steps[rel(idx2,1)],0))
-						assert (t0_ge_t1 && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
-						assert (t0_ge_t1 && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> (idx > rel(idx2,0) && idx > rel(idx2,1) ==> rel(determined,0) || rel(determined,1))
-						assert (t0_ge_t1 && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined, 1)
+						ghost var idx2I0_geq_idx bool = idx >= rel(idx2,0)
+						ghost var idx2I1_geq_idx bool = idx >= rel(idx2,1)
+						ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
+						ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+						ghost if t0_ge_t1 && idx2I0_geq_idx && idx2I1_geq_idx{
+
+							ghost var TStar uint64 = rel(steps[rel(idx2,1)],0)
+							assert !low(incl && t< TStar)
+							assert rel(determined,0) || rel(determined, 1)
+							assert idx2I0_ge_idx && idx2I1_ge_idx ==> rel(determined,0) || rel(determined, 1)
+					}
+					assert (t0_ge_t1 && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined, 1)
+					//assert false
+					assume false
 					@*/
 				} else {
 					/*@
+						ghost var idx2I0_geq_idx bool = idx >= rel(idx2,0)
+						ghost var idx2I1_geq_idx bool = idx >= rel(idx2,1)
+						ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
+						ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+
+						ghost if t0_ge_t1 && idx2I0_eq_idx && idx2I1_eq_idx {
+						ghost var TStar uint64
+						TStar = rel(steps[rel(idx2,0)], 0)
+						assert rel(t,1) < TStar
+						assert TStar <= rel(t,0)
+						ghost if incl {
+							assert (incl && rel(t,1) < TStar) && !(incl && rel(t,0) < TStar)
+							assert rel(determined, 1)
+						} else {
+							assert (!incl && TStar <= rel(t,0)) && !(!incl && TStar <= rel(t,1))
+							assert rel(determined, 0)
+						}
+						assert rel(determined, 0) || rel(determined, 1)
+					}
+						assert (t0_ge_t1 && idx2I1_ge_idx && idx2I0_ge_idx) ==> rel(determined,0) || rel(determined, 1)
 						assume false
-						// Try to extract per-trace negations of branch 1
-						assert rel(incl, 0) || rel(step, 0) > rel(t, 0)
-						assert rel(incl, 1) || rel(step, 1) > rel(t, 1)
-
-						// Try to extract per-trace negations of branch 2
-						assert !rel(incl, 0) || rel(step, 0) <= rel(t, 0)
-						assert !rel(incl, 1) || rel(step, 1) <= rel(t, 1)
-
-						// If those verify, the contradiction for !incl follows:
-						// trace 0: !rel(incl,0) => rel(step,0) > rel(t,0)
-						//          but invariant: rel(step,0) <= rel(t,0) => contradiction
-						//assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1) && !incl && rel(!determined,0) && rel(!determined,1)) ==> false
-
-						// For incl:
-						// trace 1: rel(incl,1) => rel(step,1) <= rel(t,1)
-						//          but invariant: rel(t,1) < rel(step,1) => contradiction
-						//assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1) && incl && rel(!determined,0) && rel(!determined,1)) ==> false
-
-						//assert (t0_ge_t1 && idx == rel(idx2,0) && idx == rel(idx2,1)) ==> false
-
-						assert (t0_ge_t1 && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
-						//assert (t0_ge_t1 && idx >= rel(idx2,0) && idx >= rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
 					@*/
 				}
-
+				//@ assert let idx2I0_ge_idx := idx > rel(idx2,0) in let idx2I1_ge_idx := idx > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 			}
+			//@ assert let idx2I0_ge_idx := idx > rel(idx2,0) in let idx2I1_ge_idx := idx > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 		}
-		//@ assert (rel(t,0) > rel(t,1) && idx > rel(idx2,0) && idx > rel(idx2,1)) ==> rel(determined,0) || rel(determined,1)
-
+		//@ assert let idx2I0_ge_idx := idx > rel(idx2,0) in let idx2I1_ge_idx := idx > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 	}
 
 	return resultRes, resultErr
