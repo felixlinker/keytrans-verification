@@ -261,11 +261,9 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 // @ requires Version >= 0
 // @ requires acc(Label)
 // @ requires acc(RootHash)
-// @ requires tree!= nil ==> tree.Inv()
 // @ ensures acc(res)
 // @ ensures acc(RootHash)
 // @ ensures acc(Label)
-// @ ensures tree != nil ==> tree.Inv()
 // @ ensures (low(len(Label)) && (forall i int :: {Label[i]} 0<= i && i < len(Label) ==> low(Label[i])) && low(len(RootHash)) && forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i]) && low(Version)) ==> (low(err) && low(len(res)) && (forall i int :: {res[i]} 0<= i && i < len(res) ==> low(res[i])))
 // @ trusted
 func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
