@@ -329,8 +329,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//this is important as the index may be different. But well
 	//As there could be different len(steps), we cannot set the invariant directly as we don't know if len(steps) is low based on the different t's.
 	//However, if the LHS holds, then RHS must hold
-	//@ invariant (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
-	//@ invariant (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
+	//@ invariant (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) >= rel(idx2,0) && rel(idx,1) >= rel(idx2,1)) || (t0_le_t1 && rel(idx,0) >= rel(idx1,0) && rel(idx,1) >= rel(idx1,1)))
+	//@ invariant (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) >= rel(idx2,0) && rel(idx,1) >= rel(idx2,1)) || (t0_le_t1 && rel(idx,0) >= rel(idx1,0) && rel(idx,1) >= rel(idx1,1)))
 	//@ invariant forall i int :: {steps[i]} 0<= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0<= idx && idx <= len(steps)
 	//@ invariant t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
@@ -344,16 +344,12 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	// invariant (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)) ==> rel(determined,0) || rel(determined,1)
 	//@ invariant let idx2I0_ge_idx := rel(idx,0) > rel(idx2,0) in let idx2I1_ge_idx := rel(idx,1) > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 	for idx := 0; idx < len(steps); idx++ {
-		//@ assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
-		//@ assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
+		// assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
+		// assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
 		//@ assert let idx2I0_ge_idx := rel(idx,0) > rel(idx2,0) in let idx2I1_ge_idx := rel(idx,1) > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
 		if !determined {
 			step := steps[idx]
-			//@ assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1)))
-			//@ assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined)|| (rel(determined,0) && rel(determined,1)))
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
-			//@ assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1)))
-			//@ assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined)|| (rel(determined,0) && rel(determined,1)))
 
 			//@ assume err == nil // && rel(commitment==nil, 0) == rel(commitment == nil, 1) // TODO.
 			//@ assume low(commitment == nil)
@@ -369,8 +365,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 				/*@
 				//Use assume false to see which branch is taken.
-				ghost var idx2I0_eq_idx bool = idx == rel(idx2,0)
-				ghost var idx2I1_eq_idx bool = idx == rel(idx2,1)
+				ghost var idx2I0_eq_idx bool = rel(idx,0) == rel(idx2,0)
+				ghost var idx2I1_eq_idx bool = rel(idx,1) == rel(idx2,1)
 				ghost if t0_ge_t1 && idx2I0_eq_idx && idx2I1_eq_idx {
 						//step is now between rel(t,0) and rel(t,1), so the path must differ
 						//assert rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0)
@@ -396,10 +392,11 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					resultErr = nil
 					determined = true
 					/*@
-						ghost var idx2I0_geq_idx bool = idx >= rel(idx2,0)
-						ghost var idx2I1_geq_idx bool = idx >= rel(idx2,1)
-						ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
-						ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+						assume false
+						ghost var idx2I0_geq_idx bool = rel(idx,0) >= rel(idx2,0)
+						ghost var idx2I1_geq_idx bool = rel(idx,1) >= rel(idx2,1)
+						ghost var idx2I0_ge_idx bool = rel(idx,0) > rel(idx2,0)
+						ghost var idx2I1_ge_idx bool = rel(idx,1) > rel(idx2,1)
 
 						ghost if t0_ge_t1 && (idx2I0_geq_idx && idx2I1_geq_idx){
 						 	ghost var TStar uint64 = rel(steps[rel(idx2,1)],0)
@@ -408,6 +405,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 							assert idx2I0_ge_idx && idx2I1_ge_idx ==> rel(determined,0) || rel(determined, 1)
 						}
 						assert (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined, 1)
+					assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) >= rel(idx2,0) && rel(idx,1) >= rel(idx2,1)) || (t0_le_t1 && rel(idx,0) >= rel(idx1,0) && rel(idx,1) >= rel(idx1,1)))
+					assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) >= rel(idx2,0) && rel(idx,1) >= rel(idx2,1)) || (t0_le_t1 && rel(idx,0) >= rel(idx1,0) && rel(idx,1) >= rel(idx1,1)))
 					@*/
 				} else if incl && t < step { // Greatest is greater than t
 					resultRes = 1
@@ -415,10 +414,10 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					determined = true
 					/*@
 						assume false
-						ghost var idx2I0_geq_idx bool = idx >= rel(idx2,0)
-						ghost var idx2I1_geq_idx bool = idx >= rel(idx2,1)
-						ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
-						ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+						ghost var idx2I0_geq_idx bool = rel(idx,0) >= rel(idx2,0)
+						ghost var idx2I1_geq_idx bool = rel(idx,1) >= rel(idx2,1)
+						ghost var idx2I0_ge_idx bool = rel(idx,0) > rel(idx2,0)
+						ghost var idx2I1_ge_idx bool = rel(idx,1) > rel(idx2,1)
 						ghost if t0_ge_t1 && idx2I0_geq_idx && idx2I1_geq_idx{
 
 							ghost var TStar uint64 = rel(steps[rel(idx2,1)],0)
@@ -431,11 +430,11 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 					@*/
 				} else {
 					/*@
-						assume false
-						ghost var idx2I0_geq_idx bool = idx >= rel(idx2,0)
-						ghost var idx2I1_geq_idx bool = idx >= rel(idx2,1)
-						ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
-						ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+
+						ghost var idx2I0_geq_idx bool = rel(idx,0) >= rel(idx2,0)
+						ghost var idx2I1_geq_idx bool = rel(idx,1) >= rel(idx2,1)
+						ghost var idx2I0_ge_idx bool = rel(idx,0) > rel(idx2,0)
+						ghost var idx2I1_ge_idx bool = rel(idx,1) > rel(idx2,1)
 
 						ghost if t0_ge_t1 && idx2I0_eq_idx && idx2I1_eq_idx {
 						ghost var TStar uint64
@@ -447,26 +446,26 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 							assert rel(determined, 1)
 						} else {
 							assert (!incl && TStar <= rel(t,0)) && !(!incl && TStar <= rel(t,1))
-							assert rel(determined, 0)
+							assert rel(determined,0)
 						}
 						assert rel(determined, 0) || rel(determined, 1)
 					}
-						assert (t0_ge_t1 && idx2I1_ge_idx && idx2I0_ge_idx) ==> rel(determined,0) || rel(determined, 1)
+						assert let idx2I0_ge_idx := rel(idx,0) > rel(idx2,0) in let idx2I1_ge_idx := rel(idx,1) > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 					@*/
 				}
-				//@ ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
-				//@ ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
-				//@ assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
-				//@ assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
+				//@ ghost var idx2I0_ge_idx bool = rel(idx,0) > rel(idx2,0)
+				//@ ghost var idx2I1_ge_idx bool = rel(idx,1) > rel(idx2,1)
+				//@ assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) >= rel(idx2,0) && rel(idx,1) >= rel(idx2,1)) || (t0_le_t1 && rel(idx,0) >= rel(idx1,0) && rel(idx,1) >= rel(idx1,1)))
+				//@ assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) >= rel(idx2,0) && rel(idx,1) >= rel(idx2,1)) || (t0_le_t1 && rel(idx,0) >= rel(idx1,0) && rel(idx,1) >= rel(idx1,1)))
 				//@ assert (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 			}
-			//@ ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
-			//@ ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+			//@ ghost var idx2I0_ge_idx bool = rel(idx,0) > rel(idx2,0)
+			//@ ghost var idx2I1_ge_idx bool = rel(idx,1) > rel(idx2,1)
 			//@ assert (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 		}
 
-		//@ ghost var idx2I0_ge_idx bool = idx > rel(idx2,0)
-		//@ ghost var idx2I1_ge_idx bool = idx > rel(idx2,1)
+		//@ ghost var idx2I0_ge_idx bool = rel(idx,0) > rel(idx2,0)
+		//@ ghost var idx2I1_ge_idx bool = rel(idx,1) > rel(idx2,1)
 		//@ assert (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> rel(determined,0) || rel(determined,1)
 		//@ assert (forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
 		//@ assert (forall i int :: {label[i]} 0 <= i && i < len(label) ==> low(label[i])) ==> (low(determined) || (rel(determined,0) && rel(determined,1))|| (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)))
