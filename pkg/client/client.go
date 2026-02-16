@@ -203,6 +203,22 @@ ensures res > 0
 func GetInt() (res int)
 @*/
 
+/*@
+ghost
+decreases
+requires acc(steps)
+requires rel(t,0) != rel(t,1)
+ensures acc(steps)
+ensures t0_ge_t1 == (rel(t,0) > rel(t,1))
+ensures t0_le_t1 == (rel(t,0) < rel(t,1))
+ensures t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
+ensures t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
+ensures rel(idx1,0) == rel(idx1,1)
+ensures rel(idx2,0) == rel(idx2,1)
+ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
+func EstablishTStarWitnesses(steps []uint64, t uint64) (t0_ge_t1 bool, t0_le_t1 bool, idx1 int, idx2 int)
+@*/
+
 /*
 CheckGreatest verifies if t is the greatest version
  Returns:
@@ -236,98 +252,19 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
 
 	//@ assume rel(t,0) != rel(t,1)
-
-	//Postcondition from the FBLS
 	//@ assert acc(steps)
-	// assert forall t2 uint64 :: exists idx1 int :: t < t2 ==> 0 <= idx1 && idx1 < len(steps) && t < proofs.TStar_pure(t, t2) && proofs.TStar_pure(t, t2) <= t2 && proofs.TStar_pure(t, t2) == steps[idx1]
-	// assert forall t2 uint64 :: exists idx2 int :: t > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(steps) && proofs.TStar_pure(t2, t) == steps[idx2] && t2 < proofs.TStar_pure(t2, t) && proofs.TStar_pure(t2, t) <= t
-
-	// @ assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t, t2)} proofs.TStar_wrapper(steps,t, t2)
-	// @ assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t2, t)} proofs.TStar_wrapper(steps,t2,t)
-
-	// Replace it using rel(t,0), rel(t,1) and rel(steps,0), rel(steps,1)
-
-	// assert exists idx2 int :: rel(t,0) > rel(t,1)  ==>  0 <= idx2 && idx2 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,0)[idx2]
-	//@ assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
-	// assert  exists idx3 int :: rel(t,0) > rel(t,1) ==> 0 <= idx3 && idx3 < len(rel(steps,1)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,1)[idx3]
-	// assert proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1))
-	//@ assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1)), 1)
-
-	// exists idx1 int :: rel(t,0) < rel(t,1) ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps,0)[idx1]
-	//@ assert proofs.TStar_wrapper(rel(steps,0), rel(t,1), rel(t,0))
-	// exists idx4 int :: rel(t,0) < rel(t,1) ==> 0 <= idx4 && idx4 < len(rel(steps,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps,1)[idx4]
-	// assert proofs.TStar_wrapper(rel(steps,1), rel(t,1), rel(t,0))
-	//@ assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,1),rel(t,0)), 1)
-
-	//Condition
-	//@ ghost var t0_ge_t1 bool = rel(t,0) > rel(t,1)
-	//@ ghost var t0_le_t1 bool = rel(t,0) < rel(t,1)
-
-	//@ assert exists idx2 int :: exists idx3 int :: t0_ge_t1 ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps[idx3],1) == rel(steps[idx2],0) && rel(t,1) < rel(steps[idx3],1) && rel(steps[idx3],1) <= rel(t,0)
-	//@ assert exists idx1 int :: exists idx4 int :: t0_le_t1 ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) < rel(steps[idx4],1) && rel(steps[idx4],1) <= rel(t,1)
-
-	//Remove existential quantifier to replace the statement, adding an assume with it
-	// assume acc(rel(steps,1), p) // Will cause an error in this case, a java concurrency error...
-	//@ idx1 := GetInt()
-	//@ idx2 := GetInt()
-	//@ idx3 := GetInt()
-	//@ idx4 := GetInt()
-
-	//@ assume rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1)
-	//@ assume rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0)
-
-	//@ assert t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1)
-	//@ assert t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0)
-
-	//@ assert t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-	//@ assert t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) <rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-
-	//Move existential quantifier to the right side of the implication
-
-	//@ assert t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-	//@ assert t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-
-	// idx1 ==> rel(idx1,0)
-	// idx2 ==> rel(idx2,0)
-	// idx3 ==> rel(idx2,1)
-	// idx4 ==> rel(idx1,1)
-	//TODO: Use impure lemma to concatinate all the lines
-	// assert false
+	//@ t0_ge_t1, t0_le_t1, idx1, idx2 := EstablishTStarWitnesses(steps, t)
 
 	resultRes := 0
 	var resultErr error = nil
-	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
+	var determined bool = false
 	idx := 0
-	//@ assert acc(steps)
-
-	// step0 != step1 and idx0 == idx1 ==> differences, with assume
-	// Fixed iteration observation ==> assumes ==> arbitrary loop iteration
-
-	//TODO: We want to remove this assumption later
-
-	//@ assume rel(idx1,0) == rel(idx1,1)
-	//@ assume rel(idx2,0) == rel(idx2,1)
-
-	/*	Idea:
-		idx1 == idx4
-		b11 := incl1 && TStar <= t1,
-		b12 := incl2 && TStar <= t2
-		t1 < TStar && TStar <= t2
-
-		b21 := !incl1 && t1 < TStar
-		b22 := !incl2 && t2 < TStar
-		t1 < TStar && TStar <= t2
-
-
-		(b11 || b12) && (b21 || b22) ==> low(t)
-	*/
 
 	//@ ghost var idx_ge_K2_0 bool = rel(idx, 0) >= rel(idx2, 0)
 	//@ ghost var idx_ge_K2_1 bool = rel(idx, 1) >= rel(idx2, 1)
 	//@ ghost var idx_ge_K1_0 bool = rel(idx, 0) >= rel(idx1, 0)
 	//@ ghost var idx_ge_K1_1 bool = rel(idx, 1) >= rel(idx1, 1)
-	//@ ghost var det_0 bool = rel(determined, 0)
-	//@ ghost var det_1 bool = rel(determined, 1)
+	//by observation, we have low(idx) from 0 to the place of tstar
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
@@ -341,8 +278,11 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
 	//@ invariant t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 	//@ invariant t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-	//@ invariant let idx2I0_ge_idx := rel(idx,0) > rel(idx2,0) in let idx2I1_ge_idx := rel(idx,1) > rel(idx2,1) in !(t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) || (rel(determined,0) || rel(determined,1))
-	//@ invariant let idx1I0_ge_idx := rel(idx,0) > rel(idx1,0) in let idx1I1_ge_idx := rel(idx,1) > rel(idx1,1) in !(t0_le_t1 && idx1I0_ge_idx && idx1I1_ge_idx) || (rel(determined,0) || rel(determined,1))
+	//@ invariant (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) ==> (rel(determined,0) || rel(determined,1))
+	//@ invariant (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)) ==> (rel(determined,0) || rel(determined,1))
+	// idx is low (same across executions) until we pass the TStar witness
+	//@ invariant t0_ge_t1 ==> (rel(idx,0) <= rel(idx2,0) || rel(idx,1) <= rel(idx2,1)) ==> rel(idx,0) == rel(idx,1)
+	//@ invariant t0_le_t1 ==> (rel(idx,0) <= rel(idx1,0) || rel(idx,1) <= rel(idx1,1)) ==> rel(idx,0) == rel(idx,1)
 	for ; idx < len(steps); idx++ {
 		step := steps[idx]
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
@@ -364,8 +304,8 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 			//@ ghost var old_determined bool = determined
 
 			if !incl {
-				//@ assert !(t0_ge_t1 && rel(idx,0) == rel(idx2,0)) || rel(step <= t, 0)
-				//@ assert !(t0_le_t1 && rel(idx,1) == rel(idx1,1)) || rel(step <= t, 1)
+				//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0)) ==> rel(step <= t, 0)
+				//@ assert (t0_le_t1 && rel(idx,1) == rel(idx1,1)) ==> rel(step <= t, 1)
 
 				if step <= t && !determined {
 					resultRes = -1
@@ -376,14 +316,14 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				//@ assert determined == (old_determined || step <= t)
 				//@ assert rel(determined, 0) == (rel(old_determined, 0) || rel(step <= t, 0))
 				//@ assert rel(determined, 1) == (rel(old_determined, 1) || rel(step <= t, 1))
-				//@ assert !(t0_ge_t1 && rel(idx,0) == rel(idx2,0)) || rel(determined, 0)
-				//@ assert !(t0_le_t1 && rel(idx,1) == rel(idx1,1)) || rel(determined, 1)
-				//@ assert !rel(old_determined, 0) || rel(determined, 0)
-				//@ assert !rel(old_determined, 1) || rel(determined, 1)
+				//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0)) ==> rel(determined, 0)
+				//@ assert (t0_le_t1 && rel(idx,1) == rel(idx1,1)) ==> rel(determined, 1)
+				//@ assert rel(old_determined, 0) ==> rel(determined, 0)
+				//@ assert rel(old_determined, 1) ==> rel(determined, 1)
 
 			} else {
-				//@ assert !(t0_ge_t1 && rel(idx,1) == rel(idx2,1)) || rel(t < step, 1)
-				//@ assert !(t0_le_t1 && rel(idx,0) == rel(idx1,0)) || rel(t < step, 0)
+				//@ assert (t0_ge_t1 && rel(idx,1) == rel(idx2,1)) ==> rel(t < step, 1)
+				//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0)) ==> rel(t < step, 0)
 
 				if t < step && !determined {
 					resultRes = 1
@@ -394,35 +334,44 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				//@ assert determined == (old_determined || t < step)
 				//@ assert rel(determined, 0) == (rel(old_determined, 0) || rel(t < step, 0))
 				//@ assert rel(determined, 1) == (rel(old_determined, 1) || rel(t < step, 1))
-				//@ assert !(t0_ge_t1 && rel(idx,1) == rel(idx2,1)) || rel(determined, 1)
-				//@ assert !(t0_le_t1 && rel(idx,0) == rel(idx1,0)) || rel(determined, 0)
-				//@ assert !rel(old_determined, 0) || rel(determined, 0)
-				//@ assert !rel(old_determined, 1) || rel(determined, 1)
+				//@ assert (t0_ge_t1 && rel(idx,1) == rel(idx2,1)) ==> rel(determined, 1)
+				//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0)) ==> rel(determined, 0)
+				//@ assert rel(old_determined, 0) ==> rel(determined, 0)
+				//@ assert rel(old_determined, 1) ==> rel(determined, 1)
 			}
 		}
 
-		// == and > will cover >=, which is a direct implication
-		// Gobra is not able to detect that, so we use the assume trick.
-		// There is no soundnesss error as far as I can see
+		// == case: both at witness simultaneously
+		//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0) && rel(idx,1) == rel(idx2,1)) ==> (rel(determined,0) || rel(determined,1))
+		//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0) && rel(idx,1) == rel(idx1,1)) ==> (rel(determined,0) || rel(determined,1))
 
-		//@ assert !(t0_ge_t1 && rel(idx,0) == rel(idx2,0) && rel(idx,1) == rel(idx2,1)) || (rel(determined,0) || rel(determined,1))
-		//@ assert !(t0_le_t1 && rel(idx,0) == rel(idx1,0) && rel(idx,1) == rel(idx1,1)) || (rel(determined,0) || rel(determined,1))
-
-		//@ assert !(t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) || (rel(determined,0) || rel(determined,1))
-		//@ assert !(t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)) || (rel(determined,0) || rel(determined,1))
-
-		// Workaround: Use ghost variables in order to prevent bugs.
+		// > case: past witness (from loop invariant + determined monotonicity)
+		//@ assert (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) ==> (rel(determined,0) || rel(determined,1))
+		//@ assert (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)) ==> (rel(determined,0) || rel(determined,1))
 
 		//@ idx_ge_K2_0 = rel(idx, 0) >= rel(idx2, 0)
 		//@ idx_ge_K2_1 = rel(idx, 1) >= rel(idx2, 1)
 		//@ idx_ge_K1_0 = rel(idx, 0) >= rel(idx1, 0)
 		//@ idx_ge_K1_1 = rel(idx, 1) >= rel(idx1, 1)
-		//@ det_0 = rel(determined, 0)
-		//@ det_1 = rel(determined, 1)
 
-		//@ assume !(t0_ge_t1 && idx_ge_K2_0 && idx_ge_K2_1) || (det_0 || det_1)
-		//@ assume !(t0_le_t1 && idx_ge_K1_0 && idx_ge_K1_1) || (det_0 || det_1)
-		// assert false
+		// Cross cases impossible: idx is low until TStar
+		//@ assert t0_ge_t1 ==> (rel(idx,0) == rel(idx2,0) ==> rel(idx,0) == rel(idx,1))
+		//@ assert t0_ge_t1 ==> (rel(idx,1) == rel(idx2,1) ==> rel(idx,0) == rel(idx,1))
+		//@ assert t0_le_t1 ==> (rel(idx,0) == rel(idx1,0) ==> rel(idx,0) == rel(idx,1))
+		//@ assert t0_le_t1 ==> (rel(idx,1) == rel(idx1,1) ==> rel(idx,0) == rel(idx,1))
+
+		// Cross cases impossible (explicit)
+		//@ assert t0_ge_t1 ==> !(rel(idx,0) > rel(idx2,0) && rel(idx,1) == rel(idx2,1))
+		//@ assert t0_ge_t1 ==> !(rel(idx,0) == rel(idx2,0) && rel(idx,1) > rel(idx2,1))
+		//@ assert t0_le_t1 ==> !(rel(idx,0) > rel(idx1,0) && rel(idx,1) == rel(idx1,1))
+		//@ assert t0_le_t1 ==> !(rel(idx,0) == rel(idx1,0) && rel(idx,1) > rel(idx1,1))
+
+		// >= decomposes into == and > without cross cases
+		//@ assert (t0_ge_t1 && rel(idx,0) >= rel(idx2,0) && rel(idx,1) >= rel(idx2,1)) ==> (rel(determined,0) || rel(determined,1))
+		//@ assert (t0_le_t1 && rel(idx,0) >= rel(idx1,0) && rel(idx,1) >= rel(idx1,1)) ==> (rel(determined,0) || rel(determined,1))
+
+		//@ assert (t0_ge_t1 && idx_ge_K2_0 && idx_ge_K2_1) ==> (rel(determined, 0) ||  rel(determined, 1))
+		//@ assert (t0_le_t1 && idx_ge_K1_0 && idx_ge_K1_1) ==> (rel(determined, 0) ||  rel(determined, 1))
 	}
 
 	return resultRes, resultErr
