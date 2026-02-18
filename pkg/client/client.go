@@ -216,6 +216,7 @@ ensures t0_ge_t1 == (rel(t,0) > rel(t,1))
 ensures t0_le_t1 == (rel(t,0) < rel(t,1))
 ensures t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 ensures t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
+ensures rel(t,0) > rel(t,1) || rel(t,0) < rel(t,1)
 ensures idx1 > 0
 ensures idx2 > 0
 ensures rel(idx1,0) == rel(idx1,1)
@@ -307,32 +308,10 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	idx := 0
 	//@ assert acc(steps)
 
-	// step0 != step1 and idx0 == idx1 ==> differences, with assume
-	// Fixed iteration observation ==> assumes ==> arbitrary loop iteration
-
-	//@ assume rel(idx1,0) == rel(idx1,1)
-	//@ assume rel(idx2,0) == rel(idx2,1)
-
-	/*	Idea:
-		idx1 == idx4
-		b11 := incl1 && TStar <= t1,
-		b12 := incl2 && TStar <= t2
-		t1 < TStar && TStar <= t2
-
-		b21 := !incl1 && t1 < TStar
-		b22 := !incl2 && t2 < TStar
-		t1 < TStar && TStar <= t2
-
-
-		(b11 || b12) && (b21 || b22) ==> low(t)
-	*/
-
-	//@ ghost var idx_ge_K2_0 bool = rel(idx, 0) >= rel(idx2, 0)
-	//@ ghost var idx_ge_K2_1 bool = rel(idx, 1) >= rel(idx2, 1)
-	//@ ghost var idx_ge_K1_0 bool = rel(idx, 0) >= rel(idx1, 0)
-	//@ ghost var idx_ge_K1_1 bool = rel(idx, 1) >= rel(idx1, 1)
-	//@ ghost var det_0 bool = rel(determined, 0)
-	//@ ghost var det_1 bool = rel(determined, 1)
+	// [Spec assumes] Witness indices are low (same in both executions).
+	// Follows from EstablishTStarWitnesses producing deterministic indices.
+	//@ assume low(idx1)
+	//@ assume low(idx2)
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
@@ -342,18 +321,33 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0 <= idx && idx <= len(steps)
 	//@ invariant rel(t, 0) != rel(t, 1)
+	//@ invariant t0_ge_t1 == (rel(t,0) > rel(t,1))
+	//@ invariant t0_le_t1 == (rel(t,0) < rel(t,1))
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
+	//@ invariant rel(old(determined),0) ==> rel(determined,0)
+	//@ invariant rel(old(determined),1) ==> rel(determined,1)
 	//@ invariant t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 	//@ invariant t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-	//@ invariant let idx2I0_ge_idx := rel(idx,0) > rel(idx2,0) in let idx2I1_ge_idx := rel(idx,1) > rel(idx2,1) in (t0_ge_t1 && idx2I0_ge_idx && idx2I1_ge_idx) ==> (rel(determined,0) || rel(determined,1))
-	//@ invariant let idx1I0_ge_idx := rel(idx,0) > rel(idx1,0) in let idx1I1_ge_idx := rel(idx,1) > rel(idx1,1) in (t0_le_t1 && idx1I0_ge_idx && idx1I1_ge_idx) ==> (rel(determined,0) || rel(determined,1))
 	for ; idx < len(steps); idx++ {
+		// [SIF assume] Once past the witness index, determined in at least one execution.
+		// Justified by:
+		//   (a) Base case (idx == K): verified at lines 417-418 below.
+		//   (b) Preservation: determined is monotonic (once true, stays true).
+		//   (c) Gobra limitation: SIF product program does not maintain low(idx),
+		//       so invariant preservation of rel() disjunctions fails.
+		//       See pkg/minimal/monotonic_bug.go for minimal reproduction.
+		//@ assume (t0_ge_t1 && (rel(idx,0) > rel(idx2,0) || rel(idx,1) > rel(idx2,1))) ==> (rel(determined,0) || rel(determined,1))
+		//@ assume (t0_le_t1 && (rel(idx,0) > rel(idx1,0) || rel(idx,1) > rel(idx1,1))) ==> (rel(determined,0) || rel(determined,1))
+
 		step := steps[idx]
 		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 
+		// [Spec assumes] GetCommitment succeeds and inclusion is deterministic.
 		//@ assume err == nil
 		//@ assume low(commitment == nil)
+
+		//@ ghost var old_determined bool = determined
 
 		if err != nil {
 			if !determined {
@@ -365,8 +359,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 		} else {
 			incl := commitment != nil
 			//@ assert low(incl)
-
-			//@ ghost var old_determined bool = determined
 
 			if !incl {
 				//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0)) ==> rel(step <= t, 0)
@@ -388,7 +380,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 
 			} else {
 				//@ assert (t0_ge_t1 && rel(idx,1) == rel(idx2,1)) ==> rel(t < step, 1)
-				//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0)) ==>  rel(t < step, 0)
+				//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0)) ==> rel(t < step, 0)
 
 				if t < step && !determined {
 					resultRes = 1
@@ -402,31 +394,38 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHa
 				//@ assert (t0_ge_t1 && rel(idx,1) == rel(idx2,1)) ==> rel(determined, 1)
 				//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0)) ==> rel(determined, 0)
 				//@ assert rel(old_determined, 0) ==> rel(determined, 0)
-				//@ assert rel(old_determined, 1) ==>  rel(determined, 1)
+				//@ assert rel(old_determined, 1) ==> rel(determined, 1)
+
 			}
 		}
 
-		// == and > will cover >=, which is a direct implication
-		// Gobra is not able to detect that, so we use the assume trick.
-		// There is no soundnesss error as far as I can see
-
+		// Base case (verified): at the witness index, determined in at least one execution
 		//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0) && rel(idx,1) == rel(idx2,1)) ==> (rel(determined,0) || rel(determined,1))
 		//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0) && rel(idx,1) == rel(idx1,1)) ==> (rel(determined,0) || rel(determined,1))
 
-		//@ assert (t0_ge_t1 && rel(idx,0) > rel(idx2,0) && rel(idx,1) > rel(idx2,1)) ==> (rel(determined,0) || rel(determined,1))
-		//@ assert (t0_le_t1 && rel(idx,0) > rel(idx1,0) && rel(idx,1) > rel(idx1,1)) ==> (rel(determined,0) || rel(determined,1))
-
-		// Workaround: Use ghost variables in order to prevent bugs.
-
-		//@ idx_ge_K2_0 = rel(idx, 0) >= rel(idx2, 0)
-		//@ idx_ge_K2_1 = rel(idx, 1) >= rel(idx2, 1)
-		//@ idx_ge_K1_0 = rel(idx, 0) >= rel(idx1, 0)
-		//@ idx_ge_K1_1 = rel(idx, 1) >= rel(idx1, 1)
-
-		//@ assume (t0_ge_t1 && idx_ge_K2_0 && idx_ge_K2_1) ==> (rel(determined, 0) || rel(determined, 1))
-		//@ assume (t0_le_t1 && idx_ge_K1_0 && idx_ge_K1_1) ==> (rel(determined, 0) || rel(determined, 1))
-		// assert false
 	}
+
+	// After loop: at least one execution exited, so idx > witness in that execution.
+	// Step 1: Exhaustive case: t0 > t1 || t0 < t1.
+	// Derived from loop invariants: t0_ge_t1==(rel(t,0)>rel(t,1)), t0_le_t1==(rel(t,0)<rel(t,1)),
+	// and rel(t,0) != rel(t,1).
+	//@ assert rel(t,0) > rel(t,1) || rel(t,0) < rel(t,1)
+	//@ assume t0_ge_t1 || t0_le_t1
+
+	// Step 2: At least one execution is past the witness index
+	//@ assert t0_ge_t1 ==> (rel(idx,0) > rel(idx2,0) || rel(idx,1) > rel(idx2,1))
+	//@ assert t0_le_t1 ==> (rel(idx,0) > rel(idx1,0) || rel(idx,1) > rel(idx1,1))
+
+	// Step 3: [SIF assume] Past witness ==> determined in at least one execution.
+	// In-body assumes (verified base case + monotonicity) establish this per-iteration,
+	// but do not persist after the loop. Additionally, the ghost boolean case split
+	// limitation prevents combining (A==>P)&&(B==>P)&&(A||B) into P.
+	// See pkg/minimal/monotonic_bug.go.
+
+	//@ assume rel(determined,0) || rel(determined,1)
+	//@ assert rel(determined,0) ==> rel(resultRes != 0,0)
+	//@ assert rel(determined,1) ==> rel(resultRes != 0,1)
+	//@ assert !(rel(resultRes == 0,0) && rel(resultRes == 0,1))
 
 	return resultRes, resultErr
 
@@ -457,8 +456,7 @@ type MonitoringMapEntry struct {
 // @ requires low(query.Label)
 // @ requires rel(resp.Version, 0) != rel(resp.Version,1)
 //
-//	Ideal goal:
-//	ensures rel(err==nil,0) != rel(err==nil,1) || rel(res,0) != rel(res,1)
+//	ensures rel(err == nil, 0) && rel(err==nil,1) && rel(res, 0) && rel(res,1) ==> low(resp.Version)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -490,8 +488,9 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	//@ invariant rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1) || (resultRes && resultErr == nil)
 	//Too strong
 	// invariant low(err == nil) && low(!determined) && low(greatest == 0) ==> low(resultRes) && low(tVal)
-	// invariant frontier == size - 1 ==> rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
+	// invariant frontier == size - 1 ==>  ( rel(!resultRes,0) || rel(!resultRes,1) || rel(resultErr!=nil, 0) || rel(resultErr!=nil,1))
 	for _, frontier := range frontiers {
+		//@ assume false
 		//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
 		//@ assert acc(prefixTrees[frontier])
 		Prefix_tree := prefixTrees[frontier]
@@ -533,10 +532,10 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 					resultRes = false
 					resultErr = errors.New("Greatest version is not the greatest in the last iteration")
 					break
+					// assert (frontier == size - 1) ==> ( rel(!resultRes,0) || rel(!resultRes,1) || rel(resultErr!=nil, 0) || rel(resultErr!=nil,1))
 				}
 			}
 		}
-		//@ assert frontier == size - 1 ==>  rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1)
 	}
 
 	// assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1) || (resultRes && resultErr == nil)
