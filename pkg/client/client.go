@@ -244,13 +244,6 @@ func GetInt() (res int)
 // Ghost seq params avoid needing to unfold IsLow (which loses low facts in hyper mode)
 
 
-ghost
-decreases
-// this captures our assumption that GetCommitment is deterministic
-// takes seq[byte] inputs so it remains pure (no heap permissions needed)
-pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash seq[byte]) *[]byte
-
-
 @*/
 
 /*@
@@ -327,14 +320,14 @@ CheckGreatest verifies if t is the greatest version
 // @ requires acc(label)
 // @ requires acc(RootHash)
 // @ requires acc(steps)
+// @ requires low(labelSeq)
+// @ requires low(RootHashSeq)
 // @ requires t >= 0
 // @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 // @ requires 0<= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
 // @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
-// Very basic postcondition
-// @ ensures (res == 0 && err == nil) || (res == 404 && err != nil) || ((res == -1 || res == 1) && err == nil)
 // Correct postcondition
 // @ ensures err == nil && res==0 ==> low(t)
 func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
@@ -342,25 +335,23 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
-	idx := 0
 	//@ ghost var tStarVisited bool = false
 	//@ ghost var tStar uint64 = steps[tStarIdx]
 
-	//@ non_incl_lemma := GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) != nil && tStar <= t
-	//@ incl_lemma := GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) == nil && t < tStar
-
-	//@ assert  tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
+	//@ non_incl_lemma := proofs.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) != nil && tStar <= t
+	//@ incl_lemma := proofs.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) == nil && t < tStar
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
 	//@ invariant acc(steps)
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0 <= idx && idx <= len(steps)
-	//@ invariant  TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
-	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
+	//@ invariant tStar == steps[tStarIdx]
+	//@ invariant TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
+	//@ invariant determined ==> resultRes != 0
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
 	//@ invariant tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
-	for ; idx < len(steps); idx++ {
+	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
@@ -373,8 +364,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 				}
 			} else {
 				incl := commitment != nil
-				//@ assert low(incl)
-
 				if !incl {
 					if step <= t {
 						resultRes = -1
@@ -390,31 +379,19 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 						determined = true
 					}
 				}
-			}
-			/*@
-			ghost if idx == tStarIdx{
-				assert !determined ==> non_incl_lemma || incl_lemma
-				tStarVisited = true
-			}
+				/*@
+				ghost if idx == tStarIdx{
+					assert (commitment == nil) == (proofs.GetCommitmentIsDeterministic(labelSeq, step, RootHashSeq) == nil)
+					assert !determined ==> non_incl_lemma || incl_lemma
+					tStarVisited = true
+				}
 
-			@*/
+				@*/
+			}
 
 		}
 
 	}
-	/*@
-
-		ghost if true {
-		 	issue903worksaround2 := !determined && low(!determined)
-			ghost if issue903worksaround2 {
-				assert non_incl_lemma || incl_lemma
-
-
-			}
-
-		}
-
-	@*/
 
 	return resultRes, resultErr
 
