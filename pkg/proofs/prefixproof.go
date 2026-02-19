@@ -24,6 +24,12 @@ pred (t PrefixTree) InvRec() {
 	// If a node's value is defined, its children's values must be defined
 	((t.Value != nil && t.Left != nil && t.Right != nil) ==> (t.Left.Value != nil && t.Right.Value != nil))
 }
+
+
+
+pred IsLow(arr []byte) {
+	acc(arr) && low(len(arr)) && (forall i int :: 0<= i && i < len(arr) ==> low(arr[i]))
+}
 @*/
 
 // @ requires t != nil
@@ -255,6 +261,14 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 	}
 }
 
+/*@
+// this captures our assumption that GetCommitment is deterministic
+ghost
+decreases
+pure
+func GetCommitmentDeterministic(Label []byte, Version uint64, RootHash []byte) (r []byte)
+@*/
+
 // TODO: Implement this
 // TODO: Verify this
 // @ requires Label != nil && len(Label) >= 0
@@ -265,6 +279,7 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 // @ ensures acc(RootHash)
 // @ ensures acc(Label)
 // @ ensures (low(len(Label)) && (forall i int :: {Label[i]} 0<= i && i < len(Label) ==> low(Label[i])) && low(len(RootHash)) && forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i]) && low(Version)) ==> (low(err) && low(len(res)) && (forall i int :: {res[i]} 0<= i && i < len(res) ==> low(res[i])))
+// @ ensures err == nil ==> res === GetCommitmentDeterministic(Label, Version, RootHash)
 // @ trusted
 func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
 	if tree == nil {

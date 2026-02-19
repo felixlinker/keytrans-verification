@@ -41,6 +41,14 @@ pred UIntLowInv(s []uint64){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
 
+ghost
+requires true
+decreases
+pure func TStarWrapper(steps []uint64, t1, t2 uint64) uint64 {
+  return (t1 < 0 || t2 < 0) ? 0 :  //Cannot happen because we check this beforehand.
+  			t1 == t2 ? 0 : t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
+}
+
 
 @*/
 
@@ -201,6 +209,18 @@ ghost
 decreases
 ensures res > 0
 func GetInt() (res int)
+
+
+// Ghost seq params avoid needing to unfold IsLow (which loses low facts in hyper mode)
+
+
+ghost
+decreases
+// this captures our assumption that GetCommitment is deterministic
+// takes seq[byte] inputs so it remains pure (no heap permissions needed)
+pure func GetCommitmentIsDeterministic(Label seq[byte], Version int, RootHash seq[byte]) *[]byte
+
+
 @*/
 
 /*@
@@ -273,159 +293,71 @@ CheckGreatest verifies if t is the greatest version
 */
 
 // TODO: We need to somehow grab the value of the root from the tree and see if the hash root is equal
-// @ requires noPerm < p
 // @ requires label != nil
 // @ requires t >= 0
 // @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires acc(label)
 // @ requires acc(RootHash)
-// @ requires low(len(label))
-// @ requires forall i int :: {label[i]} 0<= i && i < len(label) ==> low(label[i])
-// @ requires low(len(RootHash))
-// @ requires forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==>  low(RootHash[i])
-// @ requires low(t>=0)
+// @ requires acc(steps)
+// @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 // Very basic postcondition
 // @ ensures (res == 0 && err == nil) || (res == 404 && err != nil) || ((res == -1 || res == 1) && err == nil)
-// The holy grail (Don't change it!):
-//
-//	ensures rel(err == nil, 0) && rel(err==nil,1) && rel(res==0, 0) && rel(res==0,1) ==> rel(t,0) == rel(t,1)
-//
-// Changed the right implication to low(t)
-// @ ensures rel(err == nil, 0) && rel(err==nil,1) && rel(res==0, 0) && rel(res==0,1) ==> low(t)
-func CheckGreatest(prefixTree *proofs.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost p perm@*/) (res int, err error) {
-	steps := proofs.FullBinaryLadderSteps_wrapper(t)
-
-	//@ assume rel(t,0) != rel(t,1)
-
-	//Postcondition from the FBLS
-	//@ assert acc(steps)
-
-	//@ t0_ge_t1, t0_le_t1, idx1, idx2 := EstablishTStarWitnesses(steps, t)
+// Correct postcondition
+// @ ensures err == nil && res==0 ==> low(t)
+func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
 
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
 	idx := 0
-	//@ assert acc(steps)
-
-	// [Spec assumes] Witness indices are low (same in both executions).
-	// Follows from EstablishTStarWitnesses producing deterministic indices.
-	//@ assume low(idx1)
-	//@ assume low(idx2)
+	//@ ghost var tStarVisited bool = false
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
 	//@ invariant acc(steps)
-	//@ invariant low(len(label))
-	//@ invariant low(len(RootHash))
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0 <= idx && idx <= len(steps)
-	//@ invariant rel(t, 0) != rel(t, 1)
-	//@ invariant t0_ge_t1 == (rel(t,0) > rel(t,1))
-	//@ invariant t0_le_t1 == (rel(t,0) < rel(t,1))
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
-	//@ invariant rel(old(determined),0) ==> rel(determined,0)
-	//@ invariant rel(old(determined),1) ==> rel(determined,1)
-	//@ invariant t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-	//@ invariant t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
 	for ; idx < len(steps); idx++ {
-		// [SIF assume] Once past the witness index, determined in at least one execution.
-		// Justified by:
-		//   (a) Base case (idx == K): verified at lines 417-418 below.
-		//   (b) Preservation: determined is monotonic (once true, stays true).
-		//   (c) Gobra limitation: SIF product program does not maintain low(idx),
-		//       so invariant preservation of rel() disjunctions fails.
-		//       See pkg/minimal/monotonic_bug.go for minimal reproduction.
-		//@ assume (t0_ge_t1 && (rel(idx,0) > rel(idx2,0) || rel(idx,1) > rel(idx2,1))) ==> (rel(determined,0) || rel(determined,1))
-		//@ assume (t0_le_t1 && (rel(idx,0) > rel(idx1,0) || rel(idx,1) > rel(idx1,1))) ==> (rel(determined,0) || rel(determined,1))
+		if !determined {
+			step := steps[idx]
+			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
 
-		step := steps[idx]
-		commitment, err := prefixTree.GetCommitment(label, step, RootHash)
+			//@ assume err == nil
+			//@ assume low(commitment == nil)
 
-		// [Spec assumes] GetCommitment succeeds and inclusion is deterministic.
-		//@ assume err == nil
-		//@ assume low(commitment == nil)
-
-		//@ ghost var old_determined bool = determined
-
-		if err != nil {
-			if !determined {
-				resultRes = 404
-				resultErr = err
-				determined = true
-			}
-			//@ assert false
-		} else {
-			incl := commitment != nil
-			//@ assert low(incl)
-
-			if !incl {
-				//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0)) ==> rel(step <= t, 0)
-				//@ assert (t0_le_t1 && rel(idx,1) == rel(idx1,1)) ==> rel(step <= t, 1)
-
-				if step <= t && !determined {
-					resultRes = -1
-					resultErr = nil
+			if err != nil {
+				if !determined {
+					resultRes = 404
+					resultErr = err
 					determined = true
 				}
-
-				//@ assert determined == (old_determined || step <= t)
-				//@ assert rel(determined, 0) == (rel(old_determined, 0) || rel(step <= t, 0))
-				//@ assert rel(determined, 1) == (rel(old_determined, 1) || rel(step <= t, 1))
-				//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0)) ==> rel(determined, 0)
-				//@ assert (t0_le_t1 && rel(idx,1) == rel(idx1,1)) ==> rel(determined, 1)
-				//@ assert rel(old_determined, 0) ==> rel(determined, 0)
-				//@ assert rel(old_determined, 1) ==> rel(determined, 1)
-
+				//@ assert false
 			} else {
-				//@ assert (t0_ge_t1 && rel(idx,1) == rel(idx2,1)) ==> rel(t < step, 1)
-				//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0)) ==> rel(t < step, 0)
+				incl := commitment != nil
+				//@ assert low(incl)
 
-				if t < step && !determined {
-					resultRes = 1
-					resultErr = nil
-					determined = true
+				if !incl {
+					if step <= t {
+						resultRes = -1
+						resultErr = nil
+						determined = true
+					}
+
+				} else {
+
+					if t < step {
+						resultRes = 1
+						resultErr = nil
+						determined = true
+					}
 				}
-
-				//@ assert determined == (old_determined || t < step)
-				//@ assert rel(determined, 0) == (rel(old_determined, 0) || rel(t < step, 0))
-				//@ assert rel(determined, 1) == (rel(old_determined, 1) || rel(t < step, 1))
-				//@ assert (t0_ge_t1 && rel(idx,1) == rel(idx2,1)) ==> rel(determined, 1)
-				//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0)) ==> rel(determined, 0)
-				//@ assert rel(old_determined, 0) ==> rel(determined, 0)
-				//@ assert rel(old_determined, 1) ==> rel(determined, 1)
-
 			}
+
 		}
 
-		// Base case (verified): at the witness index, determined in at least one execution
-		//@ assert (t0_ge_t1 && rel(idx,0) == rel(idx2,0) && rel(idx,1) == rel(idx2,1)) ==> (rel(determined,0) || rel(determined,1))
-		//@ assert (t0_le_t1 && rel(idx,0) == rel(idx1,0) && rel(idx,1) == rel(idx1,1)) ==> (rel(determined,0) || rel(determined,1))
-
 	}
-
-	// After loop: at least one execution exited, so idx > witness in that execution.
-	// Step 1: Exhaustive case: t0 > t1 || t0 < t1.
-	// Derived from loop invariants: t0_ge_t1==(rel(t,0)>rel(t,1)), t0_le_t1==(rel(t,0)<rel(t,1)),
-	// and rel(t,0) != rel(t,1).
-	//@ assert rel(t,0) > rel(t,1) || rel(t,0) < rel(t,1)
-	//@ assume t0_ge_t1 || t0_le_t1
-
-	// Step 2: At least one execution is past the witness index
-	//@ assert t0_ge_t1 ==> (rel(idx,0) > rel(idx2,0) || rel(idx,1) > rel(idx2,1))
-	//@ assert t0_le_t1 ==> (rel(idx,0) > rel(idx1,0) || rel(idx,1) > rel(idx1,1))
-
-	// Step 3: [SIF assume] Past witness ==> determined in at least one execution.
-	// In-body assumes (verified base case + monotonicity) establish this per-iteration,
-	// but do not persist after the loop. Additionally, the ghost boolean case split
-	// limitation prevents combining (A==>P)&&(B==>P)&&(A||B) into P.
-	// See pkg/minimal/monotonic_bug.go.
-
-	//@ assume rel(determined,0) || rel(determined,1)
-	//@ assert rel(determined,0) ==> rel(resultRes != 0,0)
-	//@ assert rel(determined,1) ==> rel(resultRes != 0,1)
-	//@ assert !(rel(resultRes == 0,0) && rel(resultRes == 0,1))
 
 	return resultRes, resultErr
 
@@ -456,7 +388,7 @@ type MonitoringMapEntry struct {
 // @ requires low(query.Label)
 // @ requires rel(resp.Version, 0) != rel(resp.Version,1)
 //
-//	ensures rel(err == nil, 0) && rel(err==nil,1) && rel(res, 0) && rel(res,1) ==> low(resp.Version)
+// ensures err == nil && res ==> low(t)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -485,54 +417,51 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ invariant low(resultErr == nil) ==> low(err == nil)
-	//@ invariant rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1) || (resultRes && resultErr == nil)
-	//Too strong
-	// invariant low(err == nil) && low(!determined) && low(greatest == 0) ==> low(resultRes) && low(tVal)
-	// invariant frontier == size - 1 ==>  ( rel(!resultRes,0) || rel(!resultRes,1) || rel(resultErr!=nil, 0) || rel(resultErr!=nil,1))
 	for _, frontier := range frontiers {
-		//@ assume false
-		//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
-		//@ assert acc(prefixTrees[frontier])
-		Prefix_tree := prefixTrees[frontier]
-		if err != nil {
-			break
-		}
-		if prefixTrees[frontier] == nil {
-			resultRes = false
-			resultErr = err
-			determined = true
-			//break
-		} else {
-			rootHash := prefixRootHash[frontier]
-			//@ assert acc(query.Label)
-			if size == 0 || tVal >= size || frontier >= size {
-				resultRes = false
-				resultErr = errors.New("version out of bounds")
-				determined = true
-				//break
-				//return false, errors.New("version out of bounds")
-			}
-			LtGtOrEq, err := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size /*@,p@*/)
-			if err != nil {
+		if !determined {
+			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
+			//@ assert acc(prefixTrees[frontier])
+			Prefix_tree := prefixTrees[frontier]
+			if prefixTrees[frontier] == nil {
 				resultRes = false
 				resultErr = err
 				determined = true
-				//break
-			} else if LtGtOrEq == 1 {
-				// Greater version exists
-				resultRes = false
-				resultErr = errors.New("greater version exists")
-				break
-			} else if LtGtOrEq == 0 && terminalLogEntry == -1 {
-				terminalLogEntry = int(frontier)
-			}
-
-			if frontier == size-1 {
-				if LtGtOrEq != 0 {
+			} else {
+				rootHash := prefixRootHash[frontier]
+				//@ assert acc(query.Label)
+				if size == 0 || tVal >= size || frontier >= size {
 					resultRes = false
-					resultErr = errors.New("Greatest version is not the greatest in the last iteration")
-					break
-					// assert (frontier == size - 1) ==> ( rel(!resultRes,0) || rel(!resultRes,1) || rel(resultErr!=nil, 0) || rel(resultErr!=nil,1))
+					resultErr = errors.New("version out of bounds")
+					determined = true
+				}
+				steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
+
+				//Postcondition from the FBLS
+				//@ assert acc(steps)
+
+				// _, _, idx1, idx2 := EstablishTStarWitnesses(steps, tVal)
+
+				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size)
+				if err != nil {
+					resultRes = false
+					resultErr = err
+					determined = true
+				} else if LtGtOrEq == 1 {
+					// Greater version exists
+					resultRes = false
+					resultErr = errors.New("greater version exists")
+					determined = true
+				} else if LtGtOrEq == 0 && terminalLogEntry == -1 {
+					terminalLogEntry = int(frontier)
+				}
+
+				if frontier == size-1 {
+					if LtGtOrEq != 0 {
+						resultRes = false
+						resultErr = errors.New("Greatest version is not the greatest in the last iteration")
+						determined = true
+						// assert (frontier == size - 1) ==> ( rel(!resultRes,0) || rel(!resultRes,1) || rel(resultErr!=nil, 0) || rel(resultErr!=nil,1))
+					}
 				}
 			}
 		}

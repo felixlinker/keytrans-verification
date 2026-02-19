@@ -955,29 +955,6 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	return res
 }
 
-// @ requires target >= 0
-//@ requires t20 != t21 
-// @ ensures acc(r1)
-// @ ensures forall t2 uint64 :: exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(r1) && TStar_pure(target, t2) == r1[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
-// @ ensures forall t2 uint64 :: exists idx2 int ::target > t2 && t2 >= 0  ==> 0 <= idx2 && idx2 < len(r1) && TStar_pure(t2, target) == r1[idx2] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
-// @ ensures forall j int :: j >= 0 && j < len(r1) ==> r1[j] >= 0
-// @ ensures forall t2 uint64 :: {TStar_wrapper(r1, target, t2)} TStar_wrapper(r1, target, t2)
-// @ ensures forall t2 uint64 :: {TStar_wrapper(r1,t2,target)} TStar_wrapper(r1,t2,target)
-func FullBinaryLadderSteps_wrapper2(target uint64/*@, ghost t20 uint64, ghost t21 uint64 @*/) (r1 []uint64) {
-	//@ t2 := GetUInt64()
-	//@ assume t2 != target
-	//@ assume t2 >= 0
-	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
-	//@ assert target < t2 ==>  TStar_pure(target, t2) == res[idx]
-	//@ assert exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
-	//@ assume forall t2 uint64 :: exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(target, t2) == res[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
-	//@ assert target > t2 ==>  TStar_pure(t2, target) == res[idx]
-	//@ assert exists idx1 int :: target > t2 && t2 >= 0 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(t2,target) == res[idx1] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
-	//@ assume forall t2 uint64 :: exists idx1 int :: target > t2 && t2 >= 0 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(t2,target) == res[idx1] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
-	return res
-}
-
-
 // ==============================================================================================
 // ==============================================================================================
 
