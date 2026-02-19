@@ -30,18 +30,6 @@ func Log2FloorUpperBound(n uint64) uint64{
 }
 
 
-//Lemma: The element in the Log2Floor_pure is bounded
-
-ghost
-requires n > 0
-ensures IntPow2(Log2Floor_pure(n)) <= n
-ensures n < IntPow2(Log2Floor_pure(n) + 1)
-decreases
-pure func Log2FloorBounds(n uint64) uint64 {
-    return Log2FloorUpperBound(n)
-}
-
-
 //Lemma: Monotonicity of the Log2Floor_pure function
 
 ghost
@@ -54,7 +42,7 @@ pure
 func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 	return a == b ? 0 :
 		(b < 2 ? 0 :
-		(a < 2 ? Log2FloorBounds(b):
+		(a < 2 ? Log2FloorUpperBound(b):
 		Log2FloorMonotonic(a/2,b/2)))
 }
 
@@ -143,18 +131,6 @@ func IntPow2Monotonic(a uint64, b uint64) uint64{
 	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2Positive(b - 1)
 }
 
-// Lemma: Used to convince Gobra that the i_low < i_high ==> IntPow2(i_low +1) <= IntPow2(i_high)
-ghost
-requires i_low >= 0
-requires i_high >= 0
-requires i_high > i_low
-ensures IntPow2(i_low +1) <= IntPow2(i_high)
-decreases
-pure
-func IntPow2GapLemma(i_low uint64, i_high uint64) uint64{
-	return IntPow2Monotonic(i_low+1, i_high)
-}
-
 @*/
 // ============================================================================
 // ============================================================================
@@ -211,37 +187,6 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 }
 
 @*/
-// =============================Core Lemma======================================
-/*@
-// Core Lemma: Shows that tPure function indicates t1<r <= t2
-// Original function, not used right now.
-// Used for sightseeing and keep in memory which makes me suffer for months
-ghost
-requires t1 > 0
-requires t2 > t1
-ensures r >= 1
-ensures t1 < r && r<=t2
-decreases t1,t2
-pure
-func tStar_pure_orig(t1 uint64, t2 uint64, pick_lowest bool) (r uint64) {
-    return let i_low := Log2Floor_pure(t1) in
-           let i_high := Log2Floor_pure(t2) in
-           let low_ := IntPow2(i_low) in
-		   let bound_t1 := Log2FloorBounds(t1) in
-		   let bound_t2 := Log2FloorBounds(t2) in
-		   let i_low_positive := IntPow2Positive(i_low) in
-           i_high > i_low ?
-           		(let apply_gap := IntPow2GapLemma(i_low, i_high) in (pick_lowest ?
-						IntPow2(i_low + 1) :
-						IntPow2(i_high))) :
-				(t1 == low_ ?														// We need to consider the case that low_ == t1 if t1 is a power of 2, so this would lead t1 - low_ to 0 and Log2Floor_pure(t1) is not defined.
-					let apply_bounds := Log2FloorBounds(t2 - low_) in
-					low_ + IntPow2(Log2Floor_pure(t2-low_)):
-					low_ + tStar_pure_orig(t1 - low_,t2 - low_, false))
-
-}
-@*/
-
 // @ requires base > 0
 // =========Hyperproperties=====
 // requires low(base)
@@ -295,45 +240,6 @@ func PowOf2(exp uint64) (r uint64) {
 // @ decreases
 func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1) - 1
-}
-
-// Older version of tStar, will not be used in the newer version
-// @ requires t1 > 0
-// @ requires t2 > t1
-// =========Hyperproperties=====
-//
-//	requires low(t1) && low(t2) && low(pick_lowest)
-//	ensures low(t_star)
-//
-// =============================
-// @ ensures t_star == tStar_pure_orig(t1,t2,pick_lowest)
-// @ trusted
-func tStar_orig(t1 uint64, t2 uint64, pick_lowest bool) (t_star uint64) {
-	i_low := Log2Floor(t1)
-	i_high := Log2Floor(t2)
-
-	if i_high > i_low {
-		if pick_lowest {
-			return PowOf2(i_low + 1)
-		} else {
-			return PowOf2(i_high)
-		}
-	} else {
-		// i_high == i_low (same log bucket)
-		low_ := PowOf2(i_low)
-
-		if t1 == low_ {
-			// t1 is exactly a power of 2, so t1 - low_ = 0
-			// In float version: log2(0) = -Inf, so i_high - i_low > 0 is always true
-			// Since pick_lowest = false in recursion, it returns 2^i_high
-			// where i_high = floor(log2(t2 - low_))
-			// This is also adapted in the proof of TStar_pure, which concludes the proof of t1 < r <= t2
-			return low_ + PowOf2(Log2Floor(t2-low_))
-		}
-
-		// t1 > low_, safe to recurse normally
-		return low_ + tStar_orig(t1-low_, t2-low_, false)
-	}
 }
 
 // @ requires t1>0
@@ -406,7 +312,7 @@ ensures IntPow2(r-1) <= target +1
 decreases
 pure
 func findExpLevel(target uint64) (r uint64){
-	return let _ := Log2FloorBounds(target +1) in
+	return let _ := Log2FloorUpperBound(target +1) in
 		Log2Floor_pure(target+1)+1
 }
 
@@ -437,7 +343,7 @@ ensures IntPow2(Log2Floor_pure(t1)+1) <= t2
 decreases
 pure
 func GapImpliesPow2Bound(t1 uint64, t2 uint64) uint64{
-	return let _:= Log2FloorBounds(t2) in
+	return let _:= Log2FloorUpperBound(t2) in
 		let _:= IntPow2Monotonic(Log2Floor_pure(t1), Log2Floor_pure(t2)) in
 		let _:= IntPow2Positive(Log2Floor_pure(t1)+1) in
 		0
@@ -609,72 +515,6 @@ pure
 func isOnPath_subpath_right(v uint64, target uint64, x_in uint64,x_out uint64, next uint64) uint64{
 	return 0
 }
-// ==============================================================================================
-// ==============================================================================================
-ghost
-requires t1 > 0
-requires t1 < t2
-requires x_in <= t1 && t1 < x_out
-requires x_out <= t2  // Base case condition!
-ensures tStarRec_pure(t1,t2,x_in,x_out) == x_out
-decreases
-pure func tStarRec_returns_xout(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64 {
-    return 0
-}
-
-ghost
-requires t1 > 0
-requires t1 < t2
-requires x_in <= t1 && t1 < x_out
-requires t2 < x_out
-requires x_in + 1 < x_out
-requires let next := x_in + (x_out-x_in)/2 in next > t1 && t2 >= next
-ensures tStarRec_pure(t1,t2,x_in,x_out) == x_in + (x_out-x_in)/2
-decreases
-pure func tStarRec_returns_next(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64 {
-    return let next := x_in + (x_out-x_in)/2 in
-           tStarRec_returns_xout(t1, t2, x_in, next)
-}
-
-ghost
-requires x_in < x_out
-requires x_in <= t1 && t1 < x_out
-requires x_in + 1 < x_out
-requires let next := x_in + (x_out-x_in)/2 in next > t1
-ensures isOnPath(x_in + (x_out-x_in)/2, t1, x_in, x_out)
-decreases
-pure func midpoint_isOnPath(t1 uint64, x_in uint64, x_out uint64) uint64 {
-    return 0
-}
-
-//tStarRec returns a midpoint on path when t2 < x_out given same bucket
-// The is generally the step case where we go left or right
-ghost
-requires t1 > 0
-requires t1 < t2
-requires x_in <= t1 && t1 < x_out // Constraints on t1
-requires t2 < x_out
-ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), t1, x_in, x_out)
-decreases x_out - x_in
-pure
-func tStarRec_isOnPath(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64{
-	return x_in + 1 >= x_out ? 0 : //Base case: will not be handled here
-		let next := x_in + (x_out-x_in)/2 in
-		 //t2 < x_out ==> x_out <= t2 is false
-		 // we take the recursive branch
-		(next <= t1 ?
-			// Go right: when next <= target
-			tStarRec_isOnPath(t1,t2,next, x_out):
-			// Go left: next > target
-			// Need to check t2 < next
-			(t2 < next ?
-				// t2 >= next means tStarRec will return next a midpoint
-				tStarRec_isOnPath(t1,t2,x_in,next) :
-				     let _ := tStarRec_returns_next(t1, t2, x_in, x_out) in
-   					 let _ := midpoint_isOnPath(t1, x_in, x_out) in next))
-}
-
-
 //Lemma: Ensures that the next is on the path, i.e. v == next in isOnPath
 ghost
 requires target >= 0
@@ -955,48 +795,3 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	return res
 }
 
-// ==============================================================================================
-// ==============================================================================================
-
-//Use it as a reference, we don't need this algorithm anymore
-
-// @ requires target >=0
-// @ ensures acc(r)
-func FullBinaryLadderSteps_iterative(target uint64 /*@, ghost idx uint64 @*/) (r []uint64) {
-	//@ assume 0 <= target // see https://github.com/viperproject/gobra/issues/192
-	r = make([]uint64, 0)
-	var i uint64 = 1
-	// @ ghost var k uint64 = 0
-
-	//@ invariant acc(r)
-	//@ invariant 0 <= i - 1
-	//@ invariant i-1 <= target || 1 <= len(r)
-	//@ invariant i >= 1
-	//@ invariant k >= 0
-	//@ invariant i == IntPow2(k)
-	for i-1 <= target {
-		r = append( /*@ perm(1/2), @*/ r, i-1)
-		//@ old_i := i
-		i = i * 2
-		// @ k = k+1
-		//@ assert i == (2 * old_i)  // Gobra currently does not axiomatize left and right shifts
-	}
-	// i is now the smallest power of two s.t. i-1 is larger than target
-	//@ assert len(r) > 0
-
-	x_in := r[len(r)-1]
-	x_out := i - 1
-	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
-
-	//@ invariant acc(r)
-	for x_in+1 < x_out {
-		next := x_in + (x_out-x_in)/2
-		r = append( /*@ perm(1/2), @*/ r, next)
-		if next <= target {
-			x_in = next
-		} else {
-			x_out = next
-		}
-	}
-	return r
-}

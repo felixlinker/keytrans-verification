@@ -250,7 +250,6 @@ func GetInt() (res int)
 ghost
 decreases
 requires acc(steps)
-requires rel(t,0) != rel(t,1)
 requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
@@ -259,7 +258,6 @@ ensures t0_ge_t1 == (rel(t,0) > rel(t,1))
 ensures t0_le_t1 == (rel(t,0) < rel(t,1))
 ensures t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 ensures t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-ensures rel(t,0) > rel(t,1) || rel(t,0) < rel(t,1)
 ensures idx1 > 0
 ensures idx2 > 0
 ensures rel(idx1,0) == rel(idx1,1)
@@ -381,10 +379,9 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 				}
 				/*@
 				ghost if idx == tStarIdx{
-					assert !determined ==> non_incl_lemma || incl_lemma
+					assert !determined ==> (non_incl_lemma || incl_lemma)
 					tStarVisited = true
 				}
-
 				@*/
 			}
 
@@ -419,8 +416,8 @@ type MonitoringMapEntry struct {
 // @ requires low(size)
 // @ requires query.Label != nil
 // @ requires low(query.Label)
-// @ requires rel(resp.Version, 0) != rel(resp.Version,1)
-// ensures err == nil && res ==> low(t)
+//
+//	ensures err == nil && res ==> low(resp.Version)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -436,7 +433,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	//@ assert low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ assume forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	terminalLogEntry := -1
-	//@assert low(terminalLogEntry) //This holds trivially
+	//@ assert low(terminalLogEntry) //This holds trivially
 	determined := false
 
 	//@ invariant acc(prefixTrees)
@@ -474,7 +471,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
 				//TODO: replace me
 				//@ ghost var tStarIdx int = 13
-
 				// _, _, idx1, idx2 := EstablishTStarWitnesses(steps, tVal)
 
 				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
@@ -519,6 +515,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 		}
 		monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
 	}
-	// assert false
+
 	return resultRes, resultErr
 }
