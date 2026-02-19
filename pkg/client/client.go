@@ -329,7 +329,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires low(steps[tStarIdx])
 // @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Correct postcondition
-// @ ensures err == nil && res==0 ==> low(t)
+// @ ensures err == nil && res == 0 ==> low(t)
 func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
 
 	resultRes := 0
@@ -381,7 +381,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 				}
 				/*@
 				ghost if idx == tStarIdx{
-					assert (commitment == nil) == (proofs.GetCommitmentIsDeterministic(labelSeq, step, RootHashSeq) == nil)
 					assert !determined ==> non_incl_lemma || incl_lemma
 					tStarVisited = true
 				}
