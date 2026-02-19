@@ -34,11 +34,6 @@ func BytesNotEqual(r1 []byte, r2 []byte, p perm) bool {
 	return !(len(r1) == len(r2) && forall i int :: {r1[i], r2[i]} 0<=i && i < len(r1) ==> r1[i] ==r2[i])
 }
 
-
-pred IsLow(arr []byte) {
-	acc(arr) && low(len(arr)) && (forall i int :: 0<= i && i < len(arr) ==> low(arr[i]))
-}
-
 pred ByteLowInv(s []byte){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
@@ -59,18 +54,18 @@ pure func TStarWrapper(steps []uint64, t1, t2 uint64) uint64 {
 ghost
 requires acc(arr, _)
 decreases
-pure func
-func getContent(arr []int) (res seq[int]) {
+pure
+func getContent(arr []byte) (res seq[byte]) {
   return GetByteContent(arr, 0)
 }
 
 ghost
 requires acc(arr, _)
-requires idx <= len(arr)
+requires 0 <= idx && idx <= len(arr)
 decreases len(arr) - idx
-pure func
-func GetByteContent(arr []int, idx int) (res seq[int]) {
-  return idx == len(arr) ? seq[int]{} : arr[i] ++ getContentHelper(arr, idx + 1)
+pure
+func GetByteContent(arr []byte, idx int) (res seq[byte]) {
+  return idx == len(arr) ? seq[byte]{} : seq[byte]{arr[idx]} ++ GetByteContent(arr, idx + 1)
 }
 
 @*/
@@ -317,12 +312,16 @@ CheckGreatest verifies if t is the greatest version
 
 // TODO: We need to somehow grab the value of the root from the tree and see if the hash root is equal
 // @ requires label != nil
-// @ requires t >= 0
-// @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires acc(label)
 // @ requires acc(RootHash)
 // @ requires acc(steps)
+// @ requires t >= 0
+// @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
+// @ requires 0<= tStarIdx && tStarIdx < len(steps)
+// @ requires low(steps[tStarIdx])
+// @ requires rel(t, 0) < rel(t, 1) ==> rel(t, 0) < steps[tStarIdx] && steps[tStarIdx] <= rel(t, 1)
+// @ requires rel(t, 1) < rel(t, 0) ==> rel(t, 1) < steps[tStarIdx] && steps[tStarIdx] <= rel(t, 0)
 // Very basic postcondition
 // @ ensures (res == 0 && err == nil) || (res == 404 && err != nil) || ((res == -1 || res == 1) && err == nil)
 // Correct postcondition
@@ -334,6 +333,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
 	idx := 0
 	//@ ghost var tStarVisited bool = false
+	//@ ghost var tStar uint64 = steps[tStarIdx]
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
@@ -345,7 +345,7 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 	for ; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
-			commitment, err := prefixTree.GetCommitment(label, step, RootHash)
+			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
 
 			//@ assume err == nil
 			//@ assume low(commitment == nil)
@@ -381,6 +381,11 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 		}
 
 	}
+	/*@
+
+
+
+	@*/
 
 	return resultRes, resultErr
 
@@ -410,7 +415,6 @@ type MonitoringMapEntry struct {
 // @ requires query.Label != nil
 // @ requires low(query.Label)
 // @ requires rel(resp.Version, 0) != rel(resp.Version,1)
-//
 // ensures err == nil && res ==> low(t)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
@@ -461,10 +465,14 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 
 				//Postcondition from the FBLS
 				//@ assert acc(steps)
+				//@ ghost var labelSeq seq[byte] = getContent(query.Label)
+				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+				//TODO: replace me
+				//@ ghost var tStarIdx int = 13
 
 				// _, _, idx1, idx2 := EstablishTStarWitnesses(steps, tVal)
 
-				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@@*/)
+				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
 				if err != nil {
 					resultRes = false
 					resultErr = err
