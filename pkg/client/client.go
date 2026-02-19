@@ -51,6 +51,18 @@ pure func TStarWrapper(steps []uint64, t1, t2 uint64) uint64 {
   			t1 == t2 ? 0 : t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
 }
 
+// TStarBetween captures: steps[tStarIdx] == TStar(min(t1,t2), max(t1,t2))
+// AND min(t1,t2) < steps[tStarIdx] <= max(t1,t2)
+ghost
+decreases
+pure func TStarBetween(tStarVal, t1, t2 uint64) bool {
+  return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
+    t1 == t2 ? true :
+    t1 < t2 ?
+      (tStarVal == proofs.TStar_pure(t1, t2) && t1 < tStarVal && tStarVal <= t2) :
+      (tStarVal == proofs.TStar_pure(t2, t1) && t2 < tStarVal && tStarVal <= t1)
+}
+
 ghost
 requires acc(arr, _)
 decreases
@@ -236,7 +248,7 @@ ghost
 decreases
 // this captures our assumption that GetCommitment is deterministic
 // takes seq[byte] inputs so it remains pure (no heap permissions needed)
-pure func GetCommitmentIsDeterministic(Label seq[byte], Version int, RootHash seq[byte]) *[]byte
+pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash seq[byte]) *[]byte
 
 
 @*/
@@ -320,8 +332,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 // @ requires 0<= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
-// @ requires rel(t, 0) < rel(t, 1) ==> rel(t, 0) < steps[tStarIdx] && steps[tStarIdx] <= rel(t, 1)
-// @ requires rel(t, 1) < rel(t, 0) ==> rel(t, 1) < steps[tStarIdx] && steps[tStarIdx] <= rel(t, 0)
+// @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Very basic postcondition
 // @ ensures (res == 0 && err == nil) || (res == 404 && err != nil) || ((res == -1 || res == 1) && err == nil)
 // Correct postcondition
@@ -335,20 +346,24 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 	//@ ghost var tStarVisited bool = false
 	//@ ghost var tStar uint64 = steps[tStarIdx]
 
+	//@ non_incl_lemma := GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) != nil && tStar <= t
+	//@ incl_lemma := GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) == nil && t < tStar
+
+	//@ assert  tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
+
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
 	//@ invariant acc(steps)
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0 <= idx && idx <= len(steps)
+	//@ invariant  TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 	//@ invariant determined ==> (resultRes == 404 && resultErr != nil) || ((resultRes == -1 || resultRes == 1) && resultErr == nil)
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
+	//@ invariant tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
 	for ; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
-
-			//@ assume err == nil
-			//@ assume low(commitment == nil)
 
 			if err != nil {
 				if !determined {
@@ -356,7 +371,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 					resultErr = err
 					determined = true
 				}
-				//@ assert false
 			} else {
 				incl := commitment != nil
 				//@ assert low(incl)
@@ -377,13 +391,28 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 					}
 				}
 			}
+			/*@
+			ghost if idx == tStarIdx{
+				assert !determined ==> non_incl_lemma || incl_lemma
+				tStarVisited = true
+			}
+
+			@*/
 
 		}
 
 	}
 	/*@
 
+		ghost if true {
+		 	issue903worksaround2 := !determined && low(!determined)
+			ghost if issue903worksaround2 {
+				assert non_incl_lemma || incl_lemma
 
+
+			}
+
+		}
 
 	@*/
 
