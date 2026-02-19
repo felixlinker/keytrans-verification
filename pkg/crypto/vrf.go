@@ -18,9 +18,9 @@ pred (input VrfInput) Inv() {
 }
 @*/
 
-//@ trusted
-//@ preserves input.Inv()
-//@ ensures   acc(res)
+// @ trusted
+// @ preserves input.Inv()
+// @ ensures   acc(res)
 func encode(input VrfInput) (res []byte) {
 	buf := bytes.NewBuffer([]byte{})
 	buf.WriteByte(utils.Uint8(len(input.Label)))
@@ -29,14 +29,14 @@ func encode(input VrfInput) (res []byte) {
 	return buf.Bytes()
 }
 
-//@ trusted
-//@ preserves acc(sk) && input.Inv()
+// @ trusted
+// @ preserves acc(sk) && input.Inv()
 func VRF_hash(sk []byte, input VrfInput) [32]byte {
 	return sha256.Sum256(encode(input))
 }
 
-//@ trusted
-//@ preserves acc(sk) && input.Inv()
+// @ trusted
+// @ preserves acc(sk) && input.Inv()
 func VRF_prove(sk []byte, input VrfInput) [32]byte {
 	return VRF_hash(sk, input)
 }
@@ -45,8 +45,8 @@ func VRF_proof_to_hash(prf [32]byte) [32]byte {
 	return prf
 }
 
-//@ trusted
-//@ preserves acc(pk) && input.Inv()
+// @ trusted
+// @ preserves acc(pk) && input.Inv()
 func VRF_verify(pk []byte, input VrfInput, prf [32]byte) (bool, [32]byte) {
 	return VRF_hash(nil, input) == prf, VRF_proof_to_hash(prf)
 }

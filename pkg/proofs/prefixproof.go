@@ -8,6 +8,9 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
 
+//TODO: To be fully compatible with this file, we need support of hyperpredicates in Gobra.
+// I don't think the current file will verify though.
+
 /*@
 pred (t *PrefixTree) Inv() {
 	acc(t) && (t != nil ==> t.InvRec())
@@ -19,17 +22,17 @@ pred (t PrefixTree) InvRec() {
 	(t.Value != nil || t.Leaf != nil || (t.Left != nil && t.Right != nil)) &&
 	// If there's one children, there must be two
 	(t.Left != nil) == (t.Right != nil) &&
-	// Node is either a leaf or has children
+// Node is either a leaf or has children
 	(t.Leaf != nil) != (t.Left != nil && t.Right != nil) &&
 	// If a node's value is defined, its children's values must be defined
 	((t.Value != nil && t.Left != nil && t.Right != nil) ==> (t.Left.Value != nil && t.Right.Value != nil))
 }
 
 
-
 pred IsLow(arr []byte) {
-	acc(arr) && low(len(arr)) && (forall i int :: 0<= i && i < len(arr) ==> low(arr[i]))
+    acc(arr) && low(len(arr)) && (forall i int :: 0<=i && i < len(arr) ==> low(arr[i]))
 }
+
 @*/
 
 // @ requires t != nil
@@ -68,6 +71,7 @@ type PrefixTree struct {
 // too. prefix will be initially empty and reflects the current position in the
 // prefix tree.
 // @ ensures err != nil ==> tree != nil && tree.Inv()
+// @ trusted
 func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNodes []NodeValue) (tree *PrefixTree, nextSteps []CompleteBinaryLadderStep, nextNodes []NodeValue, err error) {
 	tree = nil
 	nextSteps = steps
@@ -183,6 +187,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
 // @ ensures err != nil ==> tree != nil && tree.Inv() && tree.GetValue() != nil
+// @ trusted
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
 	tree = &PrefixTree{}
 	if len(fullLadder) < len(prf.Results) {
@@ -204,6 +209,7 @@ func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, 
 // @ requires tree != nil ==> tree.Inv()
 // @ ensures  tree != nil ==> tree.Inv()
 // @ ensures  err != nil && tree != nil ==> tree.GetValue() != nil
+// @ trusted
 func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 	hashContent = make([]byte, sha256.Size+1)
 	if tree == nil {
@@ -265,8 +271,9 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 // this captures our assumption that GetCommitment is deterministic
 ghost
 decreases
-pure
-func GetCommitmentDeterministic(Label []byte, Version uint64, RootHash []byte) (r []byte)
+// this captures our assumption that GetCommitment is deterministic
+// takes seq[byte] inputs so it remains pure (no heap permissions needed)
+pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash seq[byte]) *[]byte
 @*/
 
 // TODO: Implement this
@@ -278,10 +285,9 @@ func GetCommitmentDeterministic(Label []byte, Version uint64, RootHash []byte) (
 // @ ensures acc(res)
 // @ ensures acc(RootHash)
 // @ ensures acc(Label)
-// @ ensures (low(len(Label)) && (forall i int :: {Label[i]} 0<= i && i < len(Label) ==> low(Label[i])) && low(len(RootHash)) && forall i int :: {RootHash[i]} 0<= i && i < len(RootHash) ==> low(RootHash[i]) && low(Version)) ==> (low(err) && low(len(res)) && (forall i int :: {res[i]} 0<= i && i < len(res) ==> low(res[i])))
-// @ ensures err == nil ==> res === GetCommitmentDeterministic(Label, Version, RootHash)
+// @ ensures err == nil ==> (res == nil) == (GetCommitmentIsDeterministic(labelS, Version, rootHashS) == nil)
 // @ trusted
-func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error) {
+func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost labelS seq[byte], ghost rootHashS seq[byte]@*/) (res []byte, err error) {
 	if tree == nil {
 		res = nil
 		err = errors.New("The prefix tree is empty.")
@@ -302,6 +308,7 @@ func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []b
 }
 
 // @preserves tree!= nil ==> tree.Inv()
+// @ trusted
 func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte, error) {
 	// Nil tree means non-inclusion (path doesn't exist)
 	if tree == nil {

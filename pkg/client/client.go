@@ -10,6 +10,9 @@ import (
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 /*@
+//Helper functions
+
+
 //Compare the bytes of the arrays
 ghost
 decreases
@@ -32,6 +35,10 @@ func BytesNotEqual(r1 []byte, r2 []byte, p perm) bool {
 }
 
 
+pred IsLow(arr []byte) {
+	acc(arr) && low(len(arr)) && (forall i int :: 0<= i && i < len(arr) ==> low(arr[i]))
+}
+
 pred ByteLowInv(s []byte){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
@@ -49,6 +56,22 @@ pure func TStarWrapper(steps []uint64, t1, t2 uint64) uint64 {
   			t1 == t2 ? 0 : t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
 }
 
+ghost
+requires acc(arr, _)
+decreases
+pure func
+func getContent(arr []int) (res seq[int]) {
+  return GetByteContent(arr, 0)
+}
+
+ghost
+requires acc(arr, _)
+requires idx <= len(arr)
+decreases len(arr) - idx
+pure func
+func GetByteContent(arr []int, idx int) (res seq[int]) {
+  return idx == len(arr) ? seq[int]{} : arr[i] ++ getContentHelper(arr, idx + 1)
+}
 
 @*/
 
@@ -441,7 +464,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 
 				// _, _, idx1, idx2 := EstablishTStarWitnesses(steps, tVal)
 
-				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size)
+				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@@*/)
 				if err != nil {
 					resultRes = false
 					resultErr = err
