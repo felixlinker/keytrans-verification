@@ -261,8 +261,6 @@ ensures rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,
 ensures rel(t,0) > rel(t,1) ==> rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
 ensures idx1 > 0
 ensures idx2 > 0
-ensures rel(t,0) < rel(t,1)  ==> low(idx1)
-ensures rel(t,0) > rel(t,1)  ==> low(idx2)
 ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	// Replace it using rel(t,0), rel(t,1) and rel(steps,0), rel(steps,1)
@@ -296,8 +294,7 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
 
-	assume rel(t,0) < rel(t,1) ==> low(idx1)
-	assume rel(t,0) > rel(t,1) ==> low(idx2)
+
 }
 
 ghost
@@ -589,11 +586,11 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 
 	// Case distinction
 	/*@
-	ghost if determined {
-		assert !resultRes
-	} else {
-		assert low(tVal)
-	}
+		ghost if determined {
+			assert !resultRes
+		} else {
+			assert low(tVal)
+		}
 
 	@*/
 
