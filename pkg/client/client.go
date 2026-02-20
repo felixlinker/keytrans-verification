@@ -318,19 +318,28 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 	if low(t) {
 		idx = 0
 		assert TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
+		// steps[0] == 0 (precondition), 0 is low in both executions
+		assert low(steps[idx])
 	} else {
 		idx1, idx2 := EstablishTStarWitnesses(steps, t)
 		if rel(t, 0) < rel(t, 1) {
 			idx = idx1
 			assert low(idx < len(steps))
+			// EstablishTStarWitnesses: rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
+			// Both equal TStar_pure(rel(t,0), rel(t,1)), so low(steps[idx])
+			assert rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
+			assert low(steps[idx])
 		} else {
 			idx = idx2
 			assert low(idx < len(steps))
+			// EstablishTStarWitnesses: rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)
+			// Both equal TStar_pure(rel(t,1), rel(t,0)), so low(steps[idx])
+			assert rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)
+			assert low(steps[idx])
 		}
 	}
-	//TODO: Remove assumes! idx < len(steps) follows from relational bounds but Gobra can't derive it.
+	//TODO: Remove assume! idx < len(steps) follows from relational bounds but Gobra can't derive it.
 	assume idx < len(steps)
-	assume low(steps[idx])
 }
 @*/
 
