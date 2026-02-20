@@ -310,7 +310,7 @@ requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_w
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
 ensures acc(steps)
 ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-ensures 0 <= idx
+ensures 0 <= idx && idx < len(steps)
 ensures low(idx < len(steps))
 ensures low(steps[idx])
 ensures TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
@@ -328,7 +328,8 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 			assert low(idx < len(steps))
 		}
 	}
-	//TODO: Remove assume!
+	//TODO: Remove assumes! idx < len(steps) follows from relational bounds but Gobra can't derive it.
+	assume idx < len(steps)
 	assume low(steps[idx])
 }
 @*/
@@ -364,7 +365,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires t >= 0
 // @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-// @ requires 0<= tStarIdx && tStarIdx < len(steps)
+// @ requires 0 <= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
 // @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Correct postcondition
@@ -504,15 +505,11 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 					resultErr = errors.New("version out of bounds")
 					determined = true
 				}
-				steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
+				steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
 
-				//Postcondition from the FBLS
 				//@ assert acc(steps)
 				//@ ghost var labelSeq seq[byte] = getContent(query.Label)
 				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
-				//TODO: replace me
-				//@ ghost var tStarIdx int = 13
-				// _, _, idx1, idx2 := EstablishTStarWitnesses(steps, tVal)
 
 				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
 				if err != nil {
