@@ -402,7 +402,6 @@ func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, 
 		if !determined {
 			step := steps[idx]
 			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
-
 			if err != nil {
 				if !determined {
 					resultRes = 404
@@ -463,6 +462,7 @@ type MonitoringMapEntry struct {
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash)
 // @ requires low(size)
+// @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil
 // @ requires low(query.Label)
 // @ ensures err == nil && res ==> low(resp.Version)
@@ -474,14 +474,13 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	// Variables to track result and avoid early termination
 	resultRes := true
 	var resultErr error = nil
-	//@ assert search_tree != nil
-	//@ assert search_tree != nil ==> search_tree.Inv()
-	frontiers := search_tree.FrontierNodes( /*@p@*/ )
+	frontiers := search_tree.FrontierNodes( /*@p, size@*/ )
 	//@ assert len(frontiers) > 0
 	//@ assert low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
-	//@ assume forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
+	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < size
+	//@ assert size <= uint64(len(prefixTrees))
+	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	terminalLogEntry := -1
-	//@ assert low(terminalLogEntry) //This holds trivially
 	determined := false
 
 	if size == 0 || tVal >= size {

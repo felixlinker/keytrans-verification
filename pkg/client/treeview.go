@@ -156,10 +156,11 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 // @ ensures   tree != nil ==> len(path) > 0
 // @ ensures low(len(path))
 // @ ensures forall j int :: j>= 0 && j < len(path) ==> low(path[j])
+// @ ensures forall j int :: j >= 0 && j < len(path) ==> path[j] >= 0 && path[j] < bound
 // @ ensures tree.IsLow() ==> low(len(path)) && forall i int :: 0<= i && i< len(path) &&  low(path[i])
 // @ trusted
 // TODO: There is no way to fix this issue now due to the hyperpredicate...
-func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
+func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bound uint64 @*/ ) (path []uint64) {
 	if tree != nil {
 		//@ unfold tree.Inv()
 		path = []uint64{tree.Root}
@@ -167,7 +168,7 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
 		//@ assert tree.Right == nil ==> low(tree.Right)
 		//@ assert tree.Right != nil ==> unfolding tree.Right.Inv() in low(tree.Right.Root)
-		subtreePath := tree.Right.FrontierNodes( /*@ p @*/ )
+		subtreePath := tree.Right.FrontierNodes( /*@ p, bound @*/ )
 		//@ assert low(len(subtreePath))
 		//@ assert forall j int :: j>= 0 && j < len(subtreePath) ==> low(subtreePath[j])
 		path = append( /*@ p, @*/ path, subtreePath...)
@@ -271,8 +272,8 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	//@ unfold st.Inv()
 	oldSearchTree := MkImplicitBinarySearchTree(st.Size)
 	newSearchTree := MkImplicitBinarySearchTree(new_head.Tree_head.Tree_size)
-	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2 @*/ )
-	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2 @*/ )
+	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2, st.Size @*/ )
+	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2, new_head.Tree_head.Tree_size @*/ )
 	if st.Size == 0 {
 		// copy timestamps from `prf`:
 		timestamps := make([]uint64, len(prf.Timestamps))
