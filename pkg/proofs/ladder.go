@@ -608,6 +608,7 @@ func findExpTarget_link_loop(target uint64, k uint64){
 // @ ensures target < t2 ==> target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2
 // @ ensures t2 < target ==> t2 < TStar_pure(t2,target) && TStar_pure(t2,target) <= target
 // @ ensures forall i int :: 0<= i && i < len(r) ==> r[i] >= 0
+// @ ensures len(r) > 0 && r[0] == 0
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int@*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -703,9 +704,11 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ ensures target < t2 ==> res[resIdx] == TStar_pure(target, t2)
 // @ ensures t2 < target ==> res[resIdx] == TStar_pure(t2,target)
 // @ ensures forall l int :: 0<= l && l < len(res) ==> res[l] >= 0
+// @ ensures len(res) > 0 && res[0] == 0
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost k uint64, ghost currIdx int, ghost foundTStar bool@*/) (res []uint64 /*@, ghost resIdx int@*/) {
 	if x_in+1 >= x_out {
+		//@ assert r[0] == expJumpElement(0)
 		return r /*@, currIdx@*/
 	} else {
 		next := x_in + (x_out-x_in)/2
@@ -781,6 +784,7 @@ func TStar_wrapper(r1 []uint64, t1 uint64, t2 uint64) bool{
 // @ ensures forall j int :: j >= 0 && j < len(r1) ==> r1[j] >= 0
 // @ ensures forall t2 uint64 :: {TStar_wrapper(r1, target, t2)} TStar_wrapper(r1, target, t2)
 // @ ensures forall t2 uint64 :: {TStar_wrapper(r1,t2,target)} TStar_wrapper(r1,t2,target)
+// @ ensures len(r1) > 0 && r1[0] == 0
 func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	//@ t2 := GetUInt64()
 	//@ assume t2 != target

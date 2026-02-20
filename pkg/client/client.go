@@ -342,7 +342,6 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 // @ ensures TStarBetween(r1[tStarIdx], rel(target, 0), rel(target, 1))
 func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tStarIdx int @*/) {
 	r1 = proofs.FullBinaryLadderSteps_wrapper(target)
-	//@ assume len(r1) > 0 && r1[0] == 0
 	//@ tStarIdx = findTStarIdx(r1, target)
 	return r1 /*@, tStarIdx @*/
 }
