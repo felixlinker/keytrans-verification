@@ -209,7 +209,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		//@ fold acc(resp.Inv(), p)
 	}
 
-	// TODO: Verify proof of inclusion in all trees
+	// TODO: Verify proof of inclusion in all trees, actually, one can get this as input.
 	monitoringMap := make([]MonitoringMapEntry, 0)
 	decision, err := VerifyLatestKey(trees, rootHashes, st.Size, query, resp, monitoringMap, config)
 	if err != nil {
@@ -458,8 +458,7 @@ type MonitoringMapEntry struct {
 // @ requires low(size)
 // @ requires query.Label != nil
 // @ requires low(query.Label)
-//
-//	ensures err == nil && res ==> low(resp.Version)
+// @ ensures err == nil && res ==> low(resp.Version)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -478,71 +477,120 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	//@ assert low(terminalLogEntry) //This holds trivially
 	determined := false
 
+	if size == 0 || tVal >= size {
+		resultRes = false
+		resultErr = errors.New("version out of bounds")
+		determined = true
+	}
+
+	// Loop: process all frontiers except the last
 	//@ invariant acc(prefixTrees)
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 	//@ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
+	//@ invariant acc(prefixRootHash, p)
 	//@ invariant acc(frontiers)
 	//@ invariant acc(resp.Full_tree_head.RootHash)
 	//@ invariant acc(query.Label, p)
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
-	//@ invariant low(resultErr == nil) ==> low(err == nil)
-	for _, frontier := range frontiers {
+	//@ invariant 0 <= fIdx && fIdx <= len(frontiers) - 1
+	//@ invariant len(frontiers) > 0
+	//@ invariant determined ==> !resultRes
+	//@ invariant !determined ==> resultRes && resultErr == nil
+	for fIdx := 0; fIdx < len(frontiers)-1; fIdx++ {
+		frontier := frontiers[fIdx]
 		if !determined {
 			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
 			//@ assert acc(prefixTrees[frontier])
 			Prefix_tree := prefixTrees[frontier]
 			if prefixTrees[frontier] == nil {
 				resultRes = false
-				resultErr = err
+				resultErr = errors.New("prefix tree is nil")
 				determined = true
 			} else {
 				rootHash := prefixRootHash[frontier]
 				//@ assert acc(query.Label)
-				if size == 0 || tVal >= size || frontier >= size {
+				if frontier >= size {
 					resultRes = false
 					resultErr = errors.New("version out of bounds")
 					determined = true
 				}
+
 				steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
 
 				//@ assert acc(steps)
 				//@ ghost var labelSeq seq[byte] = getContent(query.Label)
 				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
 
-				LtGtOrEq, err := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
-				if err != nil {
+				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+				if cgErr != nil {
 					resultRes = false
-					resultErr = err
+					resultErr = cgErr
 					determined = true
 				} else if LtGtOrEq == 1 {
-					// Greater version exists
 					resultRes = false
 					resultErr = errors.New("greater version exists")
 					determined = true
 				} else if LtGtOrEq == 0 && terminalLogEntry == -1 {
 					terminalLogEntry = int(frontier)
 				}
-
-				if frontier == size-1 {
-					if LtGtOrEq != 0 {
-						resultRes = false
-						resultErr = errors.New("Greatest version is not the greatest in the last iteration")
-						determined = true
-						// assert (frontier == size - 1) ==> ( rel(!resultRes,0) || rel(!resultRes,1) || rel(resultErr!=nil, 0) || rel(resultErr!=nil,1))
-					}
-				}
 			}
 		}
 	}
 
-	// assert rel(resultRes,0) != rel(resultRes,1) || rel(resultErr==nil, 0) != rel(resultErr==nil,1) || (resultRes && resultErr == nil)
+	// Process last frontier separately
+	if !determined {
+		frontier := frontiers[len(frontiers)-1]
+		//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
+		Prefix_tree := prefixTrees[frontier]
+		if prefixTrees[frontier] == nil {
+			resultRes = false
+			resultErr = errors.New("prefix tree is nil")
+			determined = true
+		} else {
+			rootHash := prefixRootHash[frontier]
+			//@ assert acc(query.Label)
+			if frontier >= size {
+				resultRes = false
+				resultErr = errors.New("version out of bounds")
+				determined = true
+			}
 
-	// assert low(resultErr == nil) && low(determined) && low(greatest==0) ==> low(resultRes) && low(tVal)
-	// Post-loop logic (only execute if no error occurred in the loop)
+			steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
 
-	if terminalLogEntry == -1 && err == nil {
+			//@ assert acc(steps)
+			//@ ghost var labelSeq seq[byte] = getContent(query.Label)
+			//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+
+			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+			//@ assert cgErr == nil && LtGtOrEq == 0 ==> low(tVal)
+			if cgErr != nil {
+				resultRes = false
+				resultErr = cgErr
+				determined = true
+			} else if LtGtOrEq != 0 {
+				resultRes = false
+				resultErr = errors.New("Greatest version is not the greatest in the last iteration")
+				determined = true
+			} else if terminalLogEntry == -1 {
+				terminalLogEntry = int(frontier)
+			}
+		}
+	}
+
+	// Case distinction
+	/*@
+	ghost if determined {
+		assert !resultRes
+	} else {
+		assert low(tVal)
+	}
+
+	@*/
+
+	// Post-loop logic
+	if terminalLogEntry == -1 && resultErr == nil {
 		resultRes = false
 		resultErr = errors.New("Claimed Version is not found.")
 	}
