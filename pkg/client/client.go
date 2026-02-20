@@ -250,23 +250,21 @@ func GetInt() (res int)
 ghost
 decreases
 requires acc(steps)
+requires t >= 0
 requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
 ensures acc(steps)
-ensures t0_ge_t1 == (rel(t,0) > rel(t,1))
-ensures t0_le_t1 == (rel(t,0) < rel(t,1))
-ensures t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-ensures t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
+ensures rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
+ensures rel(t,0) < rel(t,1) ==> rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
+ensures rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
+ensures rel(t,0) > rel(t,1) ==> rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
 ensures idx1 > 0
 ensures idx2 > 0
-ensures rel(idx1,0) == rel(idx1,1)
-ensures rel(idx2,0) == rel(idx2,1)
+ensures rel(t,0) < rel(t,1)  ==> low(idx1)
+ensures rel(t,0) > rel(t,1)  ==> low(idx2)
 ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-func EstablishTStarWitnesses(steps []uint64, t uint64) (t0_ge_t1 bool, t0_le_t1 bool, idx1 int, idx2 int){
-	// assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t, t2)} proofs.TStar_wrapper(steps,t, t2)
-	// assert forall t2 uint64 :: {proofs.TStar_wrapper(steps,t2, t)} proofs.TStar_wrapper(steps,t2,t)
-
+func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	// Replace it using rel(t,0), rel(t,1) and rel(steps,0), rel(steps,1)
 	assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
 	assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1)), 1)
@@ -274,35 +272,79 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (t0_ge_t1 bool, t0_le_t1 
 	assert proofs.TStar_wrapper(rel(steps,0), rel(t,1), rel(t,0))
 	assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,1),rel(t,0)), 1)
 
-	//Condition
-	t0_ge_t1 = rel(t,0) > rel(t,1)
-	t0_le_t1 = rel(t,0) < rel(t,1)
-
-	// assert exists idx2 int :: exists idx3 int :: t0_ge_t1 ==> 0 <= idx2 && idx2 < len(rel(steps,0)) && 0 <= idx3 && idx3 < len(rel(steps,1)) && rel(steps[idx3],1) == rel(steps[idx2],0) && rel(t,1) < rel(steps[idx3],1) && rel(steps[idx3],1) <= rel(t,0)
-	// assert exists idx1 int :: exists idx4 int :: t0_le_t1 ==> 0 <= idx1 && idx1 < len(rel(steps,0)) && 0 <= idx4 && idx4 < len(rel(steps,1)) && rel(steps[idx4],1) == rel(steps[idx1],0)&& rel(t,0) < rel(steps[idx4],1) && rel(steps[idx4],1) <= rel(t,1)
-
 	//Remove existential quantifier to replace the statement, adding an assume with it
 	idx1 = GetInt()
 	idx2 = GetInt()
+	//TODO: The issue is similar to rel(idx1,0) < rel(len(steps),0) and rel(idx1, 1) < rel(len(steps),1) really entail.
+	// I think it's good for now to assume that as this issue depends on the encoding of rel() in Gobra.
 
-	assume rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1)
-	assume rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0)
+	assume rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
+	assume rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
 
-	assert t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1)
-	assert t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0)
 
-	assert t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-	assert t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) <rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
+	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1)
+	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0)
+
+	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
+	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) <rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
+
+	assert rel(t,0) < rel(t,1) ==> low(idx1 < len(steps))
+	assert rel(t,0) > rel(t,1) ==> low(idx2 < len(steps))
 
 	//Move existential quantifier to the right side of the implication
 
-	assert t0_le_t1 ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-	assert t0_ge_t1 ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
+	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
+	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
 
-	assume rel(idx1,0) == rel(idx1,1)
-	assume rel(idx2,0) == rel(idx2,1)
+	assume rel(t,0) < rel(t,1) ==> low(idx1)
+	assume rel(t,0) > rel(t,1) ==> low(idx2)
+}
+
+ghost
+decreases
+requires acc(steps)
+requires t >= 0
+requires len(steps) > 0 && steps[0] == 0
+requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
+requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
+requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
+ensures acc(steps)
+ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
+ensures 0 <= idx
+ensures low(idx < len(steps))
+ensures low(steps[idx])
+ensures TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
+func findTStarIdx(steps []uint64, t uint64) (idx int) {
+	if low(t) {
+		idx = 0
+		assert TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
+	} else {
+		idx1, idx2 := EstablishTStarWitnesses(steps, t)
+		if rel(t, 0) < rel(t, 1) {
+			idx = idx1
+			assert low(idx < len(steps))
+		} else {
+			idx = idx2
+			assert low(idx < len(steps))
+		}
+	}
+	//TODO: Remove assume!
+	assume low(steps[idx])
 }
 @*/
+
+// @ requires target >= 0
+// @ ensures acc(r1)
+// @ ensures forall j int :: j >= 0 && j < len(r1) ==> r1[j] >= 0
+// @ ensures 0 <= tStarIdx && tStarIdx < len(r1)
+// @ ensures low(r1[tStarIdx])
+// @ ensures TStarBetween(r1[tStarIdx], rel(target, 0), rel(target, 1))
+func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tStarIdx int @*/) {
+	r1 = proofs.FullBinaryLadderSteps_wrapper(target)
+	//@ assume len(r1) > 0 && r1[0] == 0
+	//@ tStarIdx = findTStarIdx(r1, target)
+	return r1 /*@, tStarIdx @*/
+}
 
 /*
 CheckGreatest verifies if t is the greatest version
@@ -313,7 +355,6 @@ CheckGreatest verifies if t is the greatest version
 	 1: Greatest version > t (found commitment above t), violates t being the greatest version
 */
 
-// TODO: We need to somehow grab the value of the root from the tree and see if the hash root is equal
 // @ requires label != nil
 // @ requires acc(label)
 // @ requires acc(RootHash)
