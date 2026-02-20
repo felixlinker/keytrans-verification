@@ -335,8 +335,10 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 			assert low(steps[idx])
 		}
 	}
-	//TODO: Remove assume! idx < len(steps) follows from relational bounds but Gobra can't derive it.
-	assume idx < len(steps)
+	assert rel(idx,0) < rel(len(steps),0)
+	assert rel(idx,1) < rel(len(steps),1)
+	assert low(idx < len(steps))
+	assert idx < len(steps)
 }
 @*/
 
@@ -489,6 +491,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	}
 
 	// Loop: process all frontiers except the last
+
 	//@ invariant acc(prefixTrees)
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 	//@ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
@@ -547,7 +550,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	// Process last frontier separately
 	if !determined {
 		frontier := frontiers[len(frontiers)-1]
-		//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
 		Prefix_tree := prefixTrees[frontier]
 		if prefixTrees[frontier] == nil {
 			resultRes = false
@@ -555,7 +557,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 			determined = true
 		} else {
 			rootHash := prefixRootHash[frontier]
-			//@ assert acc(query.Label)
 			if frontier >= size {
 				resultRes = false
 				resultErr = errors.New("version out of bounds")
@@ -594,7 +595,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 
 	@*/
 
-	// Post-loop logic
 	if terminalLogEntry == -1 && resultErr == nil {
 		resultRes = false
 		resultErr = errors.New("Claimed Version is not found.")
