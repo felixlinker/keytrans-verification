@@ -186,6 +186,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 // Construct a prefix tree from a prefix proof and the provided binary ladder
 // steps. We assume that the binary ladder steps are in the order that the
 // binary ladder would request them.
+// @ ensures err == nil ==> tree != nil && tree.Inv()
 // @ ensures err != nil ==> tree != nil && tree.Inv() && tree.GetValue() != nil
 // @ trusted
 func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {

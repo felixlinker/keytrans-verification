@@ -163,8 +163,13 @@ pred (s SearchResponse) Inv() {
 // @ preserves acc(query.Inv(), p) && acc(resp.Inv(), p)
 // @ requires resp.Version != nil
 // @ requires acc(resp.Version, _)
-// @ requires *resp.Version>= 0
+// @ requires *resp.Version >= 0
+// @ requires low(query.Label)
+// @ requires query.Label != nil
+// @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
+// @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ ensures err == nil ==> acc(res) && res.Inv()
+// @ ensures rel(err == nil, 0) && rel(err == nil, 1) ==> low(resp.Version)
 // @ trusted
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
@@ -273,8 +278,6 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	//Remove existential quantifier to replace the statement, adding an assume with it
 	idx1 = GetInt()
 	idx2 = GetInt()
-	//TODO: The issue is similar to rel(idx1,0) < rel(len(steps),0) and rel(idx1, 1) < rel(len(steps),1) really entail.
-	// I think it's good for now to assume that as this issue depends on the encoding of rel() in Gobra.
 
 	assume rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
 	assume rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
@@ -466,6 +469,12 @@ type MonitoringMapEntry struct {
 // @ requires query.Label != nil
 // @ requires low(query.Label)
 // @ ensures err == nil && res ==> low(resp.Version)
+// @ ensures acc(resp.Version, p)
+// @ ensures acc(query.Label, p)
+// @ ensures acc(prefixTrees, p)
+// @ ensures acc(prefixRootHash, p)
+// @ ensures acc(config, p)
+// @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -498,6 +507,8 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	//@ invariant acc(frontiers)
 	//@ invariant acc(resp.Full_tree_head.RootHash)
 	//@ invariant acc(query.Label, p)
+	//@ invariant acc(resp.Version, p)
+	//@ invariant acc(config, p)
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
@@ -569,7 +580,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 			//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
 
 			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
-			//@ assert cgErr == nil && LtGtOrEq == 0 ==> low(tVal)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr
@@ -583,16 +593,6 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 			}
 		}
 	}
-
-	// Case distinction
-	/*@
-		ghost if determined {
-			assert !resultRes
-		} else {
-			assert low(tVal)
-		}
-
-	@*/
 
 	if terminalLogEntry == -1 && resultErr == nil {
 		resultRes = false

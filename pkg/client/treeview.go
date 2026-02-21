@@ -254,6 +254,7 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 // since we take the timestamps from `prf`, we need full permissions to then
 // @ preserves acc(prf.Inv(), p)
 // @ ensures err == nil ==> unfolding st.Inv() in st.Size == new_head.Size()
+// @ ensures err == nil && low(new_head.Size()) ==> unfolding st.Inv() in low(st.Size)
 // @ trusted //TODO
 func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreeProof /*@, ghost p perm @*/) (err error) {
 	//@ unfold acc(prf.Inv(), p)
