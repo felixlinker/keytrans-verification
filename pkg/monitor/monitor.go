@@ -77,10 +77,9 @@ func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) 
 
 // VerifyMonitor verifies that previously-searched label-version pairs remain in the
 // log (Section 8.2 — Contact Monitoring).
-// Uses CheckGreatest on all frontier nodes. For monitoring, res == -1 (hole) is a
-// failure, while res == 0 or 1 are acceptable (version exists in log).
-// The low(Version) property is preserved from the input monitoring map (established
-// by prior VerifyLatest/VerifyUpdate calls), not re-proven via TStar.
+
+//TODO: I think the current spec is too weak and we need other implementations to make sure that the security property is implemented
+// The issue here is that the current implementation shows the non-equivocation but not the 
 
 // @ requires noPerm < p
 // @ preserves st.Inv()

@@ -21,17 +21,8 @@ import (
 // @ ensures acc(new_prefix_roots, p)
 // @ ensures acc(new_timestamps, p)
 // @ ensures acc(config, p)
-//@ trusted
-func VerifyConsistency(
-	old_size uint64,
-	old_subtrees []proofs.NodeValue,
-	old_frontier_timestamps []uint64,
-	new_size uint64,
-	new_prefix_roots []proofs.NodeValue,
-	new_timestamps []uint64,
-	config *Configuration,
-	/*@ ghost p perm @*/
-) (err error) {
+// @ trusted
+func VerifyConsistency(old_size uint64, old_subtrees []proofs.NodeValue, old_frontier_timestamps []uint64, new_size uint64, new_prefix_roots []proofs.NodeValue, new_timestamps []uint64, config *Configuration /*@, ghost p perm @*/) (err error) {
 	determined := false
 	var resultErr error = nil
 

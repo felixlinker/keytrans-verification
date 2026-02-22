@@ -386,6 +386,10 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 	n := len(resp.Search.Prefix_proofs)
 
 	// Read Prev_greatest while resp.Inv() is unfolded
+	//TODO: Do we need to check from 0 to the newest version or from previous greatest version to the newest version
+	// One can of course do this with the previous greatest, but we need to make sure that there are no security property loss happening. 
+	// Can we skip or not? This is the question what we want to discuss. 
+
 	start := uint32(0)
 	if resp.Prev_greatest != nil {
 		start = *resp.Prev_greatest + 1
@@ -399,6 +403,7 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 	// the same number of times. Versions below start are skipped via inRange.
 	// Prefix trees are rebuilt each iteration because VerifyUpdateKey/CheckGreatest
 	// consume tree invariants and do not return them.
+	
 	//@ invariant acc(resp.Inv(), p)
 	//@ invariant acc(label, p) && acc(config, p)
 	//@ invariant label != nil
