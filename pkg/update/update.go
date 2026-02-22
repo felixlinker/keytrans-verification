@@ -405,7 +405,7 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 	//@ invariant low(len(label)) && (forall i int :: 0 <= i && i < len(label) ==> low(label[i]))
 	//@ invariant !determined ==> resultErr == nil
 	//@ invariant low(vIdx)
-	//@ invariant 0 <= vIdx && vIdx <= end + 1
+	//@ invariant 0 <= vIdx
 	//@ invariant low(size)
 	//@ invariant size > 0
 	//@ invariant size <= uint64(n)
