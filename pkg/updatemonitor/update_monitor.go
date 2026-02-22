@@ -288,7 +288,7 @@ The user verifies this information as follows:
 5. Verify that the expected number of VRF proofs was provided, and that the proofs properly evaluate into a VRF output.
 
 There are still (4.), (5.) and (6.) missing, but it is sufficient by far to show the hyperproperty we aim to show works.
-Maybe discuss if we should do 4. 5. and 6. for...
+Maybe discuss if we should do 4. 5. and 6. in this case and if they are necessary to weaken the security property.
 
 */
 
@@ -414,7 +414,9 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 // @ requires low(config.ReasonableMonitoringWindow)
 // @ ensures acc(resp.Inv(), p) && acc(label, p) && acc(config, p)
 // @ ensures acc(new_map)
+// @ ensures err == nil ==> low(len(new_map))
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < len(new_map) ==> low(new_map[j].Version)
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < len(new_map) ==> low(new_map[j].Position)
 func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, monitor_map []client.MonitoringMapEntry, config *client.Configuration /*@, ghost p perm @*/) (new_map []client.MonitoringMapEntry, err error) {
 	//@ unfold acc(resp.Inv(), p)
 
@@ -461,7 +463,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 
 		// Process entries
 		//@ ghost var versions seq[uint32] = seq[uint32]{}
-
+		//@ ghost var positions seq[uint64] = seq[uint64]{}
 
 		//@ invariant acc(monitor_map)
 		//@ invariant acc(new_map)
@@ -483,6 +485,11 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 		//@ invariant low(versions)
 		//@ invariant len(versions) == len(new_map)
 		//@ invariant forall j int :: 0 <= j && j < len(new_map) ==> new_map[j].Version == versions[j]
+		//@ invariant low(positions)
+		//@ invariant len(positions) == len(new_map)
+		//@ invariant forall j int :: 0 <= j && j < len(new_map) ==> new_map[j].Position == positions[j]
+		//@ invariant len(new_map) == mIdx
+		//@ invariant low(len(new_map))
 		//@ invariant forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Version)
 		//@ invariant forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Position)
 		for mIdx := 0; mIdx < len(monitor_map); mIdx++ {
@@ -506,7 +513,6 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 				pathRight = client.DirectPathRight(search_tree, entry.Position, distinguished /*@, 1/8 @*/)
 			}
 
-
 			tVal := uint64(entry.Version)
 			//@ invariant acc(pathRight)
 			//@ invariant acc(trees)
@@ -516,7 +522,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 			//@ invariant acc(distinguished)
 
 			//Distinguished nodes are low as they are public (Otherwise it doesn't make sense to make them as checkpoints)
-			
+
 			//@ invariant low(len(distinguished))
 			//@ invariant forall j int :: 0 <= j && j < len(distinguished) ==> low(distinguished[j])
 			//@ invariant size <= uint64(len(trees))
@@ -524,11 +530,15 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 			//@ invariant forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(trees[i])
 			//@ invariant forall i int :: i >= 0 && i < len(trees) ==> trees[i] != nil
 			//@ invariant 0 <= pIdx && pIdx <= len(pathRight)
+			//@ invariant low(pIdx)
+			//@ invariant low(len(pathRight))
+			//@ invariant forall j int :: 0 <= j && j < len(pathRight) ==> low(pathRight[j])
+			//@ invariant low(newPosition)
 			//@ invariant !determined ==> resultErr == nil
 			for pIdx := 0; pIdx < len(pathRight); pIdx++ {
+				pos := pathRight[pIdx]
+				posIdx := int(pos)
 				if !determined {
-					pos := pathRight[pIdx]
-					posIdx := int(pos)
 					if posIdx < 0 || posIdx >= len(trees) {
 						resultErr = errors.New("monitoring check failed: position out of bounds")
 						determined = true
@@ -549,13 +559,12 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 								// Hole found: version not in log
 								resultErr = errors.New("monitoring check failed: version not included")
 								determined = true
-							} else {
-								// Success: advance position
-								newPosition = pos
 							}
 						}
 					}
 				}
+				// Always advance position — both executions stay in sync
+				newPosition = pos
 			}
 
 			// Always append to keep new_map/versions in sync across executions
@@ -565,6 +574,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 			}
 			new_map = append( /*@ perm(1/2), @*/ new_map, newEntry)
 			//@ ghost versions = versions ++ seq[uint32]{entry.Version}
+			//@ ghost positions = positions ++ seq[uint64]{newPosition}
 		}
 	}
 
