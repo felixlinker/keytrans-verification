@@ -10,7 +10,8 @@ const (
 )
 
 type Configuration struct {
-	Mode DeploymentMode
+	Mode                       DeploymentMode
+	ReasonableMonitoringWindow uint64
 	/*
 		Ciphersuite                uint16
 		SignaturePublicKey         []byte
@@ -21,7 +22,6 @@ type Configuration struct {
 		AuditorPublickey           []byte //Only for ThirdParty
 		MaxAhead                   uint64
 		MaxBehind                  uint64
-		ReasonableMonitoringWindow uint64
 		MaximumLifetime            *uint64 //Optional
 		Nc                         int	   //Size of Commitment opening
 		Kc                         []byte  //Fixed string for commitment computation

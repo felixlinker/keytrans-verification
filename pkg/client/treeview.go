@@ -209,6 +209,102 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 	return
 }
 
+// IsDistinguished checks if an entry is distinguished per Section 7.2.
+// An entry is distinguished iff (right_ts - left_ts) >= rmw.
+// @ requires low(left_ts) && low(right_ts) && low(rmw)
+// @ ensures low(res)
+func IsDistinguished(left_ts, right_ts, rmw uint64) (res bool) {
+	if right_ts >= left_ts {
+		res = (right_ts - left_ts) >= rmw
+	} else {
+		res = false
+	}
+	return
+}
+
+// ComputeDistinguishedSet recursively walks the implicit BST and marks which
+// positions are distinguished. Returns bool slice indexed by tree position.
+// @ requires noPerm < p
+// @ requires acc(tree.Inv(), p) && acc(timestamps, p)
+// @ requires low(rmw)
+// @ ensures  acc(tree.Inv(), p) && acc(timestamps, p) && acc(result)
+// @ ensures  forall j int :: 0 <= j && j < len(result) ==> low(result[j])
+// @ trusted
+func ComputeDistinguishedSet(tree *ImplicitBinarySearchTree, timestamps []uint64,
+	rmw uint64 /*@, ghost p perm @*/) (result []bool) {
+	if tree == nil {
+		result = make([]bool, 0)
+		return
+	}
+	//@ unfold acc(tree.Inv(), p)
+	size := countNodes(tree)
+	result = make([]bool, size)
+	computeDistinguishedRec(tree, timestamps, rmw, 0, uint64(len(timestamps))-1, result)
+	//@ fold acc(tree.Inv(), p)
+	return
+}
+
+// @ trusted
+func countNodes(tree *ImplicitBinarySearchTree) int {
+	if tree == nil {
+		return 0
+	}
+	return 1 + countNodes(tree.Left) + countNodes(tree.Right)
+}
+
+// @ trusted
+func computeDistinguishedRec(tree *ImplicitBinarySearchTree, timestamps []uint64,
+	rmw uint64, left_ts_idx, right_ts_idx uint64, result []bool) {
+	if tree == nil {
+		return
+	}
+	root := tree.Root
+	if right_ts_idx < uint64(len(timestamps)) && left_ts_idx < uint64(len(timestamps)) {
+		left_ts := timestamps[left_ts_idx]
+		right_ts := timestamps[right_ts_idx]
+		if IsDistinguished(left_ts, right_ts, rmw) {
+			if int(root) < len(result) {
+				result[root] = true
+			}
+			// Recurse into subtrees
+			computeDistinguishedRec(tree.Left, timestamps, rmw, left_ts_idx, root, result)
+			computeDistinguishedRec(tree.Right, timestamps, rmw, root, right_ts_idx, result)
+		}
+		// If not distinguished, nothing in the subtree is either
+	}
+}
+
+// DirectPathRight returns positions on the direct path from root to `pos` that
+// are >= pos, terminated after first distinguished entry. (Section 8.2, Step 2)
+// @ requires noPerm < p
+// @ requires acc(tree.Inv(), p) && acc(distinguished, p)
+// @ requires low(pos)
+// @ ensures  acc(tree.Inv(), p) && acc(distinguished, p) && acc(result)
+// @ ensures  forall j int :: 0 <= j && j < len(result) ==> low(result[j])
+// @ trusted
+func DirectPathRight(tree *ImplicitBinarySearchTree, pos uint64,
+	distinguished []bool /*@, ghost p perm @*/) (result []uint64) {
+	result = make([]uint64, 0)
+	if tree == nil {
+		return
+	}
+	path, err := tree.PathTo(pos /*@, p/2 @*/)
+	if err != nil {
+		return
+	}
+	// Filter: keep only positions >= pos
+	for i := 0; i < len(path); i++ {
+		if path[i] >= pos {
+			result = append( /*@ perm(1/2), @*/ result, path[i])
+			// Terminate after first distinguished entry
+			if int(path[i]) < len(distinguished) && distinguished[path[i]] {
+				break
+			}
+		}
+	}
+	return
+}
+
 type UserState struct {
 	Size                uint64 // 0 means no tree
 	Full_subtrees       []proofs.NodeValue

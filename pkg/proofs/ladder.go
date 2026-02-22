@@ -229,12 +229,6 @@ func PowOf2(exp uint64) (r uint64) {
 // TStar returns a value r such that t1 < r <= t2
 // @ requires t1 >= 0
 // @ requires t2 > t1
-// =========Hyperproperties=====
-//
-//	requires low(t1) && low(t2)
-//	ensures low(t_star)
-//
-// =============================
 // @ ensures t_star >= 1
 // @ ensures t_star == TStar_pure(t1,t2)
 // @ decreases
@@ -244,12 +238,6 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 
 // @ requires t1>0
 // @ requires t2 > t1
-// =========Hyperproperties=====
-//
-//	requires low(t1) && low(t2)
-//	ensures low(t_star)
-//
-// =============================
 // @ ensures t_star > t1 && t_star <= t2
 // @ ensures tStar_pure(t1, t2) == t_star
 // @ decreases
@@ -262,12 +250,6 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ requires t2 > t1
 // @ requires t1 >= x_in
 // @ requires t1 < x_out
-// =========Hyperproperties=====
-// requires low(t1) && low(t2) && low(x_in) && low(x_out)
-//
-//	ensures low(r)
-//
-// =============================
 // @ ensures r > t1 && r <= t2
 // @ ensures r == tStarRec_pure(t1,t2,x_in, x_out)
 // @ decreases x_out - x_in
@@ -798,4 +780,3 @@ func FullBinaryLadderSteps_wrapper(target uint64) (r1 []uint64) {
 	//@ assume forall t2 uint64 :: exists idx1 int :: target > t2 && t2 >= 0 ==> 0 <= idx1 && idx1 < len(res) && TStar_pure(t2,target) == res[idx1] && t2 < TStar_pure(t2, target ) && TStar_pure(t2, target) <= target
 	return res
 }
-

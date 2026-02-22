@@ -43,13 +43,6 @@ pred UIntLowInv(s []uint64){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
 
-ghost
-requires true
-decreases
-pure func TStarWrapper(steps []uint64, t1, t2 uint64) uint64 {
-  return (t1 < 0 || t2 < 0) ? 0 :  //Cannot happen because we check this beforehand.
-  			t1 == t2 ? 0 : t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
-}
 
 // TStarBetween captures: steps[tStarIdx] == TStar(min(t1,t2), max(t1,t2))
 // AND min(t1,t2) < steps[tStarIdx] <= max(t1,t2)
@@ -157,36 +150,6 @@ pred (s SearchResponse) Inv() {
 	s.Value.Inv()
 }
 @*/
-
-// buildPrefixTrees constructs prefix trees from the response's prefix proofs.
-// @ requires noPerm < p
-// @ requires acc(resp.Inv(), p)
-// @ ensures err == nil ==> acc(resp.Inv(), p)
-// @ ensures err == nil ==> acc(trees) && len(trees) == n
-// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&trees[j])
-// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> trees[j] != nil
-// @ ensures err == nil ==> forall j int :: {&trees[j]} 0 <= j && j < n ==> trees[j].Inv()
-// @ ensures err == nil ==> acc(rootHashes) && len(rootHashes) == n
-// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&rootHashes[j])
-// @ ensures err != nil ==> acc(resp.Inv(), p)
-// @ trusted
-func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
-	trees = make([]*proofs.PrefixTree, 0, n)
-	rootHashes = make([]*[sha256.Size]byte, 0, n)
-	//@ unfold acc(resp.Inv(), p)
-	for i := 0; i < n; i++ {
-		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
-		if tree, treeErr := prf.ToTree(resp.Binary_ladder); treeErr != nil {
-			//@ fold acc(resp.Inv(), p)
-			return nil, nil, treeErr
-		} else {
-			trees = append( /*@ perm(1/2), @*/ trees, tree)
-			rootHashes = append( /*@ perm(1/2), @*/ rootHashes, tree.Value)
-		}
-	}
-	//@ fold acc(resp.Inv(), p)
-	return trees, rootHashes, nil
-}
 
 // @ requires noPerm < p
 // @ preserves st.Inv()
@@ -666,3 +629,34 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 
 	return resultRes, resultErr
 }
+
+// buildPrefixTrees constructs prefix trees from the response's prefix proofs.
+// @ requires noPerm < p
+// @ requires acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(trees) && len(trees) == n
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&trees[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> trees[j] != nil
+// @ ensures err == nil ==> forall j int :: {&trees[j]} 0 <= j && j < n ==> trees[j].Inv()
+// @ ensures err == nil ==> acc(rootHashes) && len(rootHashes) == n
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&rootHashes[j])
+// @ ensures err != nil ==> acc(resp.Inv(), p)
+// @ trusted
+func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
+	trees = make([]*proofs.PrefixTree, 0, n)
+	rootHashes = make([]*[sha256.Size]byte, 0, n)
+	//@ unfold acc(resp.Inv(), p)
+	for i := 0; i < n; i++ {
+		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
+		if tree, treeErr := prf.ToTree(resp.Binary_ladder); treeErr != nil {
+			//@ fold acc(resp.Inv(), p)
+			return nil, nil, treeErr
+		} else {
+			trees = append( /*@ perm(1/2), @*/ trees, tree)
+			rootHashes = append( /*@ perm(1/2), @*/ rootHashes, tree.Value)
+		}
+	}
+	//@ fold acc(resp.Inv(), p)
+	return trees, rootHashes, nil
+}
+

@@ -1,0 +1,508 @@
+package updatemonitor
+
+import (
+	"crypto/sha256"
+	"errors"
+
+	"github.com/felixlinker/keytrans-verification/pkg/client"
+	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+)
+
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
+/*@
+ghost
+requires acc(arr, _)
+decreases
+pure
+func getContent(arr []byte) (res seq[byte]) {
+  return client.GetByteContent(arr, 0)
+}
+@*/
+
+// ==================================================================================
+// ============================= Update & Monitor Types =============================
+
+type UpdateResponse struct {
+	Full_tree_head client.FullTreeHead
+	Prev_tree_head client.FullTreeHead
+	New_version    uint32
+	Prev_greatest  *uint32
+	Insertion_pos  uint64
+	Prev_insertion *uint64
+	Binary_ladder  []proofs.BinaryLadderStep
+	Search         proofs.CombinedTreeProof
+	Prev_search    proofs.CombinedTreeProof
+	Values         []proofs.UpdateValue
+	Openings       [][]byte
+}
+
+/*@
+pred (u UpdateResponse) Inv() {
+	u.Full_tree_head.Inv() &&
+	u.Prev_tree_head.Inv() &&
+	(u.Prev_greatest != nil ==> acc(u.Prev_greatest)) &&
+	(u.Prev_insertion != nil ==> acc(u.Prev_insertion)) &&
+	acc(u.Binary_ladder) &&
+	u.Search.Inv() &&
+	u.Prev_search.Inv() &&
+	acc(u.Values) &&
+	acc(u.Openings)
+}
+@*/
+
+type MonitorResponse struct {
+	Full_tree_head client.FullTreeHead
+	Binary_ladder  []proofs.BinaryLadderStep
+	Search         proofs.CombinedTreeProof
+}
+
+/*@
+pred (m MonitorResponse) Inv() {
+	m.Full_tree_head.Inv() &&
+	acc(m.Binary_ladder) &&
+	m.Search.Inv()
+}
+@*/
+
+// ==================================================================================
+// ============================= VerifyUpdateKey ====================================
+
+// @ requires noPerm < p
+// @ requires acc(prefixTrees, p)
+// @ requires acc(prefixRootHash, p)
+// @ requires acc(label, p) && acc(config, p)
+// @ requires low(label) && low(size)
+// @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
+// @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
+// @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
+// @ requires size > 0
+// @ requires size <= uint64(len(prefixTrees))
+// @ requires label != nil
+// @ ensures err == nil && res ==> low(new_version)
+// @ ensures acc(label, p) && acc(config, p)
+// @ ensures acc(prefixTrees, p) && acc(prefixRootHash, p)
+func VerifyUpdateKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte,
+	size uint64, label []byte, new_version uint32, prev_greatest uint32,
+	config *client.Configuration /*@, ghost p perm @*/) (res bool, err error) {
+	tVal := uint64(new_version)
+	search_tree := client.MkImplicitBinarySearchTree(size)
+	resultRes := true
+	var resultErr error = nil
+	frontiers := search_tree.FrontierNodes( /*@p, size@*/ )
+	terminalLogEntry := -1
+	determined := false
+
+	if size == 0 || tVal >= size {
+		resultRes = false
+		resultErr = errors.New("version out of bounds")
+		determined = true
+	}
+
+	// Loop: process all frontiers except the last
+	//@ invariant acc(prefixTrees)
+	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
+	//@ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
+	//@ invariant acc(prefixRootHash, p)
+	//@ invariant acc(frontiers)
+	//@ invariant acc(label, p)
+	//@ invariant acc(config, p)
+	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
+	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
+	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
+	//@ invariant 0 <= fIdx && fIdx <= len(frontiers) - 1
+	//@ invariant len(frontiers) > 0
+	//@ invariant determined ==> !resultRes
+	//@ invariant !determined ==> resultRes && resultErr == nil
+	for fIdx := 0; fIdx < len(frontiers)-1; fIdx++ {
+		frontier := frontiers[fIdx]
+		if !determined {
+			Prefix_tree := prefixTrees[frontier]
+			if prefixTrees[frontier] == nil {
+				resultRes = false
+				resultErr = errors.New("prefix tree is nil")
+				determined = true
+			} else {
+				rootHash := prefixRootHash[frontier]
+				if frontier >= size {
+					resultRes = false
+					resultErr = errors.New("version out of bounds")
+					determined = true
+				}
+
+				steps /*@, tStarIdx @*/ := client.FullBinaryLadderSteps_with_tstar(tVal)
+
+				//@ ghost var labelSeq seq[byte] = getContent(label)
+				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+
+				LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+				if cgErr != nil {
+					resultRes = false
+					resultErr = cgErr
+					determined = true
+				} else if LtGtOrEq == 1 {
+					resultRes = false
+					resultErr = errors.New("greater version exists")
+					determined = true
+				} else if LtGtOrEq == 0 && terminalLogEntry == -1 {
+					terminalLogEntry = int(frontier)
+				}
+			}
+		}
+	}
+
+	// Process last frontier separately
+	if !determined {
+		frontier := frontiers[len(frontiers)-1]
+		Prefix_tree := prefixTrees[frontier]
+		if prefixTrees[frontier] == nil {
+			resultRes = false
+			resultErr = errors.New("prefix tree is nil")
+			determined = true
+		} else {
+			rootHash := prefixRootHash[frontier]
+			if frontier >= size {
+				resultRes = false
+				resultErr = errors.New("version out of bounds")
+				determined = true
+			}
+
+			steps /*@, tStarIdx @*/ := client.FullBinaryLadderSteps_with_tstar(tVal)
+
+			//@ ghost var labelSeq seq[byte] = getContent(label)
+			//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+
+			LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+			if cgErr != nil {
+				resultRes = false
+				resultErr = cgErr
+				determined = true
+			} else if LtGtOrEq != 0 {
+				resultRes = false
+				resultErr = errors.New("Greatest version is not the greatest in the last iteration")
+				determined = true
+			} else if terminalLogEntry == -1 {
+				terminalLogEntry = int(frontier)
+			}
+		}
+	}
+
+	if terminalLogEntry == -1 && resultErr == nil {
+		resultRes = false
+		resultErr = errors.New("Claimed Version is not found.")
+	}
+
+	return resultRes, resultErr
+}
+
+// ==================================================================================
+// ============================= buildUpdatePrefixTrees =============================
+
+// buildUpdatePrefixTrees constructs prefix trees from an UpdateResponse's prefix proofs.
+// @ requires noPerm < p
+// @ requires acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(trees) && len(trees) == n
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&trees[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> trees[j] != nil
+// @ ensures err == nil ==> forall j int :: {&trees[j]} 0 <= j && j < n ==> trees[j].Inv()
+// @ ensures err == nil ==> acc(rootHashes) && len(rootHashes) == n
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&rootHashes[j])
+// @ ensures err != nil ==> acc(resp.Inv(), p)
+// @ trusted
+func buildUpdatePrefixTrees(resp UpdateResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
+	trees = make([]*proofs.PrefixTree, 0, n)
+	rootHashes = make([]*[sha256.Size]byte, 0, n)
+	//@ unfold acc(resp.Inv(), p)
+	for i := 0; i < n; i++ {
+		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
+		if tree, treeErr := prf.ToTree(resp.Binary_ladder); treeErr != nil {
+			//@ fold acc(resp.Inv(), p)
+			return nil, nil, treeErr
+		} else {
+			trees = append( /*@ perm(1/2), @*/ trees, tree)
+			rootHashes = append( /*@ perm(1/2), @*/ rootHashes, tree.Value)
+		}
+	}
+	//@ fold acc(resp.Inv(), p)
+	return trees, rootHashes, nil
+}
+
+// buildMonitorPrefixTrees constructs prefix trees from a MonitorResponse's prefix proofs.
+// @ requires noPerm < p
+// @ requires acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(trees) && len(trees) == n
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&trees[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> trees[j] != nil
+// @ ensures err == nil ==> forall j int :: {&trees[j]} 0 <= j && j < n ==> trees[j].Inv()
+// @ ensures err == nil ==> acc(rootHashes) && len(rootHashes) == n
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&rootHashes[j])
+// @ ensures err != nil ==> acc(resp.Inv(), p)
+// @ trusted
+func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
+	trees = make([]*proofs.PrefixTree, 0, n)
+	rootHashes = make([]*[sha256.Size]byte, 0, n)
+	//@ unfold acc(resp.Inv(), p)
+	for i := 0; i < n; i++ {
+		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
+		if tree, treeErr := prf.ToTree(resp.Binary_ladder); treeErr != nil {
+			//@ fold acc(resp.Inv(), p)
+			return nil, nil, treeErr
+		} else {
+			trees = append( /*@ perm(1/2), @*/ trees, tree)
+			rootHashes = append( /*@ perm(1/2), @*/ rootHashes, tree.Value)
+		}
+	}
+	//@ fold acc(resp.Inv(), p)
+	return trees, rootHashes, nil
+}
+
+// ==================================================================================
+// ============================= VerifyUpdate =======================================
+
+// VerifyUpdate verifies that a new version was correctly inserted (Section 9.1).
+// @ requires noPerm < p
+// @ preserves st.Inv()
+// @ requires acc(resp.Inv(), p)
+// @ requires acc(label, p) && low(label)
+// @ requires label != nil
+// @ requires acc(config, p)
+// @ requires resp.New_version >= 0
+// @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
+// @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
+// @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
+// @ ensures err != nil ==> acc(resp.Inv(), p)
+// @ ensures rel(err == nil, 0) && rel(err == nil, 1) ==> low(resp.New_version)
+func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse,
+	config *client.Configuration /*@, ghost p perm @*/) (err error) {
+	//@ unfold acc(resp.Inv(), p)
+
+	determined := false
+	var resultErr error = nil
+
+	// Capture size and n before folding so Gobra retains size <= n
+	size := resp.Full_tree_head.Tree_head.Tree_size
+	n := len(resp.Search.Prefix_proofs)
+
+	// Phase 1: UpdateView
+	updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
+	if updateErr != nil {
+		resultErr = updateErr
+		determined = true
+	}
+
+	// Phase 2: Validation checks
+	if !determined {
+		if resp.Prev_greatest != nil {
+			if resp.New_version <= *resp.Prev_greatest {
+				resultErr = errors.New("new version not greater than previous greatest")
+				determined = true
+			}
+		}
+	}
+	if !determined {
+		if resp.Prev_insertion != nil {
+			if resp.Insertion_pos <= *resp.Prev_insertion {
+				resultErr = errors.New("insertion position not greater than previous insertion")
+				determined = true
+			}
+		}
+	}
+
+	// Phase 3: Build prefix trees
+	//@ fold acc(resp.Inv(), p)
+
+	var trees []*proofs.PrefixTree
+	var rootHashes []*[sha256.Size]byte
+	if !determined {
+		var buildErr error
+		trees, rootHashes, buildErr = buildUpdatePrefixTrees(resp, n /*@, p @*/)
+		if buildErr != nil {
+			resultErr = buildErr
+			determined = true
+		}
+	}
+
+	// Phase 4: VerifyUpdateKey (iterates all frontier nodes)
+	decision := false
+	if !determined {
+		prev_greatest := uint32(0)
+		//@ unfold acc(resp.Inv(), p)
+		if resp.Prev_greatest != nil {
+			prev_greatest = *resp.Prev_greatest
+		}
+
+		//@ assert size <= uint64(len(trees))
+		decision, resultErr = VerifyUpdateKey(trees, rootHashes, size, label,
+			resp.New_version, prev_greatest, config /*@, p/4 @*/)
+
+		if !decision || resultErr != nil {
+			//@ fold acc(resp.Inv(), p)
+			if resultErr == nil {
+				resultErr = errors.New("Update verification failed")
+			}
+			determined = true
+		}
+	}
+
+	// Phase 5: Single return
+	if !determined && decision {
+		err = nil
+	} else {
+		err = resultErr
+	}
+	return err
+}
+
+// ==================================================================================
+// ============================= VerifyMonitor ======================================
+
+// VerifyMonitor verifies that previously-searched label-version pairs remain in the
+// log (Section 8.2 — Contact Monitoring).
+// Uses CheckGreatest on all frontier nodes. For monitoring, res == -1 (hole) is a
+// failure, while res == 0 or 1 are acceptable (version exists in log).
+// The low(Version) property is preserved from the input monitoring map (established
+// by prior VerifyLatest/VerifyUpdate calls), not re-proven via TStar.
+// @ requires noPerm < p
+// @ preserves st.Inv()
+// @ requires acc(resp.Inv(), p)
+// @ requires acc(label, p) && low(label)
+// @ requires acc(monitor_map)
+// @ requires acc(config, p)
+// @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
+// @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
+// @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
+// @ requires resp.Full_tree_head.RootHash != nil
+// @ requires low(len(monitor_map))
+// @ requires forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Version)
+// @ ensures acc(resp.Inv(), p) && acc(label, p) && acc(config, p)
+// @ ensures acc(new_map)
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < len(new_map) ==> low(new_map[j].Version)
+func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse,
+	monitor_map []client.MonitoringMapEntry, config *client.Configuration /*@, ghost p perm @*/) (new_map []client.MonitoringMapEntry, err error) {
+	//@ unfold acc(resp.Inv(), p)
+
+	determined := false
+	var resultErr error = nil
+
+	// Capture size and n before folding so Gobra retains size <= n
+	size := resp.Full_tree_head.Tree_head.Tree_size
+	n := len(resp.Search.Prefix_proofs)
+
+	// Phase 1: UpdateView
+	updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
+	if updateErr != nil {
+		resultErr = updateErr
+		determined = true
+	}
+
+	// Phase 2: Build prefix trees
+	//@ fold acc(resp.Inv(), p)
+
+	var trees []*proofs.PrefixTree
+	var rootHashes []*[sha256.Size]byte
+	if !determined {
+		var buildErr error
+		trees, rootHashes, buildErr = buildMonitorPrefixTrees(resp, n /*@, p @*/)
+		if buildErr != nil {
+			resultErr = buildErr
+			determined = true
+		}
+	}
+
+	// Phase 3: Process each monitoring map entry using frontier nodes
+	new_map = make([]client.MonitoringMapEntry, 0)
+	if !determined {
+		search_tree := client.MkImplicitBinarySearchTree(size)
+		frontiers := search_tree.FrontierNodes( /*@ p/4, size @*/ )
+		//@ assert size <= uint64(len(trees))
+		//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < uint64(len(trees))
+
+		// Process entries
+		//@ ghost var versions seq[uint32] = seq[uint32]{}
+		//@ invariant acc(monitor_map)
+		//@ invariant acc(new_map)
+		//@ invariant acc(trees)
+		//@ invariant acc(rootHashes)
+		//@ invariant acc(frontiers)
+		//@ invariant acc(label, p)
+		//@ invariant acc(config, p)
+		//@ invariant forall i int :: i >= 0 && i < len(trees) ==> acc(&trees[i])
+		//@ invariant forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(trees[i])
+		//@ invariant forall i int :: i >= 0 && i < len(trees) ==> trees[i] != nil
+		//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < uint64(len(trees))
+		//@ invariant 0 <= mIdx && mIdx <= len(monitor_map)
+		//@ invariant low(mIdx)
+		//@ invariant !determined ==> resultErr == nil
+		//@ invariant low(versions)
+		//@ invariant len(versions) == len(new_map)
+		//@ invariant forall j int :: 0 <= j && j < len(new_map) ==> new_map[j].Version == versions[j]
+		//@ invariant forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Version)
+		for mIdx := 0; mIdx < len(monitor_map); mIdx++ {
+			entry := monitor_map[mIdx]
+			//@ assert low(entry.Version)
+
+			if !determined {
+				tVal := uint64(entry.Version)
+				monitorOk := true
+
+				// Check all frontier nodes using CheckGreatest
+				// For monitoring: res == -1 (hole) is failure; res == 0 or 1 is ok
+				//@ invariant acc(frontiers)
+				//@ invariant acc(trees)
+				//@ invariant acc(rootHashes)
+				//@ invariant acc(label, p)
+				//@ invariant forall i int :: i >= 0 && i < len(trees) ==> acc(&trees[i])
+				//@ invariant forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(trees[i])
+				//@ invariant forall i int :: i >= 0 && i < len(trees) ==> trees[i] != nil
+				//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < uint64(len(trees))
+				//@ invariant 0 <= fIdx && fIdx <= len(frontiers)
+				//@ invariant !determined ==> monitorOk && resultErr == nil
+				for fIdx := 0; fIdx < len(frontiers); fIdx++ {
+					if !determined {
+						frontier := frontiers[fIdx]
+						//@ assert frontier >= 0 && int(frontier) < len(trees)
+						Prefix_tree := trees[frontier]
+						rootHash := rootHashes[frontier]
+						if Prefix_tree != nil {
+
+							steps /*@, tStarIdx @*/ := client.FullBinaryLadderSteps_with_tstar(tVal)
+
+							//@ ghost var labelSeq seq[byte] = getContent(label)
+							//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+
+							cgRes, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+							if cgErr != nil {
+								monitorOk = false
+								resultErr = cgErr
+								determined = true
+							} else if cgRes == -1 {
+								// Hole found: version not in log
+								monitorOk = false
+								resultErr = errors.New("monitoring check failed: version not included")
+								determined = true
+							}
+							// cgRes == 0 or 1: acceptable for monitoring
+						}
+					}
+				}
+			}
+
+			// Always append to keep new_map/versions in sync across executions
+			newEntry := client.MonitoringMapEntry{
+				Position: entry.Position,
+				Version:  entry.Version,
+			}
+			new_map = append( /*@ perm(1/2), @*/ new_map, newEntry)
+			//@ ghost versions = versions ++ seq[uint32]{entry.Version}
+		}
+	}
+
+	if determined {
+		err = resultErr
+	} else {
+		err = nil
+	}
+	return new_map, err
+}
