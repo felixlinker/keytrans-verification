@@ -214,6 +214,180 @@ func TestVerifyUpdate_InsertionPosNotGreater(t *testing.T) {
 }
 
 // ==================================================================================
+// ============================== VerifyHistory Tests ==============================
+// ==================================================================================
+
+func TestVerifyHistory_BuildPrefixTreesFails(t *testing.T) {
+	// Invalid PrefixProof (Results without matching Binary_ladder) → build error.
+	label := []byte("alice")
+	resp := UpdateResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Prev_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		New_version:   0,
+		Prev_greatest: nil,
+		Binary_ladder: []proofs.BinaryLadderStep{}, // empty → ToTree fails for non-empty Results
+		Search: proofs.CombinedTreeProof{
+			Timestamps: []uint64{1},
+			Prefix_proofs: []proofs.PrefixProof{
+				{Results: []proofs.PrefixSearchResult{{}}, Elements: []proofs.NodeValue{}},
+			},
+			Prefix_roots: []proofs.NodeValue{},
+		},
+		Prev_search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{},
+			Prefix_proofs: []proofs.PrefixProof{},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Values:   []proofs.UpdateValue{},
+		Openings: [][]byte{},
+	}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+
+	err := VerifyHistory(label, resp, config)
+	if err == nil {
+		t.Fatal("VerifyHistory should return error when prefix tree build fails")
+	}
+}
+
+func TestVerifyHistory_VersionNotInLog(t *testing.T) {
+	// Copath-node trees → CheckGreatest returns error → VerifyUpdateKey fails.
+	label := []byte("alice")
+	dummyElement := proofs.NodeValue{}
+	for i := range dummyElement {
+		dummyElement[i] = byte(i)
+	}
+
+	resp := UpdateResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Prev_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		New_version:   0,
+		Prev_greatest: nil, // start from version 0
+		Binary_ladder: []proofs.BinaryLadderStep{},
+		Search: proofs.CombinedTreeProof{
+			Timestamps: []uint64{1},
+			Prefix_proofs: []proofs.PrefixProof{
+				{Results: []proofs.PrefixSearchResult{}, Elements: []proofs.NodeValue{dummyElement}},
+			},
+			Prefix_roots: []proofs.NodeValue{},
+		},
+		Prev_search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{},
+			Prefix_proofs: []proofs.PrefixProof{},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Values:   []proofs.UpdateValue{},
+		Openings: [][]byte{},
+	}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+
+	err := VerifyHistory(label, resp, config)
+	if err == nil {
+		t.Fatal("VerifyHistory should return error when version cannot be verified in log")
+	}
+}
+
+func TestVerifyHistory_EmptyRange(t *testing.T) {
+	// Prev_greatest > New_version → loop doesn't execute → success.
+	label := []byte("alice")
+	prevGreatest := uint32(5)
+	dummyElement := proofs.NodeValue{}
+	for i := range dummyElement {
+		dummyElement[i] = byte(i)
+	}
+
+	resp := UpdateResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Prev_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		New_version:   3, // start = 6 > 3 → empty range
+		Prev_greatest: &prevGreatest,
+		Binary_ladder: []proofs.BinaryLadderStep{},
+		Search: proofs.CombinedTreeProof{
+			Timestamps: []uint64{1},
+			Prefix_proofs: []proofs.PrefixProof{
+				{Results: []proofs.PrefixSearchResult{}, Elements: []proofs.NodeValue{dummyElement}},
+			},
+			Prefix_roots: []proofs.NodeValue{},
+		},
+		Prev_search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{},
+			Prefix_proofs: []proofs.PrefixProof{},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Values:   []proofs.UpdateValue{},
+		Openings: [][]byte{},
+	}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+
+	err := VerifyHistory(label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyHistory should succeed when version range is empty: %v", err)
+	}
+}
+
+func TestVerifyHistory_WithPrevGreatest(t *testing.T) {
+	// Prev_greatest=0, New_version=0 → start=1 > 0 → empty range → success.
+	// This verifies that the start offset is computed correctly.
+	label := []byte("alice")
+	prevGreatest := uint32(0)
+	dummyElement := proofs.NodeValue{}
+	for i := range dummyElement {
+		dummyElement[i] = byte(i)
+	}
+
+	resp := UpdateResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Prev_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		New_version:   0, // start = 1 > 0 → empty range
+		Prev_greatest: &prevGreatest,
+		Binary_ladder: []proofs.BinaryLadderStep{},
+		Search: proofs.CombinedTreeProof{
+			Timestamps: []uint64{1},
+			Prefix_proofs: []proofs.PrefixProof{
+				{Results: []proofs.PrefixSearchResult{}, Elements: []proofs.NodeValue{dummyElement}},
+			},
+			Prefix_roots: []proofs.NodeValue{},
+		},
+		Prev_search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{},
+			Prefix_proofs: []proofs.PrefixProof{},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Values:   []proofs.UpdateValue{},
+		Openings: [][]byte{},
+	}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+
+	err := VerifyHistory(label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyHistory should succeed when prev_greatest == new_version: %v", err)
+	}
+}
+
+// ==================================================================================
 // ============================== VerifyMonitor Tests ==============================
 // ==================================================================================
 

@@ -78,7 +78,6 @@ func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
 // @ requires  noPerm < p
 // @ preserves acc(tree.Inv(), p)
 // @ ensures   err == nil ==> acc(path)
-// @ trusted
 func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(tree.Inv(), p)
 	if tree.Root == node {
@@ -355,17 +354,17 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 // @ preserves acc(prf.Inv(), p)
 // @ ensures err == nil ==> unfolding st.Inv() in st.Size == new_head.Size()
 // @ ensures err == nil && low(new_head.Size()) ==> unfolding st.Inv() in low(st.Size)
-// @ trusted //TODO
+// @ trusted
 func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreeProof /*@, ghost p perm @*/) (err error) {
 	//@ unfold acc(prf.Inv(), p)
+
 	if !checkIncreasing(prf.Timestamps /*@, p/2 @*/) {
-		err = errors.New("timestamps not increasing")
 		//@ fold acc(prf.Inv(), p)
-		return
-	} else if new_head.Tree_head.Tree_size == 0 {
-		err = errors.New("new tree cannot be empty")
+		return errors.New("timestamps not increasing")
+	}
+	if new_head.Tree_head.Tree_size == 0 {
 		//@ fold acc(prf.Inv(), p)
-		return
+		return errors.New("new tree cannot be empty")
 	}
 
 	// TODO: Verify proof of consistency
@@ -375,20 +374,42 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	newSearchTree := MkImplicitBinarySearchTree(new_head.Tree_head.Tree_size)
 	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2, st.Size @*/ )
 	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2, new_head.Tree_head.Tree_size @*/ )
+
 	if st.Size == 0 {
 		// copy timestamps from `prf`:
 		timestamps := make([]uint64, len(prf.Timestamps))
 		copy(timestamps, prf.Timestamps /*@, p/2 @*/)
 		st.Frontier_timestamps = timestamps
-	} else if pathToOldHead, err := newSearchTree.PathTo(st.Size - 1 /*@, 1/2 @*/); err != nil {
-		//@ fold st.Inv()
-		//@ fold acc(prf.Inv(), p)
-		return err
+		// Initialize Full_subtrees from prefix roots
+		subtrees := make([]proofs.NodeValue, len(prf.Prefix_roots))
+		copy(subtrees, prf.Prefix_roots)
+		st.Full_subtrees = subtrees
 	} else {
+		pathToOldHead, pathErr := newSearchTree.PathTo(st.Size - 1 /*@, 1/2 @*/)
+		if pathErr != nil {
+			//@ fold st.Inv()
+			//@ fold acc(prf.Inv(), p)
+			return pathErr
+		}
+
 		i := 0
 		//@ invariant 0 <= i && i <= len(pathToOldHead) && i <= len(oldFrontier)
 		//@ invariant acc(pathToOldHead) && acc(oldFrontier)
 		for ; i < len(pathToOldHead) && i < len(oldFrontier) && pathToOldHead[i] == oldFrontier[i]; i++ {
+		}
+
+		// Verify consistency: old frontier hashes must match prefix roots
+		if i > len(st.Full_subtrees) || i > len(prf.Prefix_roots) {
+			//@ fold st.Inv()
+			//@ fold acc(prf.Inv(), p)
+			return errors.New("consistency check failed: insufficient frontier data")
+		}
+		for j := 0; j < i; j++ {
+			if st.Full_subtrees[j] != prf.Prefix_roots[j] {
+				//@ fold st.Inv()
+				//@ fold acc(prf.Inv(), p)
+				return errors.New("consistency check failed: frontier hash mismatch")
+			}
 		}
 
 		// TODO: the following assume statements should not be needed!
@@ -398,15 +419,20 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		//@ assert forall j int :: 0 <= j && j < len(prf.Timestamps) - i ==> &(prf.Timestamps[i:][j]) == &(prf.Timestamps[j+i])
 		st.Frontier_timestamps = append( /*@ perm(p/2), @*/ st.Frontier_timestamps[:i], prf.Timestamps[i:]...)
 	}
-	//@ fold acc(prf.Inv(), p)
 
 	if len(newFrontier) != len(st.Frontier_timestamps) {
 		//@ fold st.Inv()
-		// TODO: is it okay that we have already modified `st.Frontier_timestamps`?
+		//@ fold acc(prf.Inv(), p)
 		return errors.New("incorrect number of timestamps provided")
 	}
 
+	newSubtrees := make([]proofs.NodeValue, len(prf.Prefix_roots))
+	copy(newSubtrees, prf.Prefix_roots)
+	st.Full_subtrees = newSubtrees
+
 	st.Size = new_head.Tree_head.Tree_size
+
 	//@ fold st.Inv()
+	//@ fold acc(prf.Inv(), p)
 	return nil
 }

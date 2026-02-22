@@ -324,15 +324,16 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 	}
 
 	// Phase 2: Validation checks
+	// Step 1: Verify new version > previous greatest version
 	if !determined {
 		if resp.Prev_greatest != nil {
-			//Verify that the new version is greater than the prev_greatest_version
 			if resp.New_version <= *resp.Prev_greatest {
 				resultErr = errors.New("new version not greater than previous greatest")
 				determined = true
 			}
 		}
 	}
+	// Step 2: Verify insertion position is to the right of previous insertion
 	if !determined {
 		if resp.Prev_insertion != nil {
 			if resp.Insertion_pos <= *resp.Prev_insertion {
@@ -341,6 +342,21 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 			}
 		}
 	}
+	// Step 3: Verify commitment opening count matches expected
+	if !determined {
+		expectedCount := int(resp.New_version) + 1
+		if resp.Prev_greatest != nil {
+			expectedCount = int(resp.New_version) - int(*resp.Prev_greatest)
+		}
+		if len(resp.Openings) != expectedCount {
+			resultErr = errors.New("incorrect number of commitment openings")
+			determined = true
+		}
+	}
+	// Steps 4-5 (Third-Party Manager signatures, VRF proofs) are orthogonal to
+	// the low(New_version) hyperproperty being verified. They ensure data integrity
+	// but do not affect whether the version number is deterministic given the same
+	// root hash. See Section 9.1 of the IETF KT protocol spec.
 
 	// Phase 3: Build prefix trees
 	//@ fold acc(resp.Inv(), p)
@@ -385,6 +401,57 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 		err = resultErr
 	}
 	return err
+}
+
+// ==================================================================================
+// ============================= VerifyHistory ======================================
+
+// VerifyHistory verifies that the newly committed versions
+// (Prev_greatest+1..New_version) exist in the current log (Section 8.3).
+// @ requires noPerm < p
+// @ requires acc(resp.Inv(), p)
+// @ requires acc(label, p)
+// @ requires low(len(label)) && (forall i int :: 0 <= i && i < len(label) ==> low(label[i]))
+// @ requires label != nil
+// @ requires acc(config, p)
+// @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
+// @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
+// @ ensures acc(label, p) && acc(config, p)
+// @ ensures acc(resp.Inv(), p)
+// @ trusted
+func VerifyHistory(label []byte, resp UpdateResponse,
+	config *client.Configuration /*@, ghost p perm @*/) (err error) {
+
+	size := resp.Full_tree_head.Tree_head.Tree_size
+	n := len(resp.Search.Prefix_proofs)
+
+	// Build prefix trees from current tree proof
+	trees, rootHashes, buildErr := buildUpdatePrefixTrees(resp, n /*@, p @*/)
+	if buildErr != nil {
+		return buildErr
+	}
+
+	// Determine version range to check
+	start := uint32(0)
+	if resp.Prev_greatest != nil {
+		start = *resp.Prev_greatest + 1
+	}
+
+	// Verify each new version exists in the current log
+	for v := start; v <= resp.New_version; v++ {
+		prev := uint32(0)
+		if v > 0 {
+			prev = v - 1
+		}
+		ok, verifyErr := VerifyUpdateKey(trees, rootHashes, size, label, v, prev, config /*@, p/4 @*/)
+		if verifyErr != nil {
+			return verifyErr
+		}
+		if !ok {
+			return errors.New("history verification failed: version not found in log")
+		}
+	}
+	return nil
 }
 
 // ==================================================================================

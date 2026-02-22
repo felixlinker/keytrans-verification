@@ -193,7 +193,6 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 // @ ensures base < IntPow2(r+1)
 // @ ensures r == Log2Floor_pure(base)
 // @ decreases base
-// @ trusted
 func Log2Floor(base uint64) (r uint64) {
 	if base <= 1 {
 		//@ assert Log2Floor_pure(base) == 0
@@ -247,7 +246,6 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ ensures r > t1 && r <= t2
 // @ ensures r == tStarRec_pure(t1,t2,x_in, x_out)
 // @ decreases x_out - x_in
-// @ trusted
 func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	if x_out <= t2 {
 		return x_out

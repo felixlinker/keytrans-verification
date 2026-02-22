@@ -388,6 +388,7 @@ CheckGreatest verifies if t is the greatest version
 	-1: Greatest version < t (found hole at or below t), the greatest version does not exist so far
 	 0: t is the greatest version
 	 1: Greatest version > t (found commitment above t), violates t being the greatest version
+
 */
 
 // @ requires label != nil

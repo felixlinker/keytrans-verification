@@ -545,6 +545,133 @@ func TestFullBinaryLadderSteps_ContainsTarget(t *testing.T) {
 }
 
 // ==================================================================================
+// ================================ UpdateView =====================================
+// ==================================================================================
+
+func TestUpdateView_InitializesFullSubtrees(t *testing.T) {
+	// First update (st.Size == 0): Full_subtrees should be initialized from Prefix_roots.
+	st := newUserState()
+	hash1 := proofs.NodeValue{}
+	hash1[0] = 0xAA
+	hash1[1] = 0xBB
+
+	newHead := FullTreeHead{
+		Tree_head: TreeHead{Tree_size: 1, Signature: []byte{}},
+		RootHash:  makeRootHash(),
+	}
+	prf := proofs.CombinedTreeProof{
+		Timestamps:    []uint64{100},
+		Prefix_proofs: []proofs.PrefixProof{},
+		Prefix_roots:  []proofs.NodeValue{hash1},
+	}
+
+	err := st.UpdateView(newHead, prf)
+	if err != nil {
+		t.Fatalf("UpdateView returned unexpected error: %v", err)
+	}
+	if st.Size != 1 {
+		t.Errorf("st.Size = %d; want 1", st.Size)
+	}
+	if len(st.Full_subtrees) != 1 {
+		t.Fatalf("len(st.Full_subtrees) = %d; want 1", len(st.Full_subtrees))
+	}
+	if st.Full_subtrees[0] != hash1 {
+		t.Error("st.Full_subtrees[0] does not match expected hash")
+	}
+}
+
+func TestUpdateView_ConsistencyCheckPasses(t *testing.T) {
+	// Second update: matching frontier hashes should pass the consistency check.
+	// Transition: size 2 → size 3.
+	hash1 := proofs.NodeValue{}
+	hash1[0] = 0x11
+	hash2 := proofs.NodeValue{}
+	hash2[0] = 0x22
+
+	st := newUserState()
+
+	// First update to size 2 (frontier = [1], 1 timestamp needed)
+	newHead1 := FullTreeHead{
+		Tree_head: TreeHead{Tree_size: 2, Signature: []byte{}},
+		RootHash:  makeRootHash(),
+	}
+	prf1 := proofs.CombinedTreeProof{
+		Timestamps:    []uint64{100},
+		Prefix_proofs: []proofs.PrefixProof{},
+		Prefix_roots:  []proofs.NodeValue{hash1},
+	}
+	if err := st.UpdateView(newHead1, prf1); err != nil {
+		t.Fatalf("First UpdateView failed: %v", err)
+	}
+	if st.Size != 2 {
+		t.Fatalf("st.Size after first update = %d; want 2", st.Size)
+	}
+
+	// Second update to size 3 (frontier = [1, 2], 2 timestamps needed)
+	// Prefix_roots[0] matches old Full_subtrees[0] → consistency passes.
+	newHead2 := FullTreeHead{
+		Tree_head: TreeHead{Tree_size: 3, Signature: []byte{}},
+		RootHash:  makeRootHash(),
+	}
+	prf2 := proofs.CombinedTreeProof{
+		Timestamps:    []uint64{100, 200},
+		Prefix_proofs: []proofs.PrefixProof{},
+		Prefix_roots:  []proofs.NodeValue{hash1, hash2},
+	}
+	if err := st.UpdateView(newHead2, prf2); err != nil {
+		t.Fatalf("Second UpdateView failed: %v", err)
+	}
+	if st.Size != 3 {
+		t.Errorf("st.Size after second update = %d; want 3", st.Size)
+	}
+	if len(st.Full_subtrees) != 2 {
+		t.Fatalf("len(st.Full_subtrees) = %d; want 2", len(st.Full_subtrees))
+	}
+	if st.Full_subtrees[0] != hash1 || st.Full_subtrees[1] != hash2 {
+		t.Error("st.Full_subtrees does not match expected hashes after second update")
+	}
+}
+
+func TestUpdateView_ConsistencyCheckFails(t *testing.T) {
+	// Second update: mismatched frontier hashes should fail.
+	hash1 := proofs.NodeValue{}
+	hash1[0] = 0x11
+	hashWrong := proofs.NodeValue{}
+	hashWrong[0] = 0xFF // different from hash1
+
+	st := newUserState()
+
+	// First update to size 2
+	newHead1 := FullTreeHead{
+		Tree_head: TreeHead{Tree_size: 2, Signature: []byte{}},
+		RootHash:  makeRootHash(),
+	}
+	prf1 := proofs.CombinedTreeProof{
+		Timestamps:    []uint64{100},
+		Prefix_proofs: []proofs.PrefixProof{},
+		Prefix_roots:  []proofs.NodeValue{hash1},
+	}
+	if err := st.UpdateView(newHead1, prf1); err != nil {
+		t.Fatalf("First UpdateView failed: %v", err)
+	}
+
+	// Second update to size 3 with wrong Prefix_roots[0]
+	newHead2 := FullTreeHead{
+		Tree_head: TreeHead{Tree_size: 3, Signature: []byte{}},
+		RootHash:  makeRootHash(),
+	}
+	prf2 := proofs.CombinedTreeProof{
+		Timestamps:    []uint64{100, 200},
+		Prefix_proofs: []proofs.PrefixProof{},
+		Prefix_roots:  []proofs.NodeValue{hashWrong, {}},
+	}
+	err := st.UpdateView(newHead2, prf2)
+	if err == nil {
+		t.Fatal("UpdateView should fail when frontier hashes don't match")
+	}
+}
+
+// ==================================================================================
 // ============================== IsDistinguished ==================================
 // ==================================================================================
 
