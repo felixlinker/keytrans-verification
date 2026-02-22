@@ -167,7 +167,7 @@ pred (s SearchResponse) Inv() {
 // @ requires acc(config, p)
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
-// @ ensures rel(err == nil, 0) && rel(err == nil, 1) ==> low(resp.Version)
+// @ ensures err == nil ==> low(resp.Version)
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 
@@ -491,13 +491,13 @@ type MonitoringMapEntry struct {
 // @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil
 // @ requires low(query.Label)
-// @ ensures err == nil && res ==> low(resp.Version)
 // @ ensures acc(resp.Version, p)
 // @ ensures acc(query.Label, p)
 // @ ensures acc(prefixTrees, p)
 // @ ensures acc(prefixRootHash, p)
 // @ ensures acc(config, p)
 // @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
+// @ ensures err == nil && res ==> low(resp.Version)
 func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
@@ -640,6 +640,8 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 // @ ensures err == nil ==> forall j int :: {&trees[j]} 0 <= j && j < n ==> trees[j].Inv()
 // @ ensures err == nil ==> acc(rootHashes) && len(rootHashes) == n
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&rootHashes[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(rootHashes[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> forall k int :: 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ trusted
 func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
@@ -659,4 +661,3 @@ func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees [
 	//@ fold acc(resp.Inv(), p)
 	return trees, rootHashes, nil
 }
-

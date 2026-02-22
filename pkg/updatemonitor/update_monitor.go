@@ -68,6 +68,17 @@ pred (m MonitorResponse) Inv() {
 // ==================================================================================
 // ============================= VerifyUpdateKey ====================================
 
+/*
+VerifyUpdateKey Algorithms:
+
+1. Obtain a search binary ladder from the current log entry where the target version is the claimed greatest version of the label, omitting redundant lookups.
+
+2. If this is the rightmost log entry, verify that the binary ladder terminates in a way that is consistent with the claimed greatest version of the label. That is, verify that it contains inclusion proofs for all expected versions less than or equal to the target and non-inclusion proofs for all expected versions greater than the target.
+
+3. If this is not the rightmost log entry, recurse to the log entry's right child.
+
+*/
+
 // @ requires noPerm < p
 // @ requires acc(prefixTrees, p)
 // @ requires acc(prefixRootHash, p)
@@ -79,12 +90,10 @@ pred (m MonitorResponse) Inv() {
 // @ requires size > 0
 // @ requires size <= uint64(len(prefixTrees))
 // @ requires label != nil
-// @ ensures err == nil && res ==> low(new_version)
 // @ ensures acc(label, p) && acc(config, p)
 // @ ensures acc(prefixTrees, p) && acc(prefixRootHash, p)
-func VerifyUpdateKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte,
-	size uint64, label []byte, new_version uint32, prev_greatest uint32,
-	config *client.Configuration /*@, ghost p perm @*/) (res bool, err error) {
+// @ ensures err == nil && res ==> low(new_version)
+func VerifyUpdateKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, label []byte, new_version uint32, prev_greatest uint32, config *client.Configuration /*@, ghost p perm @*/) (res bool, err error) {
 	tVal := uint64(new_version)
 	search_tree := client.MkImplicitBinarySearchTree(size)
 	resultRes := true
@@ -208,6 +217,8 @@ func VerifyUpdateKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 // @ ensures err == nil ==> forall j int :: {&trees[j]} 0 <= j && j < n ==> trees[j].Inv()
 // @ ensures err == nil ==> acc(rootHashes) && len(rootHashes) == n
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&rootHashes[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(rootHashes[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> forall k int :: 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ trusted
 func buildUpdatePrefixTrees(resp UpdateResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
@@ -238,6 +249,8 @@ func buildUpdatePrefixTrees(resp UpdateResponse, n int /*@, ghost p perm @*/) (t
 // @ ensures err == nil ==> forall j int :: {&trees[j]} 0 <= j && j < n ==> trees[j].Inv()
 // @ ensures err == nil ==> acc(rootHashes) && len(rootHashes) == n
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(&rootHashes[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> acc(rootHashes[j])
+// @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> forall k int :: 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ trusted
 func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
@@ -261,6 +274,24 @@ func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) 
 // ==================================================================================
 // ============================= VerifyUpdate =======================================
 
+/*
+The user verifies this information as follows:
+
+1. Verify that the new greatest version of the label is greater than the previously known greatest version.
+
+2. Verify that the log entry where the new versions were inserted is to the right of where the previous greatest version of the label was inserted, or the starting position chosen in Section 8.3 if this is the first version inserted since the user became the label owner.
+
+3. Verify that the number of commitment openings provided is equal to the new greatest version minus the previous greatest version, or is equal to the new greatest version plus one if there were no previous versions.
+
+4. If the Transparency Log is deployed with a Third-Party Manager, verify that the number of signatures provided matches the number of commitments and that the signatures are valid.
+
+5. Verify that the expected number of VRF proofs was provided, and that the proofs properly evaluate into a VRF output.
+
+There are still (4.), (5.) and (6.) missing, but it is sufficient by far to show the hyperproperty we aim to show works. 
+Maybe discuss if we should do 4. 5. and 6. for...
+
+*/
+
 // VerifyUpdate verifies that a new version was correctly inserted (Section 9.1).
 // @ requires noPerm < p
 // @ preserves st.Inv()
@@ -273,9 +304,8 @@ func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) 
 // @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ ensures err != nil ==> acc(resp.Inv(), p)
-// @ ensures rel(err == nil, 0) && rel(err == nil, 1) ==> low(resp.New_version)
-func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse,
-	config *client.Configuration /*@, ghost p perm @*/) (err error) {
+// @ ensures err == nil ==> low(resp.New_version)
+func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, config *client.Configuration /*@, ghost p perm @*/) (err error) {
 	//@ unfold acc(resp.Inv(), p)
 
 	determined := false
@@ -295,6 +325,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse,
 	// Phase 2: Validation checks
 	if !determined {
 		if resp.Prev_greatest != nil {
+			//Verify that the new version is greater than the prev_greatest_version
 			if resp.New_version <= *resp.Prev_greatest {
 				resultErr = errors.New("new version not greater than previous greatest")
 				determined = true
@@ -327,6 +358,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse,
 	// Phase 4: VerifyUpdateKey (iterates all frontier nodes)
 	decision := false
 	if !determined {
+		//TODO: We need to implement prev_greatest
 		prev_greatest := uint32(0)
 		//@ unfold acc(resp.Inv(), p)
 		if resp.Prev_greatest != nil {
@@ -334,8 +366,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse,
 		}
 
 		//@ assert size <= uint64(len(trees))
-		decision, resultErr = VerifyUpdateKey(trees, rootHashes, size, label,
-			resp.New_version, prev_greatest, config /*@, p/4 @*/)
+		decision, resultErr = VerifyUpdateKey(trees, rootHashes, size, label, resp.New_version, prev_greatest, config /*@, p/4 @*/)
 
 		if !decision || resultErr != nil {
 			//@ fold acc(resp.Inv(), p)
@@ -364,6 +395,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse,
 // failure, while res == 0 or 1 are acceptable (version exists in log).
 // The low(Version) property is preserved from the input monitoring map (established
 // by prior VerifyLatest/VerifyUpdate calls), not re-proven via TStar.
+
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ requires acc(resp.Inv(), p)
@@ -379,8 +411,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse,
 // @ ensures acc(resp.Inv(), p) && acc(label, p) && acc(config, p)
 // @ ensures acc(new_map)
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < len(new_map) ==> low(new_map[j].Version)
-func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse,
-	monitor_map []client.MonitoringMapEntry, config *client.Configuration /*@, ghost p perm @*/) (new_map []client.MonitoringMapEntry, err error) {
+func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, monitor_map []client.MonitoringMapEntry, config *client.Configuration /*@, ghost p perm @*/) (new_map []client.MonitoringMapEntry, err error) {
 	//@ unfold acc(resp.Inv(), p)
 
 	determined := false
