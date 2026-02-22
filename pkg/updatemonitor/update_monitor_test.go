@@ -243,7 +243,7 @@ func TestVerifyMonitor_EmptyMonitorMap(t *testing.T) {
 		},
 	}
 	monitorMap := []client.MonitoringMapEntry{}
-	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring, ReasonableMonitoringWindow: 1}
 
 	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
 	if err != nil {
@@ -275,7 +275,7 @@ func TestVerifyMonitor_UpdateViewFailsTreeSizeZero(t *testing.T) {
 	monitorMap := []client.MonitoringMapEntry{
 		{Position: 0, Version: 0},
 	}
-	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring, ReasonableMonitoringWindow: 1}
 
 	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
 	if err == nil {
@@ -321,10 +321,10 @@ func TestVerifyMonitor_PreservesMonitorMapEntries(t *testing.T) {
 	// That sets determined=true, so remaining entries are still appended.
 	monitorMap := []client.MonitoringMapEntry{
 		{Position: 0, Version: 1},
-		{Position: 1, Version: 2},
-		{Position: 2, Version: 3},
+		{Position: 0, Version: 2},
+		{Position: 0, Version: 3},
 	}
-	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring, ReasonableMonitoringWindow: 1}
 
 	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
 	// First entry causes CheckGreatest error → determined = true
@@ -368,7 +368,7 @@ func TestVerifyMonitor_BadTimestamps(t *testing.T) {
 		},
 	}
 	monitorMap := []client.MonitoringMapEntry{}
-	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring, ReasonableMonitoringWindow: 1}
 
 	_, err := VerifyMonitor(st, label, resp, monitorMap, config)
 	if err == nil {

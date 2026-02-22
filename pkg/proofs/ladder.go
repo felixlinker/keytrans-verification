@@ -188,12 +188,6 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 
 @*/
 // @ requires base > 0
-// =========Hyperproperties=====
-// requires low(base)
-//
-//	ensures low(r)
-//
-// =============================
 // @ ensures r >= 0
 // @ ensures IntPow2(r) <= base
 // @ ensures base < IntPow2(r+1)

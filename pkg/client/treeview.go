@@ -228,6 +228,7 @@ func IsDistinguished(left_ts, right_ts, rmw uint64) (res bool) {
 // @ requires acc(tree.Inv(), p) && acc(timestamps, p)
 // @ requires low(rmw)
 // @ ensures  acc(tree.Inv(), p) && acc(timestamps, p) && acc(result)
+// @ ensures  low(len(result))
 // @ ensures  forall j int :: 0 <= j && j < len(result) ==> low(result[j])
 // @ trusted
 func ComputeDistinguishedSet(tree *ImplicitBinarySearchTree, timestamps []uint64,
@@ -278,8 +279,11 @@ func computeDistinguishedRec(tree *ImplicitBinarySearchTree, timestamps []uint64
 // are >= pos, terminated after first distinguished entry. (Section 8.2, Step 2)
 // @ requires noPerm < p
 // @ requires acc(tree.Inv(), p) && acc(distinguished, p)
-// @ requires low(pos)
+// @ requires low(pos) && low(len(distinguished))
+// @ requires forall j int :: 0 <= j && j < len(distinguished) ==> low(distinguished[j])
 // @ ensures  acc(tree.Inv(), p) && acc(distinguished, p) && acc(result)
+// @ ensures  low(len(result)) && low(len(distinguished))
+// @ ensures  forall j int :: 0 <= j && j < len(distinguished) ==> low(distinguished[j])
 // @ ensures  forall j int :: 0 <= j && j < len(result) ==> low(result[j])
 // @ trusted
 func DirectPathRight(tree *ImplicitBinarySearchTree, pos uint64,

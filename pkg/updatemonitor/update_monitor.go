@@ -83,7 +83,7 @@ VerifyUpdateKey Algorithms:
 // @ requires acc(prefixTrees, p)
 // @ requires acc(prefixRootHash, p)
 // @ requires acc(label, p) && acc(config, p)
-// @ requires low(label) && low(size)
+// @ requires low(len(label)) && (forall i int :: 0 <= i && i < len(label) ==> low(label[i])) && low(size)
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 // @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
@@ -287,7 +287,7 @@ The user verifies this information as follows:
 
 5. Verify that the expected number of VRF proofs was provided, and that the proofs properly evaluate into a VRF output.
 
-There are still (4.), (5.) and (6.) missing, but it is sufficient by far to show the hyperproperty we aim to show works. 
+There are still (4.), (5.) and (6.) missing, but it is sufficient by far to show the hyperproperty we aim to show works.
 Maybe discuss if we should do 4. 5. and 6. for...
 
 */
@@ -296,7 +296,8 @@ Maybe discuss if we should do 4. 5. and 6. for...
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ requires acc(resp.Inv(), p)
-// @ requires acc(label, p) && low(label)
+// @ requires acc(label, p)
+// @ requires low(len(label)) && (forall i int :: 0 <= i && i < len(label) ==> low(label[i]))
 // @ requires label != nil
 // @ requires acc(config, p)
 // @ requires resp.New_version >= 0
@@ -399,7 +400,8 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ requires acc(resp.Inv(), p)
-// @ requires acc(label, p) && low(label)
+// @ requires acc(label, p)
+// @ requires low(len(label)) && (forall i int :: 0 <= i && i < len(label) ==> low(label[i]))
 // @ requires acc(monitor_map)
 // @ requires acc(config, p)
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
@@ -408,6 +410,8 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires low(len(monitor_map))
 // @ requires forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Version)
+// @ requires forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Position)
+// @ requires low(config.ReasonableMonitoringWindow)
 // @ ensures acc(resp.Inv(), p) && acc(label, p) && acc(config, p)
 // @ ensures acc(new_map)
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < len(new_map) ==> low(new_map[j].Version)
@@ -428,6 +432,12 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 		determined = true
 	}
 
+	// Copy timestamps while resp.Search.Inv() is still accessible
+	//@ unfold acc(resp.Search.Inv(), p/2)
+	timestamps := make([]uint64, len(resp.Search.Timestamps))
+	copy(timestamps, resp.Search.Timestamps /*@, p/4 @*/)
+	//@ fold acc(resp.Search.Inv(), p/2)
+
 	// Phase 2: Build prefix trees
 	//@ fold acc(resp.Inv(), p)
 
@@ -442,27 +452,31 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 		}
 	}
 
-	// Phase 3: Process each monitoring map entry using frontier nodes
+	// Phase 3: Per-entry direct path inspection (Section 8.2)
 	new_map = make([]client.MonitoringMapEntry, 0)
 	if !determined {
 		search_tree := client.MkImplicitBinarySearchTree(size)
-		frontiers := search_tree.FrontierNodes( /*@ p/4, size @*/ )
+		distinguished := client.ComputeDistinguishedSet(search_tree, timestamps, config.ReasonableMonitoringWindow /*@, 1/2 @*/)
 		//@ assert size <= uint64(len(trees))
-		//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < uint64(len(trees))
 
 		// Process entries
 		//@ ghost var versions seq[uint32] = seq[uint32]{}
+
+
 		//@ invariant acc(monitor_map)
 		//@ invariant acc(new_map)
 		//@ invariant acc(trees)
 		//@ invariant acc(rootHashes)
-		//@ invariant acc(frontiers)
 		//@ invariant acc(label, p)
 		//@ invariant acc(config, p)
+		//@ invariant search_tree != nil && acc(search_tree.Inv(), 1/4)
+		//@ invariant acc(distinguished)
+		//@ invariant low(len(distinguished))
+		//@ invariant forall j int :: 0 <= j && j < len(distinguished) ==> low(distinguished[j])
+		//@ invariant size <= uint64(len(trees))
 		//@ invariant forall i int :: i >= 0 && i < len(trees) ==> acc(&trees[i])
 		//@ invariant forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(trees[i])
 		//@ invariant forall i int :: i >= 0 && i < len(trees) ==> trees[i] != nil
-		//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < uint64(len(trees))
 		//@ invariant 0 <= mIdx && mIdx <= len(monitor_map)
 		//@ invariant low(mIdx)
 		//@ invariant !determined ==> resultErr == nil
@@ -470,35 +484,58 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 		//@ invariant len(versions) == len(new_map)
 		//@ invariant forall j int :: 0 <= j && j < len(new_map) ==> new_map[j].Version == versions[j]
 		//@ invariant forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Version)
+		//@ invariant forall j int :: 0 <= j && j < len(monitor_map) ==> low(monitor_map[j].Position)
 		for mIdx := 0; mIdx < len(monitor_map); mIdx++ {
 			entry := monitor_map[mIdx]
 			//@ assert low(entry.Version)
+			//@ assert low(entry.Position)
+			newPosition := entry.Position
 
-			if !determined {
-				tVal := uint64(entry.Version)
-				monitorOk := true
-				_ = monitorOk
+			// All distinguished access is OUTSIDE if !determined so both
+			// executions touch distinguished identically (preserves low() in hyper mode)
+			isDistinguished := false
+			entryPosInt := int(entry.Position)
+			if entryPosInt >= 0 && entryPosInt < len(distinguished) {
+				isDistinguished = distinguished[entryPosInt]
+			}
 
-				// Check all frontier nodes using CheckGreatest
-				// For monitoring: res == -1 (hole) is failure; res == 0 or 1 is ok
-				//@ invariant acc(frontiers)
-				//@ invariant acc(trees)
-				//@ invariant acc(rootHashes)
-				//@ invariant acc(label, p)
-				//@ invariant forall i int :: i >= 0 && i < len(trees) ==> acc(&trees[i])
-				//@ invariant forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(trees[i])
-				//@ invariant forall i int :: i >= 0 && i < len(trees) ==> trees[i] != nil
-				//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < uint64(len(trees))
-				//@ invariant 0 <= fIdx && fIdx <= len(frontiers)
-				//@ invariant !determined ==> monitorOk && resultErr == nil
-				for fIdx := 0; fIdx < len(frontiers); fIdx++ {
-					if !determined {
-						frontier := frontiers[fIdx]
-						//@ assert frontier >= 0 && int(frontier) < len(trees)
-						Prefix_tree := trees[frontier]
-						rootHash := rootHashes[frontier]
+			// Compute pathRight unconditionally when !isDistinguished
+			// (isDistinguished is low(), so both executions take the same branch)
+			pathRight := make([]uint64, 0)
+			if !isDistinguished {
+				pathRight = client.DirectPathRight(search_tree, entry.Position, distinguished /*@, 1/8 @*/)
+			}
+
+
+			tVal := uint64(entry.Version)
+			//@ invariant acc(pathRight)
+			//@ invariant acc(trees)
+			//@ invariant acc(rootHashes)
+			//@ invariant acc(label, p)
+			//@ invariant acc(search_tree.Inv(), 1/4)
+			//@ invariant acc(distinguished)
+
+			//Distinguished nodes are low as they are public (Otherwise it doesn't make sense to make them as checkpoints)
+			
+			//@ invariant low(len(distinguished))
+			//@ invariant forall j int :: 0 <= j && j < len(distinguished) ==> low(distinguished[j])
+			//@ invariant size <= uint64(len(trees))
+			//@ invariant forall i int :: i >= 0 && i < len(trees) ==> acc(&trees[i])
+			//@ invariant forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(trees[i])
+			//@ invariant forall i int :: i >= 0 && i < len(trees) ==> trees[i] != nil
+			//@ invariant 0 <= pIdx && pIdx <= len(pathRight)
+			//@ invariant !determined ==> resultErr == nil
+			for pIdx := 0; pIdx < len(pathRight); pIdx++ {
+				if !determined {
+					pos := pathRight[pIdx]
+					posIdx := int(pos)
+					if posIdx < 0 || posIdx >= len(trees) {
+						resultErr = errors.New("monitoring check failed: position out of bounds")
+						determined = true
+					} else {
+						Prefix_tree := trees[posIdx]
+						rootHash := rootHashes[posIdx]
 						if Prefix_tree != nil {
-
 							steps /*@, tStarIdx @*/ := client.FullBinaryLadderSteps_with_tstar(tVal)
 
 							//@ ghost var labelSeq seq[byte] = getContent(label)
@@ -506,16 +543,16 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 
 							cgRes, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
 							if cgErr != nil {
-								monitorOk = false
 								resultErr = cgErr
 								determined = true
 							} else if cgRes == -1 {
 								// Hole found: version not in log
-								monitorOk = false
 								resultErr = errors.New("monitoring check failed: version not included")
 								determined = true
+							} else {
+								// Success: advance position
+								newPosition = pos
 							}
-							// cgRes == 0 or 1: acceptable for monitoring
 						}
 					}
 				}
@@ -523,7 +560,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 
 			// Always append to keep new_map/versions in sync across executions
 			newEntry := client.MonitoringMapEntry{
-				Position: entry.Position,
+				Position: newPosition,
 				Version:  entry.Version,
 			}
 			new_map = append( /*@ perm(1/2), @*/ new_map, newEntry)
