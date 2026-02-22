@@ -477,6 +477,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 			if !determined {
 				tVal := uint64(entry.Version)
 				monitorOk := true
+				_ = monitorOk
 
 				// Check all frontier nodes using CheckGreatest
 				// For monitoring: res == -1 (hole) is failure; res == 0 or 1 is ok
