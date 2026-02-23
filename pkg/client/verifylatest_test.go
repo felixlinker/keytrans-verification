@@ -453,6 +453,263 @@ func TestVerifyLatest_WrongLadderLength(t *testing.T) {
 }
 
 // ==================================================================================
+// ======================== VerifyLatest Happy-Path Tests ===========================
+// ==================================================================================
+
+// makeBinaryLadderStep creates a BinaryLadderStep whose Proof is VRF_hash(nil, {label, version}).
+// Since VRF_prove == VRF_hash and VRF_proof_to_hash is the identity, CombineResults
+// will produce a leaf with the correct Vrf_output for this (label, version) pair.
+func makeBinaryLadderStep(label []byte, version uint32) proofs.BinaryLadderStep {
+	vrfInput := crypto.VrfInput{Label: label, Version: version}
+	vrfProof := crypto.VRF_hash(nil, vrfInput)
+	commitment := sha256.Sum256(append([]byte("commit-"), byte(version)))
+	return proofs.BinaryLadderStep{Proof: vrfProof, Commitment: commitment}
+}
+
+func TestVerifyLatest_HappyPath_Size1(t *testing.T) {
+	// Simplest happy path: tree_size=1, version=0, label="alice"
+	// FullBinaryLadderSteps_wrapper(0) = [0, 1] → 2 binary ladder steps
+	// 1 prefix proof with Results: [{Inclusion, depth=0}], Elements: [] → leaf
+	// CheckGreatest: step 0 → inclusion (<=t) ok; step 1 → non-inclusion (>t) ok → res=0
+	// Expected: VerifyLatest returns (&UpdateValue{...}, nil)
+	label := []byte("alice")
+	version := uint32(0)
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	prefixProof := proofs.PrefixProof{
+		Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		},
+		Elements: []proofs.NodeValue{},
+	}
+
+	rootHash := makeRootHash()
+	st := newUserState()
+	query := SearchRequest{Label: label}
+	resp := SearchResponse{
+		Version: uint32Ptr(version),
+		Full_tree_head: FullTreeHead{
+			Tree_head: TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  rootHash,
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{100},
+			Prefix_proofs: []proofs.PrefixProof{prefixProof},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Inclusion: proofs.InclusionProof{},
+		Opening:   []byte{},
+		Value:     proofs.UpdateValue{Value: []byte("alice-key-v0")},
+	}
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest returned nil result; expected UpdateValue")
+	}
+	if string(res.Value) != "alice-key-v0" {
+		t.Errorf("res.Value = %q; want %q", string(res.Value), "alice-key-v0")
+	}
+}
+
+func TestVerifyLatest_HappyPath_Size2(t *testing.T) {
+	// tree_size=2, version=0, label="bob"
+	// FullBinaryLadderSteps_wrapper(0) = [0, 1] → 2 binary ladder steps
+	// FrontierNodes(2) = [1] → checks tree at position 1
+	// prefix_proofs[0]: copath node (not a frontier, not checked by VerifyLatestKey)
+	// prefix_proofs[1]: leaf for version 0 (Inclusion, depth=0)
+	label := []byte("bob")
+	version := uint32(0)
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	dummyHash := proofs.NodeValue{}
+	dummyHash[0] = 0xAB
+
+	prefixProofs := []proofs.PrefixProof{
+		// prefix_proofs[0]: copath node (position 0 is not a frontier for size=2)
+		{Results: []proofs.PrefixSearchResult{}, Elements: []proofs.NodeValue{dummyHash}},
+		// prefix_proofs[1]: leaf for version 0
+		{Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		}, Elements: []proofs.NodeValue{}},
+	}
+
+	rootHash := makeRootHash()
+	st := newUserState()
+	query := SearchRequest{Label: label}
+	resp := SearchResponse{
+		Version: uint32Ptr(version),
+		Full_tree_head: FullTreeHead{
+			Tree_head: TreeHead{Tree_size: 2, Signature: []byte{}},
+			RootHash:  rootHash,
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{100},
+			Prefix_proofs: prefixProofs,
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Inclusion: proofs.InclusionProof{},
+		Opening:   []byte{},
+		Value:     proofs.UpdateValue{Value: []byte("bob-key-v0")},
+	}
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest returned nil result; expected UpdateValue")
+	}
+	if string(res.Value) != "bob-key-v0" {
+		t.Errorf("res.Value = %q; want %q", string(res.Value), "bob-key-v0")
+	}
+}
+
+func TestVerifyLatest_HappyPath_Size3(t *testing.T) {
+	// tree_size=3, version=0, label="charlie"
+	// FullBinaryLadderSteps_wrapper(0) = [0, 1] → 2 binary ladder steps
+	// FrontierNodes(3) = [1, 2] → checks trees at positions 1 AND 2
+	// prefix_proofs[0]: copath node (position 0 is not a frontier)
+	// prefix_proofs[1]: leaf for version 0
+	// prefix_proofs[2]: leaf for version 0
+	label := []byte("charlie")
+	version := uint32(0)
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	dummyHash := proofs.NodeValue{}
+	dummyHash[0] = 0xCD
+
+	prefixProofs := []proofs.PrefixProof{
+		// prefix_proofs[0]: copath node
+		{Results: []proofs.PrefixSearchResult{}, Elements: []proofs.NodeValue{dummyHash}},
+		// prefix_proofs[1]: leaf for version 0
+		{Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		}, Elements: []proofs.NodeValue{}},
+		// prefix_proofs[2]: leaf for version 0
+		{Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		}, Elements: []proofs.NodeValue{}},
+	}
+
+	rootHash := makeRootHash()
+	st := newUserState()
+	query := SearchRequest{Label: label}
+	resp := SearchResponse{
+		Version: uint32Ptr(version),
+		Full_tree_head: FullTreeHead{
+			Tree_head: TreeHead{Tree_size: 3, Signature: []byte{}},
+			RootHash:  rootHash,
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{100, 200},
+			Prefix_proofs: prefixProofs,
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Inclusion: proofs.InclusionProof{},
+		Opening:   []byte{},
+		Value:     proofs.UpdateValue{Value: []byte("charlie-key-v0")},
+	}
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest returned nil result; expected UpdateValue")
+	}
+	if string(res.Value) != "charlie-key-v0" {
+		t.Errorf("res.Value = %q; want %q", string(res.Value), "charlie-key-v0")
+	}
+}
+
+func TestVerifyLatest_HappyPath_UpdatesUserState(t *testing.T) {
+	// Verify that a successful VerifyLatest call correctly updates the UserState
+	// (size and frontier timestamps).
+	label := []byte("dave")
+	version := uint32(0)
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	prefixProof := proofs.PrefixProof{
+		Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		},
+		Elements: []proofs.NodeValue{},
+	}
+
+	st := newUserState()
+	if st.Size != 0 {
+		t.Fatalf("initial st.Size = %d; want 0", st.Size)
+	}
+
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+	query := SearchRequest{Label: label}
+	resp := SearchResponse{
+		Version: uint32Ptr(version),
+		Full_tree_head: FullTreeHead{
+			Tree_head: TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{42},
+			Prefix_proofs: []proofs.PrefixProof{prefixProof},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Inclusion: proofs.InclusionProof{},
+		Opening:   []byte{},
+		Value:     proofs.UpdateValue{Value: []byte("dave-key-v0")},
+	}
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest returned nil result")
+	}
+
+	// Verify UserState was updated by UpdateView
+	if st.Size != 1 {
+		t.Errorf("st.Size = %d; want 1", st.Size)
+	}
+	if len(st.Frontier_timestamps) != 1 {
+		t.Fatalf("len(st.Frontier_timestamps) = %d; want 1", len(st.Frontier_timestamps))
+	}
+	if st.Frontier_timestamps[0] != 42 {
+		t.Errorf("st.Frontier_timestamps[0] = %d; want 42", st.Frontier_timestamps[0])
+	}
+}
+
+// ==================================================================================
 // ========================== MkImplicitBinarySearchTree ===========================
 // ==================================================================================
 

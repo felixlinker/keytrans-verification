@@ -126,7 +126,7 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 		return completeSteps, errors.New("not enough steps")
 	}
 
-	sortedSteps := make([]BinaryLadderStep, 0, len(results))
+	sortedSteps := make([]BinaryLadderStep, len(results))
 	copy(sortedSteps, steps[:len(results)])
 	sortBinaryLadderSteps(sortedSteps)
 

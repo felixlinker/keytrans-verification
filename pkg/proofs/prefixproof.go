@@ -93,7 +93,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 
 	step /*@@@*/ := steps[0]
 
-	prefixMatches := false
+	prefixMatches := true
 	for i := 0; i < len(prefix); i++ {
 		bit := step.Step.Vrf_output[i/8]>>(i%8) == 0x01
 		prefixMatches = prefixMatches && bit == prefix[i]
