@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
+	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -16,7 +17,7 @@ import (
 // matches the given (label, version) pair. GetCommitment on this tree returns:
 //   - non-nil (inclusion) when queried with the same (label, version)
 //   - nil (non-inclusion) for any other (label, version)
-func buildSingleLeafTree(label []byte, version uint32) *proofs.PrefixTree {
+func buildSingleLeafTree(label []byte, version uint32) *prefixtree.PrefixTree {
 	vrfInput := crypto.VrfInput{Label: label, Version: version}
 	vrfHash := crypto.VRF_hash(nil, vrfInput)
 	commitment := sha256.Sum256([]byte("test-commitment"))
@@ -24,7 +25,7 @@ func buildSingleLeafTree(label []byte, version uint32) *proofs.PrefixTree {
 		Vrf_output: vrfHash,
 		Commitment: commitment,
 	}
-	tree := &proofs.PrefixTree{Leaf: leaf}
+	tree := &prefixtree.PrefixTree{Leaf: leaf}
 	tree.ComputeHash()
 	return tree
 }
@@ -178,7 +179,7 @@ func TestVerifyLatestKey_VersionOutOfBounds(t *testing.T) {
 	size := uint64(4)
 
 	tree := buildSingleLeafTree(label, 0)
-	trees := []*proofs.PrefixTree{tree, tree, tree, tree}
+	trees := []*prefixtree.PrefixTree{tree, tree, tree, tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr(), makeHashPtr(), makeHashPtr(), makeHashPtr()}
 
 	query := SearchRequest{Label: label}
@@ -208,7 +209,7 @@ func TestVerifyLatestKey_VersionEqualToSize(t *testing.T) {
 	size := uint64(4) // version 4 >= size 4 → out of bounds
 
 	tree := buildSingleLeafTree(label, 0)
-	trees := []*proofs.PrefixTree{tree, tree, tree, tree}
+	trees := []*prefixtree.PrefixTree{tree, tree, tree, tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr(), makeHashPtr(), makeHashPtr(), makeHashPtr()}
 
 	query := SearchRequest{Label: label}
@@ -240,7 +241,7 @@ func TestVerifyLatestKey_IsGreatest_SingleFrontier(t *testing.T) {
 	size := uint64(1)
 
 	tree := buildSingleLeafTree(label, version)
-	trees := []*proofs.PrefixTree{tree}
+	trees := []*prefixtree.PrefixTree{tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr()}
 
 	query := SearchRequest{Label: label}
@@ -270,7 +271,7 @@ func TestVerifyLatestKey_HoleDetected(t *testing.T) {
 	size := uint64(1)
 
 	tree := buildSingleLeafTree(label, 99) // wrong version → non-inclusion at step 0
-	trees := []*proofs.PrefixTree{tree}
+	trees := []*prefixtree.PrefixTree{tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr()}
 
 	query := SearchRequest{Label: label}
@@ -299,7 +300,7 @@ func TestVerifyLatestKey_NilTree(t *testing.T) {
 	version := uint32(0)
 	size := uint64(1)
 
-	trees := []*proofs.PrefixTree{nil}
+	trees := []*prefixtree.PrefixTree{nil}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr()}
 
 	query := SearchRequest{Label: label}
@@ -330,7 +331,7 @@ func TestVerifyLatestKey_MultipleFrontiers(t *testing.T) {
 	size := uint64(2)
 
 	tree := buildSingleLeafTree(label, version)
-	trees := []*proofs.PrefixTree{tree, tree}
+	trees := []*prefixtree.PrefixTree{tree, tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr(), makeHashPtr()}
 
 	query := SearchRequest{Label: label}

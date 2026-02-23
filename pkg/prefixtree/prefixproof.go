@@ -1,4 +1,4 @@
-package proofs
+package prefixtree
 
 import (
 	"bytes"
@@ -6,10 +6,8 @@ import (
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
+	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
-
-//TODO: To be fully compatible with this file, we need perhaps support of hyperpredicates in Gobra.
-// I don't think the current file will verify though. But no idea, worth to give it a try? 
 
 /*@
 pred (t *PrefixTree) Inv() {
@@ -26,11 +24,6 @@ pred (t PrefixTree) InvRec() {
 	(t.Leaf != nil) != (t.Left != nil && t.Right != nil) &&
 	// If a node's value is defined, its children's values must be defined
 	((t.Value != nil && t.Left != nil && t.Right != nil) ==> (t.Left.Value != nil && t.Right.Value != nil))
-}
-
-
-pred IsLow(arr []byte) {
-    acc(arr) && low(len(arr)) && (forall i int :: 0<=i && i < len(arr) ==> low(arr[i]))
 }
 
 @*/
@@ -58,7 +51,7 @@ type PrefixTree struct {
 	Value *[sha256.Size]byte
 	// If set, this node is a leaf of the given value. Left and Right must be nil
 	// in this case.
-	Leaf *PrefixLeaf
+	Leaf *proofs.PrefixLeaf
 	// Left subtree. May be nil even if Right is not nil.
 	Left *PrefixTree
 	// Right subtree. May be nil even if Left is not nil.
@@ -72,7 +65,7 @@ type PrefixTree struct {
 // prefix tree.
 // @ ensures err != nil ==> tree != nil && tree.Inv()
 // @ trusted
-func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNodes []NodeValue) (tree *PrefixTree, nextSteps []CompleteBinaryLadderStep, nextNodes []NodeValue, err error) {
+func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coPathNodes []proofs.NodeValue) (tree *PrefixTree, nextSteps []proofs.CompleteBinaryLadderStep, nextNodes []proofs.NodeValue, err error) {
 	tree = nil
 	nextSteps = steps
 	nextNodes = coPathNodes
@@ -146,12 +139,12 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 			// We are at the right depth to insert the search result. Insert it based
 			// on the type of result.
 			resultType := step.Result.Result_type
-			if resultType == Inclusion {
+			if resultType == proofs.Inclusion {
 				// TODO: Copy leaf
 				tree = &PrefixTree{Leaf: &step.Step}
 				nextSteps = steps[1:]
 				return
-			} else if resultType == NonInclusionLeaf {
+			} else if resultType == proofs.NonInclusionLeaf {
 				if step.Result.Leaf == nil {
 					err = errors.New("no leaf for inclusion proof given")
 					return
@@ -161,7 +154,7 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 					nextSteps = steps[1:]
 					return
 				}
-			} else if resultType == NonInclusionParent {
+			} else if resultType == proofs.NonInclusionParent {
 				tree = &PrefixTree{Value: &[32]byte{}}
 				nextSteps = steps[1:]
 				return
@@ -183,20 +176,20 @@ func ToTreeRecursive(prefix []bool, steps []CompleteBinaryLadderStep, coPathNode
 	}
 }
 
-// Construct a prefix tree from a prefix proof and the provided binary ladder
-// steps. We assume that the binary ladder steps are in the order that the
-// binary ladder would request them.
+// ToTree constructs a prefix tree from a prefix proof and the provided binary
+// ladder steps. We assume that the binary ladder steps are in the order that
+// the binary ladder would request them.
 // @ ensures err == nil ==> tree != nil && tree.Inv()
 // @ ensures err != nil ==> tree != nil && tree.Inv() && tree.GetValue() != nil
 // @ trusted
-func (prf PrefixProof) ToTree(fullLadder []BinaryLadderStep) (tree *PrefixTree, err error) {
+func ToTree(prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep) (tree *PrefixTree, err error) {
 	tree = &PrefixTree{}
 	if len(fullLadder) < len(prf.Results) {
 		return nil, errors.New("too many results")
 	}
 
-	var steps []CompleteBinaryLadderStep
-	if steps, err = CombineResults(prf.Results, fullLadder); err != nil {
+	var steps []proofs.CompleteBinaryLadderStep
+	if steps, err = proofs.CombineResults(prf.Results, fullLadder); err != nil {
 		return nil, err
 	}
 
@@ -277,7 +270,22 @@ decreases
 pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash seq[byte]) *[]byte
 @*/
 
-// TODO: Implement this
+// GetCommitment searches the authenticated prefix tree for the commitment
+// corresponding to the given (Label, Version) pair.
+//
+// Following the Authentikit pattern from "Logical Relations for Formally
+// Verified Authenticated Data Structures" (Gregersen et al., CCS '25):
+// This implements the "ideal" retrieve operation. The tree has already been
+// constructed from proofs (ToTree) and its hashes computed (ComputeHash),
+// which corresponds to the verifier's unauth checks at each level (Figure 3c).
+// GetCommitment computes the VRF output for (Label, Version) and searches
+// the prefix tree for a matching leaf.
+//
+// Returns:
+//   - (commitment, nil) if a leaf with matching VRF output is found (inclusion)
+//   - (nil, nil)         if no matching leaf exists (non-inclusion)
+//   - (nil, error)       if the tree is in an invalid state
+//
 // TODO: Verify this
 // @ requires Label != nil && len(Label) >= 0
 // @ requires Version >= 0
@@ -290,10 +298,12 @@ pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash
 // @ trusted
 func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost labelS seq[byte], ghost rootHashS seq[byte]@*/) (res []byte, err error) {
 	if tree == nil {
-		res = nil
-		err = errors.New("The prefix tree is empty.")
+		// Nil tree: non-inclusion (no commitments exist in an empty tree)
+		return nil, nil
 	}
-	//Compute the VRF output for the label-version pair
+
+	// Compute the VRF output for the (Label, Version) pair.
+	// The VRF output determines the path through the prefix tree.
 	VRFInput := crypto.VrfInput{
 		Label:   Label,
 		Version: uint32(Version),
@@ -304,14 +314,21 @@ func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []b
 	for i := 0; i < sha256.Size; i++ {
 		vrfOutputSlice[i] = vrfOutput[i]
 	}
+
+	// Search the prefix tree following the VRF output bits
 	res, err = tree.SearchForCommitment(vrfOutputSlice, 0)
 	return
 }
 
+// SearchForCommitment traverses the prefix tree following the bits of
+// vrfOutput starting at the given depth. This corresponds to the ideal
+// retrieve operation from the Authentikit pattern (Figure 3b in
+// Gregersen et al.): descend left or right based on the path bits,
+// and return the value at the matching leaf.
+//
 // @preserves tree!= nil ==> tree.Inv()
 // @ trusted
 func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte, error) {
-	// Nil tree means non-inclusion (path doesn't exist)
 	if tree == nil {
 		return nil, nil
 	}
@@ -320,52 +337,56 @@ func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte
 	d := depth
 	maxDepth := len(vrfOutput) * 8
 
-	for d <= maxDepth {
+	for d < maxDepth {
 		if node == nil {
 			// Path doesn't exist: non-inclusion
 			return nil, nil
-		} else {
-			//@ unfold node.Inv()
-			if node.Leaf != nil {
-
-				// Reached a leaf: check if VRF output matches
-				if bytes.Equal(node.Leaf.Vrf_output[:], vrfOutput) {
-					// Inclusion: copy commitment and return
-					result := make([]byte, sha256.Size)
-					for i := 0; i < sha256.Size; i++ {
-						result[i] = node.Leaf.Commitment[i]
-					}
-					//@ fold node.Inv()
-					return result, nil
-				}
-				//@ fold node.Inv()
-				return nil, nil
-			}
-
-			if node.Left != nil && node.Right != nil {
-				byteIdx := d / 8
-				bitIdx := d % 8
-				bit := (vrfOutput[byteIdx] >> bitIdx) & 1
-
-				if bit == 1 {
-					node = node.Right
-				} else {
-					node = node.Left
-				}
-				d++
-				//@ fold node.Inv()
-				continue
-			}
-
 		}
 
+		//@ unfold node.Inv()
+
+		// Case 1: Leaf node — check if VRF output matches
+		if node.Leaf != nil {
+			if bytes.Equal(node.Leaf.Vrf_output[:], vrfOutput) {
+				// Inclusion: return a copy of the commitment
+				result := make([]byte, sha256.Size)
+				for i := 0; i < sha256.Size; i++ {
+					result[i] = node.Leaf.Commitment[i]
+				}
+				//@ fold node.Inv()
+				return result, nil
+			}
+			// Non-inclusion: leaf exists but VRF output doesn't match
+			//@ fold node.Inv()
+			return nil, nil
+		}
+
+		// Case 2: Internal node with children — navigate based on bit
+		if node.Left != nil && node.Right != nil {
+			byteIdx := d / 8
+			bitIdx := d % 8
+			bit := (vrfOutput[byteIdx] >> bitIdx) & 1
+
+			if bit == 1 {
+				node = node.Right
+			} else {
+				node = node.Left
+			}
+			d++
+			//@ fold node.Inv()
+			continue
+		}
+
+		// Case 3: Copath node (has Value but no children/leaf) —
+		// the tree was only partially expanded via the prefix proof,
+		// so we cannot determine inclusion or non-inclusion.
 		if node.Value != nil {
-			// Copath node - cannot determine inclusion/non-inclusion
 			//@ fold node.Inv()
 			return nil, errors.New("cannot determine: reached copath node")
 		}
 
-		// Invalid node state
+		// Case 4: Invalid tree node (no leaf, no children, no value)
+		//@ fold node.Inv()
 		return nil, errors.New("invalid tree node state")
 	}
 

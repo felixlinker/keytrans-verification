@@ -6,6 +6,7 @@ import (
 
 	"github.com/felixlinker/keytrans-verification/pkg/client"
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
+	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -13,7 +14,7 @@ import (
 // ================================== Helpers =======================================
 // ==================================================================================
 
-func buildSingleLeafTree(label []byte, version uint32) *proofs.PrefixTree {
+func buildSingleLeafTree(label []byte, version uint32) *prefixtree.PrefixTree {
 	vrfInput := crypto.VrfInput{Label: label, Version: version}
 	vrfHash := crypto.VRF_hash(nil, vrfInput)
 	commitment := sha256.Sum256([]byte("test-commitment"))
@@ -21,7 +22,7 @@ func buildSingleLeafTree(label []byte, version uint32) *proofs.PrefixTree {
 		Vrf_output: vrfHash,
 		Commitment: commitment,
 	}
-	tree := &proofs.PrefixTree{Leaf: leaf}
+	tree := &prefixtree.PrefixTree{Leaf: leaf}
 	tree.ComputeHash()
 	return tree
 }
@@ -54,7 +55,7 @@ func TestVerifyUpdateKey_VersionOutOfBounds(t *testing.T) {
 	size := uint64(4)
 
 	tree := buildSingleLeafTree(label, 0)
-	trees := []*proofs.PrefixTree{tree, tree, tree, tree}
+	trees := []*prefixtree.PrefixTree{tree, tree, tree, tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr(), makeHashPtr(), makeHashPtr(), makeHashPtr()}
 	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
 
@@ -73,7 +74,7 @@ func TestVerifyUpdateKey_IsGreatest_SingleFrontier(t *testing.T) {
 	size := uint64(1)
 
 	tree := buildSingleLeafTree(label, 0)
-	trees := []*proofs.PrefixTree{tree}
+	trees := []*prefixtree.PrefixTree{tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr()}
 	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
 
@@ -92,7 +93,7 @@ func TestVerifyUpdateKey_HoleDetected(t *testing.T) {
 	size := uint64(1)
 
 	tree := buildSingleLeafTree(label, 99)
-	trees := []*proofs.PrefixTree{tree}
+	trees := []*prefixtree.PrefixTree{tree}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr()}
 	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
 
@@ -110,7 +111,7 @@ func TestVerifyUpdateKey_NilTree(t *testing.T) {
 	label := []byte("alice")
 	size := uint64(1)
 
-	trees := []*proofs.PrefixTree{nil}
+	trees := []*prefixtree.PrefixTree{nil}
 	rootHashes := []*[sha256.Size]byte{makeHashPtr()}
 	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
 

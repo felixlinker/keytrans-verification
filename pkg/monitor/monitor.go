@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/client"
+	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -54,13 +55,13 @@ pred (m MonitorResponse) Inv() {
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> forall k int :: 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ trusted
-func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
-	trees = make([]*proofs.PrefixTree, 0, n)
+func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) (trees []*prefixtree.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
+	trees = make([]*prefixtree.PrefixTree, 0, n)
 	rootHashes = make([]*[sha256.Size]byte, 0, n)
 	//@ unfold acc(resp.Inv(), p)
 	for i := 0; i < n; i++ {
 		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
-		if tree, treeErr := prf.ToTree(resp.Binary_ladder); treeErr != nil {
+		if tree, treeErr := prefixtree.ToTree(prf, resp.Binary_ladder); treeErr != nil {
 			//@ fold acc(resp.Inv(), p)
 			return nil, nil, treeErr
 		} else {
@@ -127,7 +128,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 	// Phase 2: Build prefix trees
 	//@ fold acc(resp.Inv(), p)
 
-	var trees []*proofs.PrefixTree
+	var trees []*prefixtree.PrefixTree
 	var rootHashes []*[sha256.Size]byte
 	if !determined {
 		var buildErr error

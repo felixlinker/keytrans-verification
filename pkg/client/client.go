@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -205,7 +206,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	n := len(resp.Search.Prefix_proofs)
 	//@ fold acc(resp.Inv(), p)
 
-	var trees []*proofs.PrefixTree
+	var trees []*prefixtree.PrefixTree
 	var rootHashes []*[sha256.Size]byte
 	if !determined {
 		var buildErr error
@@ -404,15 +405,15 @@ CheckGreatest verifies if t is the greatest version
 // @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Correct postcondition
 // @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest(prefixTree *proofs.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
+func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
 	//@ ghost var tStarVisited bool = false
 	//@ ghost var tStar uint64 = steps[tStarIdx]
 
-	//@ non_incl_lemma := proofs.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) != nil && tStar <= t
-	//@ incl_lemma := proofs.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) == nil && t < tStar
+	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) != nil && tStar <= t
+	//@ incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) == nil && t < tStar
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
@@ -499,7 +500,7 @@ type MonitoringMapEntry struct {
 // @ ensures acc(config, p)
 // @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
 // @ ensures err == nil && res ==> low(resp.Version)
-func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
+func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
 	search_tree := MkImplicitBinarySearchTree(size)
@@ -652,13 +653,13 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> forall k int :: 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ trusted
-func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
-	trees = make([]*proofs.PrefixTree, 0, n)
+func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []*prefixtree.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
+	trees = make([]*prefixtree.PrefixTree, 0, n)
 	rootHashes = make([]*[sha256.Size]byte, 0, n)
 	//@ unfold acc(resp.Inv(), p)
 	for i := 0; i < n; i++ {
 		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
-		if tree, treeErr := prf.ToTree(resp.Binary_ladder); treeErr != nil {
+		if tree, treeErr := prefixtree.ToTree(prf, resp.Binary_ladder); treeErr != nil {
 			//@ fold acc(resp.Inv(), p)
 			return nil, nil, treeErr
 		} else {

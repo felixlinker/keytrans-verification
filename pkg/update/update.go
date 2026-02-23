@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/client"
+	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -80,7 +81,7 @@ This looks like the same as the VerifyLatest, so I think we can ditch it.
 // @ ensures acc(label, p) && acc(config, p)
 // @ ensures acc(prefixTrees, p) && acc(prefixRootHash, p)
 // @ ensures err == nil && res ==> low(new_version)
-func VerifyUpdateKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, label []byte, new_version uint32, prev_greatest uint32, config *client.Configuration /*@, ghost p perm @*/) (res bool, err error) {
+func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, label []byte, new_version uint32, prev_greatest uint32, config *client.Configuration /*@, ghost p perm @*/) (res bool, err error) {
 	tVal := uint64(new_version)
 	search_tree := client.MkImplicitBinarySearchTree(size)
 	resultRes := true
@@ -208,13 +209,13 @@ func VerifyUpdateKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 // @ ensures err == nil ==> forall j int :: 0 <= j && j < n ==> forall k int :: 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ trusted
-func buildUpdatePrefixTrees(resp UpdateResponse, n int /*@, ghost p perm @*/) (trees []*proofs.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
-	trees = make([]*proofs.PrefixTree, 0, n)
+func buildUpdatePrefixTrees(resp UpdateResponse, n int /*@, ghost p perm @*/) (trees []*prefixtree.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
+	trees = make([]*prefixtree.PrefixTree, 0, n)
 	rootHashes = make([]*[sha256.Size]byte, 0, n)
 	//@ unfold acc(resp.Inv(), p)
 	for i := 0; i < n; i++ {
 		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
-		if tree, treeErr := prf.ToTree(resp.Binary_ladder); treeErr != nil {
+		if tree, treeErr := prefixtree.ToTree(prf, resp.Binary_ladder); treeErr != nil {
 			//@ fold acc(resp.Inv(), p)
 			return nil, nil, treeErr
 		} else {
@@ -317,7 +318,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 	// Phase 3: Build prefix trees
 	//@ fold acc(resp.Inv(), p)
 
-	var trees []*proofs.PrefixTree
+	var trees []*prefixtree.PrefixTree
 	var rootHashes []*[sha256.Size]byte
 	if !determined {
 		var buildErr error
