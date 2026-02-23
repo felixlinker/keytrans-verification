@@ -56,6 +56,18 @@ pure func TStarBetween(tStarVal, t1, t2 uint64) bool {
       (tStarVal == proofs.TStar_pure(t2, t1) && t2 < tStarVal && tStarVal <= t1)
 }
 
+//Optimization
+
+ghost
+decreases
+pure func TStar_Wrap(t1, t2 uint64) uint64 {
+	return (t1 < 0 || t2 < 0 || t1 == t2) ? 0:
+		t1 < t2 ?
+      (proofs.TStar_pure(t1, t2)) :
+      (proofs.TStar_pure(t2, t1))
+}
+
+
 ghost
 requires acc(arr, _)
 decreases
@@ -158,8 +170,9 @@ pred (s SearchResponse) Inv() {
 // @ requires resp.Version != nil
 // @ requires acc(resp.Version, _)
 // @ requires *resp.Version >= 0
-// @ requires low(query.Label)
 // @ requires query.Label != nil
+// @ requires acc(query.Label, p)
+// @ requires low(len(query.Label)) && forall i int :: 0<=i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
 // @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
@@ -167,7 +180,7 @@ pred (s SearchResponse) Inv() {
 // @ requires acc(config, p)
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
-// @ ensures err == nil ==> low(resp.Version)
+// @ ensures err == nil ==> low(resp.Version) //TODO: Do we need to check that low(res) holds? resp.Version is enough?
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 
@@ -269,10 +282,6 @@ decreases
 ensures res > 0
 func GetInt() (res int)
 
-
-// Ghost seq params avoid needing to unfold IsLow (which loses low facts in hyper mode)
-
-
 @*/
 
 /*@
@@ -324,6 +333,8 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 
 }
 
+//TODO: Change the permission to make sure that the steps[i]>=0 is not necessary.
+
 ghost
 decreases
 requires acc(steps)
@@ -335,7 +346,6 @@ requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_w
 ensures acc(steps)
 ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 ensures 0 <= idx && idx < len(steps)
-ensures low(idx < len(steps))
 ensures low(steps[idx])
 ensures TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
 func findTStarIdx(steps []uint64, t uint64) (idx int) {
@@ -343,6 +353,9 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 		idx = 0
 		assert TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
 		// steps[0] == 0 (precondition), 0 is low in both executions
+		// 0 will occur in every FBLS unless t == 0
+		// But t == 0 can never occur because this literally means that the version 0 is not inserted.
+		// So there will be an error returned instead
 		assert low(steps[idx])
 	} else {
 		idx1, idx2 := EstablishTStarWitnesses(steps, t)
@@ -368,6 +381,8 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 	assert idx < len(steps)
 }
 @*/
+
+//TODO: Assert the ensures and make them assert. Remove the functions
 
 // @ requires target >= 0
 // @ ensures acc(r1)
@@ -395,6 +410,8 @@ CheckGreatest verifies if t is the greatest version
 // @ requires acc(label)
 // @ requires acc(RootHash)
 // @ requires acc(steps)
+// TODO: Check the content of rootHash and label anstatt Ghost variable, eliminate ghost variables
+// @ requires low(getContent(RootHash))
 // @ requires low(labelSeq)
 // @ requires low(RootHashSeq)
 // @ requires t >= 0
@@ -473,6 +490,8 @@ type MonitoringMapEntry struct {
 	Version  uint32
 }
 
+//TODO : Fix low(query.Label) issues
+
 // @ requires noPerm < p
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version,p)
@@ -491,7 +510,7 @@ type MonitoringMapEntry struct {
 // @ requires low(size)
 // @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil
-// @ requires low(query.Label)
+// @ requires low(len(query.Label)) && forall i int :: 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ ensures acc(resp.Version, p)
 // @ ensures acc(query.Label, p)
 // @ ensures acc(prefixTrees, p)
@@ -521,6 +540,7 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 	}
 
 	// Loop: process all frontiers except the last
+	// Easier than having a if{if {...}}
 
 	//@ invariant acc(prefixTrees)
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
@@ -556,6 +576,8 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 					resultErr = errors.New("version out of bounds")
 					determined = true
 				}
+
+				//TODO: steps in CheckGreatest
 
 				steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
 
@@ -632,6 +654,10 @@ func VerifyLatestKey(prefixTrees []*proofs.PrefixTree, prefixRootHash []*[sha256
 }
 
 // buildPrefixTrees constructs prefix trees from the response's prefix proofs.
+// This part is according to our document assumed as low.
+//TODO: We maybe need to consider different views in the end?
+//TODO: Documentation
+
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(resp.Inv(), p)

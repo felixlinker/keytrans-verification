@@ -8,8 +8,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
 
-//TODO: To be fully compatible with this file, we need support of hyperpredicates in Gobra.
-// I don't think the current file will verify though.
+//TODO: To be fully compatible with this file, we need perhaps support of hyperpredicates in Gobra.
+// I don't think the current file will verify though. But no idea, worth to give it a try? 
 
 /*@
 pred (t *PrefixTree) Inv() {

@@ -747,7 +747,7 @@ decreases
 requires acc(r1)
 pure
 func TStar_wrapper(r1 []uint64, t1 uint64, t2 uint64) bool{
-	return exists idx int :: {r1[idx]} t1 < t2 && t1 >= 0 ==> 0 <= idx && idx < len(r1) && TStar_pure(t1, t2) == r1[idx]&& t1 <  TStar_pure(t1,t2)  && TStar_pure(t1,t2) <= t2
+	return exists idx int :: {r1[idx]} t1 < t2 && t1 >= 0 ==> 0 <= idx && idx < len(r1) && TStar_pure(t1, t2) == r1[idx] && t1 <  TStar_pure(t1,t2)  && TStar_pure(t1,t2) <= t2
 }
 @*/
 

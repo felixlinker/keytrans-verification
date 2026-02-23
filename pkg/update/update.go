@@ -57,12 +57,13 @@ pred (u UpdateResponse) Inv() {
 /*
 VerifyUpdateKey Algorithms:
 
-1. Obtain a search binary ladder from the current log entry where the target version is the claimed greatest version of the label, omitting redundant lookups.
+1. Obtain a search binary ladder from the current log entry where the target version is the claimed greatest version of the label( I don't think we need to omit redundant lookups for performance matter...)
 
 2. If this is the rightmost log entry, verify that the binary ladder terminates in a way that is consistent with the claimed greatest version of the label. That is, verify that it contains inclusion proofs for all expected versions less than or equal to the target and non-inclusion proofs for all expected versions greater than the target.
 
 3. If this is not the rightmost log entry, recurse to the log entry's right child.
 
+This looks like the same as the VerifyLatest, so I think we can ditch it.
 */
 
 // @ requires noPerm < p
@@ -243,6 +244,7 @@ The user verifies this information as follows:
 
 There are still (4.), (5.) and (6.) missing, but it is sufficient by far to show the hyperproperty we aim to show works.
 Maybe discuss if we should do 4. 5. and 6. in this case and if they are necessary to weaken the security property.
+But it's literally CheckGreatest + VerifyLatestKey in combination...
 
 */
 
@@ -362,6 +364,8 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 
 // VerifyHistory verifies that the newly committed versions
 // (Prev_greatest+1..New_version) exist in the current log (Section 8.3).
+// TODO: How do we formalize the security properties?
+
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)
 // @ requires acc(label, p)
@@ -403,7 +407,7 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 	// the same number of times. Versions below start are skipped via inRange.
 	// Prefix trees are rebuilt each iteration because VerifyUpdateKey/CheckGreatest
 	// consume tree invariants and do not return them.
-	
+
 	//@ invariant acc(resp.Inv(), p)
 	//@ invariant acc(label, p) && acc(config, p)
 	//@ invariant label != nil
