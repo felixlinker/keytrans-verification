@@ -85,9 +85,9 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 	} else {
 		var recurse *ImplicitBinarySearchTree
 		if tree.Root < node {
-			recurse = tree.Left
-		} else { // tree.Root > node
 			recurse = tree.Right
+		} else { // tree.Root > node
+			recurse = tree.Left
 		}
 		if recurse == nil {
 			err = errors.New("not found")
