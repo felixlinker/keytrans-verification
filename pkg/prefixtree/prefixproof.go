@@ -265,9 +265,9 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 // this captures our assumption that GetCommitment is deterministic
 ghost
 decreases
-// this captures our assumption that GetCommitment is deterministic
 // takes seq[byte] inputs so it remains pure (no heap permissions needed)
-pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash seq[byte]) *[]byte
+// returns bool: true = commitment exists (inclusion), false = no commitment (non-inclusion)
+pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash seq[byte]) bool
 @*/
 
 // GetCommitment searches the authenticated prefix tree for the commitment
@@ -294,7 +294,7 @@ pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash
 // @ ensures acc(res)
 // @ ensures acc(RootHash)
 // @ ensures acc(Label)
-// @ ensures err == nil ==> (res == nil) == (GetCommitmentIsDeterministic(labelS, Version, rootHashS) == nil)
+// @ ensures err == nil ==> (res != nil) == GetCommitmentIsDeterministic(labelS, Version, rootHashS)
 // @ trusted
 func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost labelS seq[byte], ghost rootHashS seq[byte]@*/) (res []byte, err error) {
 	if tree == nil {

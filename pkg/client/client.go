@@ -412,8 +412,8 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	//@ ghost var tStarVisited bool = false
 	//@ ghost var tStar uint64 = steps[tStarIdx]
 
-	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) != nil && tStar <= t
-	//@ incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) == nil && t < tStar
+	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
+	//@ incl_lemma := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
 
 	//@ invariant acc(RootHash)
 	//@ invariant acc(label)
