@@ -168,7 +168,7 @@ pred (s SearchResponse) Inv() {
 // @ preserves acc(query.Inv(), p)
 // @ requires acc(resp.Inv(), p)
 // @ requires resp.Version != nil
-// @ requires acc(resp.Version, _)
+// @ requires acc(resp.Version, p)
 // @ requires *resp.Version >= 0
 // @ requires query.Label != nil
 // @ requires acc(query.Label, p)
@@ -180,7 +180,7 @@ pred (s SearchResponse) Inv() {
 // @ requires acc(config, p)
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
-// @ ensures err == nil ==> low(resp.Version) //TODO: Do we need to check that low(res) holds? resp.Version is enough?
+// @ ensures err == nil ==> low(resp.Version)
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 
@@ -287,19 +287,17 @@ func GetInt() (res int)
 /*@
 ghost
 decreases
-requires acc(steps)
+requires acc(steps, 1/2)
 requires t >= 0
-requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
-ensures acc(steps)
+ensures acc(steps, 1/2)
 ensures rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 ensures rel(t,0) < rel(t,1) ==> rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
 ensures rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
 ensures rel(t,0) > rel(t,1) ==> rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
 ensures idx1 > 0
 ensures idx2 > 0
-ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	// Replace it using rel(t,0), rel(t,1) and rel(steps,0), rel(steps,1)
 	assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
@@ -337,14 +335,12 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 
 ghost
 decreases
-requires acc(steps)
+requires acc(steps, 1/2)
 requires t >= 0
 requires len(steps) > 0 && steps[0] == 0
-requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
-ensures acc(steps)
-ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
+ensures acc(steps, 1/2)
 ensures 0 <= idx && idx < len(steps)
 ensures low(steps[idx])
 ensures TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
@@ -490,7 +486,6 @@ type MonitoringMapEntry struct {
 	Version  uint32
 }
 
-//TODO : Fix low(query.Label) issues
 
 // @ requires noPerm < p
 // @ requires acc(monitor_map)
