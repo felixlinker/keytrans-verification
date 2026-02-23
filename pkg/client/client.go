@@ -10,10 +10,8 @@ import (
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 /*@
-//Helper functions
+// Ghost helper functions for hyper-property verification
 
-
-//Compare the bytes of the arrays
 ghost
 decreases
 requires p > noPerm
@@ -38,11 +36,9 @@ pred ByteLowInv(s []byte){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
 
-
 pred UIntLowInv(s []uint64){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
-
 
 // TStarBetween captures: steps[tStarIdx] == TStar(min(t1,t2), max(t1,t2))
 // AND min(t1,t2) < steps[tStarIdx] <= max(t1,t2)
@@ -67,7 +63,6 @@ pure func TStar_Wrap(t1, t2 uint64) uint64 {
       (proofs.TStar_pure(t2, t1))
 }
 
-
 ghost
 requires acc(arr, _)
 decreases
@@ -86,15 +81,6 @@ func GetByteContent(arr []byte, idx int) (res seq[byte]) {
 }
 
 @*/
-
-type PT interface {
-	// Returns non-nil if we can prove that the prefix tree contains a key for the
-	// label and version pair provided. Returns nil if we can prove that the
-	// prefix tree does not contain a key for the label and version pair provided.
-	// Returns error in any other case.
-	//@ pred Mem()
-	GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error)
-}
 
 type TreeHead struct {
 	Tree_size uint64
