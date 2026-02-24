@@ -365,7 +365,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 
 // VerifyHistory verifies that the newly committed versions
 // (Prev_greatest+1..New_version) exist in the current log (Section 8.3).
-// TODO: How do we formalize the security properties?
+// Functional correctness: every version passed to VerifyUpdateKey is in [startV, New_version].
 
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)
@@ -379,8 +379,13 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 // @ requires low(resp.New_version)
 // @ ensures acc(label, p) && acc(config, p)
 // @ ensures acc(resp.Inv(), p)
+// @ ensures numVerified == len(verified)
+// @ ensures numVerified >= 0
+// startV is the computed start version (Prev_greatest+1 or 0 if none)
+// @ ensures forall j int :: 0 <= j && j < numVerified ==> verified[j] >= startV
+// @ ensures forall j int :: 0 <= j && j < numVerified ==> verified[j] <= resp.New_version
 func VerifyHistory(label []byte, resp UpdateResponse,
-	config *client.Configuration /*@, ghost p perm @*/) (err error) {
+	config *client.Configuration /*@, ghost p perm @*/) (err error /*@, ghost verified seq[uint32], ghost numVerified int, ghost startV uint32 @*/) {
 
 	//@ unfold acc(resp.Inv(), p)
 
@@ -401,6 +406,10 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 	}
 	end := int(resp.New_version)
 
+	//@ ghost verified = seq[uint32]{}
+	//@ ghost numVerified = 0
+	//@ ghost startV = start
+
 	//@ fold acc(resp.Inv(), p)
 
 	// Verify each new version exists in the current log.
@@ -419,6 +428,10 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 	//@ invariant low(size)
 	//@ invariant size > 0
 	//@ invariant size <= uint64(n)
+	//@ invariant numVerified >= 0
+	//@ invariant numVerified == len(verified)
+	//@ invariant forall j int :: 0 <= j && j < numVerified ==> verified[j] >= start
+	//@ invariant forall j int :: 0 <= j && j < numVerified ==> verified[j] <= resp.New_version
 	for vIdx := 0; vIdx <= end; vIdx++ {
 		v := uint32(vIdx)
 		inRange := v >= start
@@ -441,6 +454,10 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 					resultErr = errors.New("history verification failed: version not found in log")
 					determined = true
 				}
+				//@ ghost if !determined {
+				//@     verified = verified ++ seq[uint32]{v}
+				//@     numVerified = numVerified + 1
+				//@ }
 			}
 		}
 	}
@@ -450,5 +467,5 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 	} else {
 		err = nil
 	}
-	return err
+	return err /*@, verified, numVerified, startV @*/
 }
