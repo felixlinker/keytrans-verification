@@ -393,10 +393,6 @@ CheckGreatest verifies if t is the greatest version
 // @ requires acc(label)
 // @ requires acc(RootHash)
 // @ requires acc(steps)
-// TODO: Check the content of rootHash and label anstatt Ghost variable, eliminate ghost variables
-// @ requires low(getContent(RootHash))
-// @ requires low(labelSeq)
-// @ requires low(RootHashSeq)
 // @ requires t >= 0
 // @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
@@ -405,7 +401,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Correct postcondition
 // @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
+func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int@*/) (res int, err error) {
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
@@ -428,7 +424,7 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
-			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
+			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, getContent(label), getContent(RootHash) @*/)
 			if err != nil {
 				if !determined {
 					resultRes = 404
@@ -473,7 +469,6 @@ type MonitoringMapEntry struct {
 	Version  uint32
 }
 
-
 // @ requires noPerm < p
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version,p)
@@ -488,7 +483,7 @@ type MonitoringMapEntry struct {
 // @ requires size > 0
 // @ requires *resp.Version >=0
 // @ requires resp.Full_tree_head.RootHash != nil
-// @ requires resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
+// @ requires acc(resp.Full_tree_head.RootHash, p)
 // @ requires low(size)
 // @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil

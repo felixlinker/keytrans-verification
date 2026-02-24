@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/felixlinker/keytrans-verification/pkg/client"
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
@@ -185,5 +186,136 @@ func TestVerifyMonitor_BadTimestamps(t *testing.T) {
 	_, err := VerifyMonitor(st, label, resp, monitorMap, config)
 	if err == nil {
 		t.Fatal("VerifyMonitor should return error for non-increasing timestamps")
+	}
+}
+
+// ==================================================================================
+// ============================= Happy-Path Helpers =================================
+// ==================================================================================
+
+// makeBinaryLadderStep creates a BinaryLadderStep whose Proof is VRF_hash(nil, {label, version}).
+func makeBinaryLadderStep(label []byte, version uint32) proofs.BinaryLadderStep {
+	vrfInput := crypto.VrfInput{Label: label, Version: version}
+	vrfProof := crypto.VRF_hash(nil, vrfInput)
+	commitment := sha256.Sum256(append([]byte("commit-"), byte(version)))
+	return proofs.BinaryLadderStep{Proof: vrfProof, Commitment: commitment}
+}
+
+// ==================================================================================
+// ========================= VerifyMonitor Happy-Path Tests =========================
+// ==================================================================================
+
+func TestVerifyMonitor_HappyPath_SingleEntry(t *testing.T) {
+	// tree_size=1, 1 monitoring map entry at position 0 with version 0.
+	// FullBinaryLadderSteps_wrapper(0) = [0, 1] → 2 binary ladder steps.
+	// PrefixProof with Inclusion at depth 0 → leaf for version 0.
+	// rmw=1000 → root is NOT distinguished → DirectPathRight returns [0].
+	// CheckGreatest: step 0 (inclusion, ≤t) ok; step 1 (non-inclusion, >t) ok → res=0.
+	// Expected: VerifyMonitor returns nil error with 1 entry in new_map.
+	st := newUserState()
+	label := []byte("alice")
+	version := uint32(0)
+	size := uint64(1)
+
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	prefixProof := proofs.PrefixProof{
+		Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		},
+		Elements: []proofs.NodeValue{},
+	}
+
+	resp := MonitorResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: size, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{100},
+			Prefix_proofs: []proofs.PrefixProof{prefixProof},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+	}
+	monitorMap := []client.MonitoringMapEntry{
+		{Position: 0, Version: version},
+	}
+	config := &client.Configuration{
+		Mode:                       client.DeploymentContractMonitoring,
+		ReasonableMonitoringWindow: 1000, // large rmw → root is NOT distinguished
+	}
+
+	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	if err != nil {
+		t.Fatalf("VerifyMonitor returned unexpected error: %v", err)
+	}
+	if len(newMap) != 1 {
+		t.Fatalf("VerifyMonitor new_map len = %d; want 1", len(newMap))
+	}
+	if newMap[0].Version != version {
+		t.Errorf("new_map[0].Version = %d; want %d", newMap[0].Version, version)
+	}
+}
+
+func TestVerifyMonitor_HappyPath_MultipleEntries(t *testing.T) {
+	// tree_size=1, 3 monitoring map entries all at position 0, version 0.
+	// All share the same prefix tree → CheckGreatest returns 0 for each.
+	// Expected: VerifyMonitor returns nil error with 3 entries in new_map.
+	st := newUserState()
+	label := []byte("alice")
+	version := uint32(0)
+	size := uint64(1)
+
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	prefixProof := proofs.PrefixProof{
+		Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		},
+		Elements: []proofs.NodeValue{},
+	}
+
+	resp := MonitorResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: size, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{100},
+			Prefix_proofs: []proofs.PrefixProof{prefixProof},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+	}
+	monitorMap := []client.MonitoringMapEntry{
+		{Position: 0, Version: version},
+		{Position: 0, Version: version},
+		{Position: 0, Version: version},
+	}
+	config := &client.Configuration{
+		Mode:                       client.DeploymentContractMonitoring,
+		ReasonableMonitoringWindow: 1000,
+	}
+
+	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	if err != nil {
+		t.Fatalf("VerifyMonitor returned unexpected error: %v", err)
+	}
+	if len(newMap) != 3 {
+		t.Fatalf("VerifyMonitor new_map len = %d; want 3", len(newMap))
+	}
+	for i, entry := range newMap {
+		if entry.Version != version {
+			t.Errorf("new_map[%d].Version = %d; want %d", i, entry.Version, version)
+		}
 	}
 }

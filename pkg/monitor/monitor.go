@@ -80,7 +80,7 @@ func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) 
 // log (Section 8.2 — Contact Monitoring).
 
 //TODO: I think the current spec is too weak and we need other implementations to make sure that the security property is implemented
-// The issue here is that the current implementation shows the non-equivocation but not the 
+// The issue here is that the current implementation shows the non-equivocation but not the consistency that the users will reach to a consensus that they'll see 
 
 // @ requires noPerm < p
 // @ preserves st.Inv()

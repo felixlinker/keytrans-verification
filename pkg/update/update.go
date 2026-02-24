@@ -332,7 +332,6 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 	// Phase 4: VerifyUpdateKey (iterates all frontier nodes)
 	decision := false
 	if !determined {
-		//TODO: We need to implement prev_greatest
 		prev_greatest := uint32(0)
 		//@ unfold acc(resp.Inv(), p)
 		if resp.Prev_greatest != nil {
@@ -384,8 +383,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 // startV is the computed start version (Prev_greatest+1 or 0 if none)
 // @ ensures forall j int :: 0 <= j && j < numVerified ==> verified[j] >= startV
 // @ ensures forall j int :: 0 <= j && j < numVerified ==> verified[j] <= resp.New_version
-func VerifyHistory(label []byte, resp UpdateResponse,
-	config *client.Configuration /*@, ghost p perm @*/) (err error /*@, ghost verified seq[uint32], ghost numVerified int, ghost startV uint32 @*/) {
+func VerifyHistory(label []byte, resp UpdateResponse, config *client.Configuration /*@, ghost p perm @*/) (err error /*@, ghost verified seq[uint32], ghost numVerified int, ghost startV uint32 @*/) {
 
 	//@ unfold acc(resp.Inv(), p)
 
@@ -397,8 +395,8 @@ func VerifyHistory(label []byte, resp UpdateResponse,
 
 	// Read Prev_greatest while resp.Inv() is unfolded
 	//TODO: Do we need to check from 0 to the newest version or from previous greatest version to the newest version
-	// One can of course do this with the previous greatest, but we need to make sure that there are no security property loss happening. 
-	// Can we skip or not? This is the question what we want to discuss. 
+	// One can of course do this with the previous greatest, but we need to make sure that there are no security property loss happening.
+	// Can we skip or not? This is the question what we want to discuss.
 
 	start := uint32(0)
 	if resp.Prev_greatest != nil {

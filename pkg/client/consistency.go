@@ -9,6 +9,8 @@ import (
 // VerifyConsistency checks that the transparency log correctly extended from
 // old_size to new_size by verifying that shared full subtree hashes match.
 // Implements the append-only structural check from Section 4.2 of the IETF KT spec.
+// TODO: Be aware that this implementation is incomplete, does not follow the pruning part of the protocol. So we need to be careful with the stuff. 
+
 // @ requires noPerm < p
 // @ requires acc(old_subtrees, p)
 // @ requires acc(old_frontier_timestamps, p)

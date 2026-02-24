@@ -379,3 +379,134 @@ func TestVerifyHistory_WithPrevGreatest(t *testing.T) {
 		t.Fatalf("VerifyHistory should succeed when prev_greatest == new_version: %v", err)
 	}
 }
+
+// ==================================================================================
+// ============================= Happy-Path Helpers =================================
+// ==================================================================================
+
+// makeBinaryLadderStep creates a BinaryLadderStep whose Proof is VRF_hash(nil, {label, version}).
+// Since VRF_proof_to_hash is the identity, the resulting PrefixLeaf will have
+// Vrf_output == VRF_hash(nil, {label, version}), enabling GetCommitment to find it.
+func makeBinaryLadderStep(label []byte, version uint32) proofs.BinaryLadderStep {
+	vrfInput := crypto.VrfInput{Label: label, Version: version}
+	vrfProof := crypto.VRF_hash(nil, vrfInput)
+	commitment := sha256.Sum256(append([]byte("commit-"), byte(version)))
+	return proofs.BinaryLadderStep{Proof: vrfProof, Commitment: commitment}
+}
+
+// ==================================================================================
+// ========================== VerifyUpdate Happy-Path Tests =========================
+// ==================================================================================
+
+func TestVerifyUpdate_HappyPath_SingleVersion(t *testing.T) {
+	// Simplest happy path: tree_size=1, New_version=0, no previous greatest.
+	// FullBinaryLadderSteps_wrapper(0) = [0, 1] → 2 binary ladder steps.
+	// PrefixProof with 1 Inclusion at depth 0 → leaf for version 0.
+	// CheckGreatest: step 0 (inclusion, ≤t) ok; step 1 (non-inclusion, >t) ok → res=0.
+	// Expected: VerifyUpdate returns nil error.
+	label := []byte("alice")
+	version := uint32(0)
+	st := newUserState()
+
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	prefixProof := proofs.PrefixProof{
+		Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		},
+		Elements: []proofs.NodeValue{},
+	}
+
+	resp := UpdateResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Prev_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		New_version:   version,
+		Prev_greatest: nil, // first version
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{100},
+			Prefix_proofs: []proofs.PrefixProof{prefixProof},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Prev_search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{},
+			Prefix_proofs: []proofs.PrefixProof{},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Values:   []proofs.UpdateValue{{Value: []byte("alice-key-v0")}},
+		Openings: [][]byte{[]byte("opening-0")}, // expectedCount = 0+1 = 1
+	}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+
+	err := VerifyUpdate(st, label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyUpdate returned unexpected error: %v", err)
+	}
+}
+
+// ==================================================================================
+// ========================== VerifyHistory Happy-Path Tests ========================
+// ==================================================================================
+
+func TestVerifyHistory_HappyPath_SingleVersion(t *testing.T) {
+	// tree_size=1, New_version=0, Prev_greatest=nil → start=0, end=0.
+	// Loop iterates once for v=0. VerifyUpdateKey succeeds (version 0 is greatest).
+	// Expected: VerifyHistory returns nil error.
+	label := []byte("alice")
+	version := uint32(0)
+
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	prefixProof := proofs.PrefixProof{
+		Results: []proofs.PrefixSearchResult{
+			{Result_type: proofs.Inclusion, Depth: 0},
+		},
+		Elements: []proofs.NodeValue{},
+	}
+
+	resp := UpdateResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: 1, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Prev_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		New_version:   version,
+		Prev_greatest: nil,
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{100},
+			Prefix_proofs: []proofs.PrefixProof{prefixProof},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Prev_search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{},
+			Prefix_proofs: []proofs.PrefixProof{},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Values:   []proofs.UpdateValue{},
+		Openings: [][]byte{},
+	}
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+
+	err := VerifyHistory(label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyHistory returned unexpected error: %v", err)
+	}
+}
