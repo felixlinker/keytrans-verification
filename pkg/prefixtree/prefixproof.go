@@ -261,6 +261,12 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 	}
 }
 
+//Lemma : Merkle Binding
+// This Merkle binding theorem is needed for showing that the commitment is in the tree state
+// It is also one of the important lemmas we need to show that the commitment we get is consistent
+// We use the following paper to derive the following lemma
+// Paper: https://arxiv.org/pdf/2501.10802
+
 /*@
 // this captures our assumption that GetCommitment is deterministic
 ghost

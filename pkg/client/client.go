@@ -41,23 +41,9 @@ pred UIntLowInv(s []uint64){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
 
-// TStarBetween captures: steps[tStarIdx] == TStar(min(t1,t2), max(t1,t2))
-// AND min(t1,t2) < steps[tStarIdx] <= max(t1,t2)
 ghost
 decreases
-pure func TStarBetween(tStarVal, t1, t2 uint64) bool {
-  return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
-    t1 == t2 ? true :
-    t1 < t2 ?
-      (tStarVal == proofs.TStar_pure(t1, t2) && t1 < tStarVal && tStarVal <= t2) :
-      (tStarVal == proofs.TStar_pure(t2, t1) && t2 < tStarVal && tStarVal <= t1)
-}
-
-//Optimization
-
-ghost
-decreases
-pure func TStar_Wrap(t1, t2 uint64) uint64 {
+pure func TStar(t1, t2 uint64) uint64 {
 	return (t1 < 0 || t2 < 0 || t1 == t2) ? 0:
 		t1 < t2 ?
       (proofs.TStar_pure(t1, t2)) :
@@ -254,15 +240,8 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	return res, err
 }
 
-//Lemma : Merkle Binding
-// This Merkle binding theorem is needed for showing that the commitment is in the tree state
-// It is also one of the important lemmas we need to show that the commitment we get is consistent
-// We use the following paper to derive the following lemma
-// Paper: https://arxiv.org/pdf/2501.10802
-
 //Why >0 instead of >=0? Because the version 0 is always included and we assume that the version we are selecting is >=0
 // If this constraint is violated, it's very easy to be captured
-
 /*@
 ghost
 decreases
@@ -330,11 +309,11 @@ requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_w
 ensures acc(steps, 1/2)
 ensures 0 <= idx && idx < len(steps)
 ensures low(steps[idx])
-ensures TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
-func findTStarIdx(steps []uint64, t uint64) (idx int) {
+ensures steps[idx] == TStar(rel(t, 0), rel(t, 1))
+func FindTStarIdx(steps []uint64, t uint64) (idx int) {
 	if low(t) {
 		idx = 0
-		assert TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
+		assert steps[idx] == TStar(rel(t, 0), rel(t, 1))
 		// steps[0] == 0 (precondition), 0 is low in both executions
 		// 0 will occur in every FBLS unless t == 0
 		// But t == 0 can never occur because this literally means that the version 0 is not inserted.
@@ -365,20 +344,6 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 }
 @*/
 
-//TODO: Assert the ensures and make them assert. Remove the functions
-
-// @ requires target >= 0
-// @ ensures acc(r1)
-// @ ensures forall j int :: j >= 0 && j < len(r1) ==> r1[j] >= 0
-// @ ensures 0 <= tStarIdx && tStarIdx < len(r1)
-// @ ensures low(r1[tStarIdx])
-// @ ensures TStarBetween(r1[tStarIdx], rel(target, 0), rel(target, 1))
-func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tStarIdx int @*/) {
-	r1 = proofs.FullBinaryLadderSteps_wrapper(target)
-	//@ tStarIdx = findTStarIdx(r1, target)
-	return r1 /*@, tStarIdx @*/
-}
-
 /*
 CheckGreatest verifies if t is the greatest version
  Returns:
@@ -393,12 +358,14 @@ CheckGreatest verifies if t is the greatest version
 // @ requires acc(label)
 // @ requires acc(RootHash)
 // @ requires acc(steps)
+// @ requires low(getContent(label))
+// @ requires low(getContent(RootHash))
 // @ requires t >= 0
 // @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 // @ requires 0 <= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
-// @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
+// @ requires steps[tStarIdx] == TStar(rel(t, 0), rel(t, 1))
 // Correct postcondition
 // @ ensures err == nil && res == 0 ==> low(t)
 func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int@*/) (res int, err error) {
@@ -407,6 +374,9 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
 	//@ ghost var tStarVisited bool = false
 	//@ ghost var tStar uint64 = steps[tStarIdx]
+
+	//@ ghost var labelSeq seq[byte] = getContent(label)
+	//@ ghost var RootHashSeq seq[byte] = getContent(RootHash)
 
 	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
 	//@ incl_lemma := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
@@ -417,14 +387,14 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0 <= idx && idx <= len(steps)
 	//@ invariant tStar == steps[tStarIdx]
-	//@ invariant TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
+	//@ invariant steps[tStarIdx] == TStar(rel(t, 0), rel(t, 1))
 	//@ invariant determined ==> resultRes != 0
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
 	//@ invariant tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
-			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, getContent(label), getContent(RootHash) @*/)
+			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
 			if err != nil {
 				if !determined {
 					resultRes = 404
@@ -479,11 +449,11 @@ type MonitoringMapEntry struct {
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 // @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
+// @ requires acc(resp.Full_tree_head.RootHash, p)
 // @ requires resp.Version != nil
 // @ requires size > 0
 // @ requires *resp.Version >=0
 // @ requires resp.Full_tree_head.RootHash != nil
-// @ requires acc(resp.Full_tree_head.RootHash, p)
 // @ requires low(size)
 // @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil
@@ -554,15 +524,15 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 					determined = true
 				}
 
-				//TODO: steps in CheckGreatest
-
-				steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
-
+				steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
+				//@ tStarIdx := FindTStarIdx(steps, tVal)
 				//@ assert acc(steps)
-				//@ ghost var labelSeq seq[byte] = getContent(query.Label)
-				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+				//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
+				//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
+				//@ assert low(steps[tStarIdx])
+				//@ assert steps[tStarIdx] == TStar(rel(tVal, 0), rel(tVal, 1))
 
-				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx @*/)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -594,13 +564,15 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 
-			steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
-
+			steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
+			//@ tStarIdx := FindTStarIdx(steps, tVal)
 			//@ assert acc(steps)
-			//@ ghost var labelSeq seq[byte] = getContent(query.Label)
-			//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+			//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
+			//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
+			//@ assert low(steps[tStarIdx])
+			//@ assert steps[tStarIdx] == TStar(rel(tVal, 0), rel(tVal, 1))
 
-			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx @*/)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr

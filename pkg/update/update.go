@@ -64,7 +64,7 @@ VerifyUpdateKey Algorithms:
 
 3. If this is not the rightmost log entry, recurse to the log entry's right child.
 
-This looks like the same as the VerifyLatest, so I think we can ditch it.
+
 */
 
 // @ requires noPerm < p
@@ -78,8 +78,9 @@ This looks like the same as the VerifyLatest, so I think we can ditch it.
 // @ requires size > 0
 // @ requires size <= uint64(len(prefixTrees))
 // @ requires label != nil
+// @ ensures acc(prefixTrees, p)
+// @ ensures acc(prefixRootHash, p)
 // @ ensures acc(label, p) && acc(config, p)
-// @ ensures acc(prefixTrees, p) && acc(prefixRootHash, p)
 // @ ensures err == nil && res ==> low(new_version)
 func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, label []byte, new_version uint32, prev_greatest uint32, config *client.Configuration /*@, ghost p perm @*/) (res bool, err error) {
 	tVal := uint64(new_version)
@@ -127,12 +128,15 @@ func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 					determined = true
 				}
 
-				steps /*@, tStarIdx @*/ := client.FullBinaryLadderSteps_with_tstar(tVal)
+				steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
+				//@ tStarIdx := client.FindTStarIdx(steps, tVal)
+				//@ assert acc(steps)
+				//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
+				//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
+				//@ assert low(steps[tStarIdx])
+				//@ assert steps[tStarIdx] == client.TStar(rel(tVal, 0), rel(tVal, 1))
 
-				//@ ghost var labelSeq seq[byte] = getContent(label)
-				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
-
-				LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+				LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx @*/)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -164,12 +168,15 @@ func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 
-			steps /*@, tStarIdx @*/ := client.FullBinaryLadderSteps_with_tstar(tVal)
+			steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
+			//@ tStarIdx := client.FindTStarIdx(steps, tVal)
+			//@ assert acc(steps)
+			//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
+			//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
+			//@ assert low(steps[tStarIdx])
+			//@ assert steps[tStarIdx] == client.TStar(rel(tVal, 0), rel(tVal, 1))
 
-			//@ ghost var labelSeq seq[byte] = getContent(label)
-			//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
-
-			LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+			LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx @*/)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr
@@ -376,8 +383,9 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
 // @ requires low(resp.New_version)
-// @ ensures acc(label, p) && acc(config, p)
 // @ ensures acc(resp.Inv(), p)
+// @ ensures acc(label, p)
+// @ ensures acc(config, p)
 // @ ensures numVerified == len(verified)
 // @ ensures numVerified >= 0
 // startV is the computed start version (Prev_greatest+1 or 0 if none)
@@ -452,10 +460,12 @@ func VerifyHistory(label []byte, resp UpdateResponse, config *client.Configurati
 					resultErr = errors.New("history verification failed: version not found in log")
 					determined = true
 				}
-				//@ ghost if !determined {
-				//@     verified = verified ++ seq[uint32]{v}
-				//@     numVerified = numVerified + 1
-				//@ }
+				/*@
+				ghost if !determined {
+				    verified = verified ++ seq[uint32]{v}
+				    numVerified = numVerified + 1
+				}
+				@*/
 			}
 		}
 	}
