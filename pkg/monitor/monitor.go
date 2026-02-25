@@ -231,15 +231,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 						Prefix_tree := trees[posIdx]
 						rootHash := rootHashes[posIdx]
 						if Prefix_tree != nil {
-							steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
-							//@ tStarIdx := client.FindTStarIdx(steps, tVal)
-							//@ assert acc(steps)
-							//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
-							//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
-							//@ assert low(steps[tStarIdx])
-							//@ assert steps[tStarIdx] == client.TStar(rel(tVal, 0), rel(tVal, 1))
-
-							cgRes, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx @*/)
+							cgRes, cgErr := client.CheckGreatest_wrapper(Prefix_tree, label, tVal, rootHash[:], size)
 							if cgErr != nil {
 								resultErr = cgErr
 								determined = true

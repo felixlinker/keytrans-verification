@@ -128,15 +128,7 @@ func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 					determined = true
 				}
 
-				steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
-				//@ tStarIdx := client.FindTStarIdx(steps, tVal)
-				//@ assert acc(steps)
-				//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
-				//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
-				//@ assert low(steps[tStarIdx])
-				//@ assert steps[tStarIdx] == client.TStar(rel(tVal, 0), rel(tVal, 1))
-
-				LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx @*/)
+				LtGtOrEq, cgErr := client.CheckGreatest_wrapper(Prefix_tree, label, tVal, rootHash[:], size)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -168,15 +160,7 @@ func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 
-			steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
-			//@ tStarIdx := client.FindTStarIdx(steps, tVal)
-			//@ assert acc(steps)
-			//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
-			//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
-			//@ assert low(steps[tStarIdx])
-			//@ assert steps[tStarIdx] == client.TStar(rel(tVal, 0), rel(tVal, 1))
-
-			LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, steps, label, tVal, rootHash[:], size /*@, tStarIdx @*/)
+			LtGtOrEq, cgErr := client.CheckGreatest_wrapper(Prefix_tree, label, tVal, rootHash[:], size)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr

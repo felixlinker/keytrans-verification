@@ -434,6 +434,26 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 
 }
 
+// CheckGreatest_wrapper computes the binary ladder steps and calls CheckGreatest.
+// @ requires label != nil
+// @ requires acc(label)
+// @ requires acc(RootHash)
+// @ requires low(getContent(label))
+// @ requires low(getContent(RootHash))
+// @ requires t >= 0
+// @ requires prefixTree != nil ==> prefixTree.Inv()
+// @ ensures err == nil && res == 0 ==> low(t)
+func CheckGreatest_wrapper(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64) (res int, err error) {
+	steps := proofs.FullBinaryLadderSteps_wrapper(t)
+	//@ tStarIdx := FindTStarIdx(steps, t)
+	//@ assert acc(steps)
+	//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
+	//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
+	//@ assert low(steps[tStarIdx])
+	//@ assert steps[tStarIdx] == TStar(rel(t, 0), rel(t, 1))
+	return CheckGreatest(prefixTree, steps, label, t, RootHash, size /*@, tStarIdx @*/)
+}
+
 type MonitoringMapEntry struct {
 	Position uint64
 	Version  uint32
@@ -524,15 +544,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 					determined = true
 				}
 
-				steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
-				//@ tStarIdx := FindTStarIdx(steps, tVal)
-				//@ assert acc(steps)
-				//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
-				//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
-				//@ assert low(steps[tStarIdx])
-				//@ assert steps[tStarIdx] == TStar(rel(tVal, 0), rel(tVal, 1))
-
-				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx @*/)
+				LtGtOrEq, cgErr := CheckGreatest_wrapper(Prefix_tree, query.Label, tVal, rootHash[:], size)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -564,15 +576,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 
-			steps := proofs.FullBinaryLadderSteps_wrapper(tVal)
-			//@ tStarIdx := FindTStarIdx(steps, tVal)
-			//@ assert acc(steps)
-			//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
-			//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
-			//@ assert low(steps[tStarIdx])
-			//@ assert steps[tStarIdx] == TStar(rel(tVal, 0), rel(tVal, 1))
-
-			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx @*/)
+			LtGtOrEq, cgErr := CheckGreatest_wrapper(Prefix_tree, query.Label, tVal, rootHash[:], size)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr
