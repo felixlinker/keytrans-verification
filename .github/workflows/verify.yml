@@ -17,7 +17,7 @@ jobs:
     container:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
     env:
-      GOBRA_REF: 31c7f4ad2696dfbd22953f4031d04b0a3d6f5a44
+      GOBRA_REF: 4eb126ad753bd6a7f7bf16f56f55741b61010f0f
     steps:
       - name: Checkout Gobra
         uses: actions/checkout@v4
