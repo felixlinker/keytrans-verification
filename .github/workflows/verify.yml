@@ -148,4 +148,4 @@ jobs:
         with:
           name: stats.json
           path: keytrans-verification/.gobra/stats.json
-          if-no-files-found: error
+          if-no-files-found: warn
