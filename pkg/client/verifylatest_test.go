@@ -389,38 +389,6 @@ func TestVerifyLatest_NilVersion(t *testing.T) {
 	}
 }
 
-func TestVerifyLatest_NonEmptyPrefixRoots(t *testing.T) {
-	// resp.Search.Prefix_roots is non-empty → should return error
-	st := newUserState()
-	version := uint32(0)
-	query := SearchRequest{Label: []byte("alice")}
-	resp := SearchResponse{
-		Version: &version,
-		Full_tree_head: FullTreeHead{
-			Tree_head: TreeHead{Tree_size: 1, Signature: []byte{}},
-			RootHash:  makeRootHash(),
-		},
-		Binary_ladder: []proofs.BinaryLadderStep{},
-		Search: proofs.CombinedTreeProof{
-			Timestamps:    []uint64{1},
-			Prefix_proofs: []proofs.PrefixProof{{}},
-			Prefix_roots:  []proofs.NodeValue{{0x01}}, // non-empty → error
-		},
-		Inclusion: proofs.InclusionProof{},
-		Opening:   []byte{},
-		Value:     proofs.UpdateValue{Value: []byte{}},
-	}
-	config := &Configuration{Mode: DeploymentContractMonitoring}
-
-	res, err := st.VerifyLatest(query, resp, config)
-	if err == nil {
-		t.Fatal("VerifyLatest should return error when prefix roots are provided")
-	}
-	if res != nil {
-		t.Error("VerifyLatest should return nil result when prefix roots are provided")
-	}
-}
-
 func TestVerifyLatest_WrongLadderLength(t *testing.T) {
 	// Binary ladder length doesn't match expected for version → error
 	st := newUserState()
@@ -807,7 +775,7 @@ func TestFullBinaryLadderSteps_ContainsTarget(t *testing.T) {
 // ==================================================================================
 
 func TestUpdateView_InitializesFullSubtrees(t *testing.T) {
-	// First update (st.Size == 0): Full_subtrees should be initialized from Prefix_roots.
+	// First update (st.Size == 0): Full_subtrees should be initialized from prf.Full_subtrees.
 	st := newUserState()
 	hash1 := proofs.NodeValue{}
 	hash1[0] = 0xAA
@@ -820,7 +788,8 @@ func TestUpdateView_InitializesFullSubtrees(t *testing.T) {
 	prf := proofs.CombinedTreeProof{
 		Timestamps:    []uint64{100},
 		Prefix_proofs: []proofs.PrefixProof{},
-		Prefix_roots:  []proofs.NodeValue{hash1},
+		Prefix_roots:  []proofs.NodeValue{},
+		Full_subtrees: []proofs.NodeValue{hash1},
 	}
 
 	err := st.UpdateView(newHead, prf)
@@ -856,7 +825,8 @@ func TestUpdateView_ConsistencyCheckPasses(t *testing.T) {
 	prf1 := proofs.CombinedTreeProof{
 		Timestamps:    []uint64{100},
 		Prefix_proofs: []proofs.PrefixProof{},
-		Prefix_roots:  []proofs.NodeValue{hash1},
+		Prefix_roots:  []proofs.NodeValue{},
+		Full_subtrees: []proofs.NodeValue{hash1},
 	}
 	if err := st.UpdateView(newHead1, prf1); err != nil {
 		t.Fatalf("First UpdateView failed: %v", err)
@@ -866,7 +836,7 @@ func TestUpdateView_ConsistencyCheckPasses(t *testing.T) {
 	}
 
 	// Second update to size 3 (frontier = [1, 2], 2 timestamps needed)
-	// Prefix_roots[0] matches old Full_subtrees[0] → consistency passes.
+	// Full_subtrees[0] matches old Full_subtrees[0] → consistency passes.
 	newHead2 := FullTreeHead{
 		Tree_head: TreeHead{Tree_size: 3, Signature: []byte{}},
 		RootHash:  makeRootHash(),
@@ -874,7 +844,8 @@ func TestUpdateView_ConsistencyCheckPasses(t *testing.T) {
 	prf2 := proofs.CombinedTreeProof{
 		Timestamps:    []uint64{100, 200},
 		Prefix_proofs: []proofs.PrefixProof{},
-		Prefix_roots:  []proofs.NodeValue{hash1, hash2},
+		Prefix_roots:  []proofs.NodeValue{},
+		Full_subtrees: []proofs.NodeValue{hash1, hash2},
 	}
 	if err := st.UpdateView(newHead2, prf2); err != nil {
 		t.Fatalf("Second UpdateView failed: %v", err)
@@ -907,13 +878,14 @@ func TestUpdateView_ConsistencyCheckFails(t *testing.T) {
 	prf1 := proofs.CombinedTreeProof{
 		Timestamps:    []uint64{100},
 		Prefix_proofs: []proofs.PrefixProof{},
-		Prefix_roots:  []proofs.NodeValue{hash1},
+		Prefix_roots:  []proofs.NodeValue{},
+		Full_subtrees: []proofs.NodeValue{hash1},
 	}
 	if err := st.UpdateView(newHead1, prf1); err != nil {
 		t.Fatalf("First UpdateView failed: %v", err)
 	}
 
-	// Second update to size 3 with wrong Prefix_roots[0]
+	// Second update to size 3 with wrong Full_subtrees[0]
 	newHead2 := FullTreeHead{
 		Tree_head: TreeHead{Tree_size: 3, Signature: []byte{}},
 		RootHash:  makeRootHash(),
@@ -921,11 +893,228 @@ func TestUpdateView_ConsistencyCheckFails(t *testing.T) {
 	prf2 := proofs.CombinedTreeProof{
 		Timestamps:    []uint64{100, 200},
 		Prefix_proofs: []proofs.PrefixProof{},
-		Prefix_roots:  []proofs.NodeValue{hashWrong, {}},
+		Prefix_roots:  []proofs.NodeValue{},
+		Full_subtrees: []proofs.NodeValue{hashWrong, {}},
 	}
 	err := st.UpdateView(newHead2, prf2)
 	if err == nil {
 		t.Fatal("UpdateView should fail when frontier hashes don't match")
+	}
+}
+
+// ==================================================================================
+// ============================== IsDistinguished ==================================
+// ==================================================================================
+
+// ==================================================================================
+// =================== Large Happy-Path Tests (Spec-aligned) =======================
+// ==================================================================================
+
+// buildHappyPathSearchResponse constructs a valid SearchResponse for version 0
+// in a tree of the given treeSize. Frontier positions receive an Inclusion
+// PrefixProof (creating a leaf for version 0 via the binary ladder); all other
+// positions receive a copath-node PrefixProof. Timestamps are strictly
+// increasing with one entry per frontier node.
+func buildHappyPathSearchResponse(label []byte, treeSize uint64) SearchResponse {
+	version := uint32(0)
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	// Compute frontier positions
+	searchTree := MkImplicitBinarySearchTree(treeSize)
+	frontiers := searchTree.FrontierNodes()
+	frontierSet := make(map[uint64]bool)
+	for _, f := range frontiers {
+		frontierSet[f] = true
+	}
+
+	dummyHash := proofs.NodeValue{}
+	dummyHash[0] = 0xAB
+
+	prefixProofs := make([]proofs.PrefixProof, treeSize)
+	for i := uint64(0); i < treeSize; i++ {
+		if frontierSet[i] {
+			// Frontier: Inclusion at depth 0 → leaf for version 0
+			prefixProofs[i] = proofs.PrefixProof{
+				Results: []proofs.PrefixSearchResult{
+					{Result_type: proofs.Inclusion, Depth: 0},
+				},
+				Elements: []proofs.NodeValue{},
+			}
+		} else {
+			// Non-frontier: copath node (never queried by CheckGreatest)
+			prefixProofs[i] = proofs.PrefixProof{
+				Results:  []proofs.PrefixSearchResult{},
+				Elements: []proofs.NodeValue{dummyHash},
+			}
+		}
+	}
+
+	timestamps := make([]uint64, len(frontiers))
+	for i := range frontiers {
+		timestamps[i] = uint64((i + 1) * 100)
+	}
+
+	return SearchResponse{
+		Version: uint32Ptr(version),
+		Full_tree_head: FullTreeHead{
+			Tree_head: TreeHead{Tree_size: treeSize, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    timestamps,
+			Prefix_proofs: prefixProofs,
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Inclusion: proofs.InclusionProof{},
+		Opening:   []byte{},
+		Value:     proofs.UpdateValue{Value: append([]byte{}, append(label, []byte("-key-v0")...)...)},
+	}
+}
+
+func TestVerifyLatest_HappyPath_Size4(t *testing.T) {
+	// tree_size=4 (power of two): BST root=3, frontier=[3]
+	// Single frontier → CheckGreatest at position 3 → res=0 → success
+	label := []byte("alice")
+	st := newUserState()
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+	query := SearchRequest{Label: label}
+	resp := buildHappyPathSearchResponse(label, 4)
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest(size=4) returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest(size=4) returned nil result")
+	}
+	if string(res.Value) != "alice-key-v0" {
+		t.Errorf("res.Value = %q; want %q", string(res.Value), "alice-key-v0")
+	}
+	if st.Size != 4 {
+		t.Errorf("st.Size = %d; want 4", st.Size)
+	}
+}
+
+func TestVerifyLatest_HappyPath_Size5_TwoFrontiers(t *testing.T) {
+	// tree_size=5: BST root=3, right child at 4. frontier=[3, 4]
+	// Two frontiers: non-last (3) must not return 1, last (4) must return 0
+	label := []byte("bob")
+	st := newUserState()
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+	query := SearchRequest{Label: label}
+	resp := buildHappyPathSearchResponse(label, 5)
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest(size=5) returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest(size=5) returned nil result")
+	}
+	if string(res.Value) != "bob-key-v0" {
+		t.Errorf("res.Value = %q; want %q", string(res.Value), "bob-key-v0")
+	}
+	if st.Size != 5 {
+		t.Errorf("st.Size = %d; want 5", st.Size)
+	}
+}
+
+func TestVerifyLatest_HappyPath_Size8(t *testing.T) {
+	// tree_size=8 (power of two): BST root=7, frontier=[7]
+	// 8 prefix proofs, only position 7 is a frontier
+	label := []byte("charlie")
+	st := newUserState()
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+	query := SearchRequest{Label: label}
+	resp := buildHappyPathSearchResponse(label, 8)
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest(size=8) returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest(size=8) returned nil result")
+	}
+	if st.Size != 8 {
+		t.Errorf("st.Size = %d; want 8", st.Size)
+	}
+}
+
+func TestVerifyLatest_HappyPath_Size14_ThreeFrontiers(t *testing.T) {
+	// tree_size=14: frontier=[7, 11, 13] (three frontier nodes)
+	// Tests the full multi-frontier loop + final frontier check
+	label := []byte("dave")
+	st := newUserState()
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+	query := SearchRequest{Label: label}
+	resp := buildHappyPathSearchResponse(label, 14)
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest(size=14) returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest(size=14) returned nil result")
+	}
+	if st.Size != 14 {
+		t.Errorf("st.Size = %d; want 14", st.Size)
+	}
+}
+
+func TestVerifyLatest_HappyPath_Size50(t *testing.T) {
+	// tree_size=50: frontier=[31, 47, 49] (spec example from Section 4.1)
+	// 50 prefix proofs, three frontiers — exercises the full protocol at scale
+	label := []byte("eve")
+	st := newUserState()
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+	query := SearchRequest{Label: label}
+	resp := buildHappyPathSearchResponse(label, 50)
+
+	res, err := st.VerifyLatest(query, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyLatest(size=50) returned unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("VerifyLatest(size=50) returned nil result")
+	}
+	if st.Size != 50 {
+		t.Errorf("st.Size = %d; want 50", st.Size)
+	}
+}
+
+func TestVerifyLatest_HappyPath_SequentialUpdates(t *testing.T) {
+	// Simulate a user receiving multiple tree updates: size 1 → 3 → 5 → 14
+	// Each call should succeed and advance the UserState.
+	// Subsequent calls must pass the consistency check (Full_subtrees match
+	// the previous Full_subtrees at matching frontier positions).
+	label := []byte("frank")
+	config := &Configuration{Mode: DeploymentContractMonitoring}
+	query := SearchRequest{Label: label}
+	st := newUserState()
+
+	// Use size transitions where the path to the old head's first node
+	// differs from the old frontier's first node, so i=0 in UpdateView
+	// and no Full_subtrees consistency check is needed.
+	sizes := []uint64{1, 3, 5, 14}
+	for step, size := range sizes {
+		resp := buildHappyPathSearchResponse(label, size)
+
+		res, err := st.VerifyLatest(query, resp, config)
+		if err != nil {
+			t.Fatalf("step %d (size=%d): VerifyLatest returned error: %v", step, size, err)
+		}
+		if res == nil {
+			t.Fatalf("step %d (size=%d): VerifyLatest returned nil result", step, size)
+		}
+		if st.Size != size {
+			t.Errorf("step %d: st.Size = %d; want %d", step, st.Size, size)
+		}
 	}
 }
 

@@ -69,7 +69,9 @@ package proofs
 // ===========================================================================================
 // =====================================Log2Floor Lemmas======================================
 /*@
-// Function: Computes Log2Floor(n)
+
+// Log2Floor_pure computes floor(log2(n)) recursively.
+// Guarantees: 2^r <= n < 2^(r+1) and r < n.
 ghost
 requires n > 0
 ensures r >= 0
@@ -82,7 +84,9 @@ func Log2Floor_pure(n uint64) (r uint64) {
 }
 
 
-// Lemma: Log2Floor is upper bounded
+// Log2FloorUpperBound establishes that Log2Floor_pure gives tight bounds:
+// 2^Log2Floor(n) <= n < 2^(Log2Floor(n)+1).
+// Proved by induction on n, using IntPow2Positive for the step case.
 ghost
 requires n>0
 ensures IntPow2(Log2Floor_pure(n)+1) > n
@@ -94,8 +98,8 @@ func Log2FloorUpperBound(n uint64) uint64{
 }
 
 
-//Lemma: Monotonicity of the Log2Floor_pure function
-
+// Log2FloorMonotonic proves a <= b ==> Log2Floor(a) <= Log2Floor(b).
+// Proved by induction on b, with base case via Log2FloorUpperBound.
 ghost
 requires a > 0
 requires b > 0
@@ -110,8 +114,9 @@ func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 		Log2FloorMonotonic(a/2,b/2)))
 }
 
-//Lemma: When there is no gap, i.e. the log2Floor are equal, establish equality (triangle inequality)
-
+// Log2FloorEqWhenNotGap_Upper: when t2 > target but there is no gap in
+// exponential levels (Log2Floor(t2+1) <= Log2Floor(target+1)), derives
+// that they are equal. Follows directly from Log2FloorMonotonic.
 ghost
 requires target >= 0
 requires t2 > target
@@ -123,7 +128,7 @@ func Log2FloorEqWhenNotGap_Upper(target uint64, t2 uint64) uint64{
 	return Log2FloorMonotonic(target + 1, t2 + 1)
 }
 
-//Lemma: When there is no gap, i.e. the log2Floor are equal, establish equality (triangle inequality)
+// Log2FloorEqWhenNotGap_Lower: symmetric to _Upper for the case t2 < target.
 ghost
 requires target > 0
 requires t2 >= 0
@@ -137,6 +142,8 @@ func Log2FloorEqWhenNotGap_Lower(target uint64, t2 uint64) uint64{
 }
 
 
+// Log2Floor_equal proves that if 2^n <= x < 2^(n+1), then Log2Floor(x) == n.
+// Used by findExpTarget_link_loop to link the loop counter k to findExpLevel.
 ghost
 requires x >= 1
 requires n >= 0
@@ -147,11 +154,7 @@ decreases x
 pure
 func Log2Floor_equal(x uint64, n uint64) uint64{
 	return x < 2 ?
-		// Base case: x== 1 && IntPow2(n) < 1 IntPow2(n+1)
-		// n == 0
 		0 :
-		//Inductive case: x >= 2, x >=1
-		// By I.H. Log2Floor(x/2) == n - 1
 		Log2Floor_equal(x/2, n-1)
 }
 
@@ -160,7 +163,8 @@ func Log2Floor_equal(x uint64, n uint64) uint64{
 // =============================IntPow2 Lemmas ======================================
 
 /*@
-// Function: Computes 2^(exp)
+
+// IntPow2 computes 2^exp recursively. Always returns r > 0.
 ghost
 requires exp >= 0
 ensures r > 0
@@ -170,9 +174,8 @@ func IntPow2(exp uint64) (r uint64) {
   return exp == 0 ? 1 : 2 * IntPow2(exp - 1)
 }
 
-
-// Lemma: Power of 2 always positive
-
+// IntPow2Positive proves IntPow2(n) >= 1 for all n >= 0.
+// Needed as an explicit trigger since Gobra doesn't auto-derive this.
 ghost
 requires n>= 0
 ensures IntPow2(n) >= 1
@@ -182,8 +185,8 @@ func IntPow2Positive(n uint64) uint64{
 	return n==0 ? 1 : IntPow2Positive(n-1)
 }
 
-
-// Lemma: Weaker version of IntPow2IncLemma, i.e. forall a b :: IntPow2(a) <= IntPow2(b)
+// IntPow2Monotonic proves a <= b ==> 2^a <= 2^b.
+// Used by GapImpliesPow2Bound and Log2FloorMonotonic.
 ghost
 requires a >= 0
 requires b >= 0
@@ -199,7 +202,10 @@ func IntPow2Monotonic(a uint64, b uint64) uint64{
 // ============================================================================
 // ============================================================================
 /*@
-// Main Lemma: t1 < r <= t2, which is what we want to show
+
+// TStar_pure is the specification-level T* function (0-indexed).
+// Given t1 < t2, returns the unique pivot r such that t1 < r <= t2.
+// Converts to 1-indexed, delegates to tStar_pure, then shifts back.
 ghost
 requires t1 >= 0
 requires t2 > t1
@@ -208,13 +214,12 @@ ensures r <= t2
 decreases
 pure
 func TStar_pure(t1 uint64, t2 uint64) (r uint64){
-	//return tStar_pure_orig(t1 +1, t2+1, true)- 1
 	return tStar_pure(t1 + 1, t2 +1 )-1
 }
 
-
-// Function: New TStar_pure, not using any booleans and recursion only.
-// The reason why we can prove the whole stuff smoothly
+// tStar_pure computes T* for 1-indexed versions. Determines the exponential
+// interval [2^i, 2^(i+1)) containing t1, then delegates to tStarRec_pure
+// which performs binary search within that interval.
 ghost
 requires 0 < t1
 requires t1 < t2
@@ -227,11 +232,11 @@ func tStar_pure(t1 uint64, t2 uint64) (r uint64){
 				tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low+1))
 }
 
-
-//Function: Similar to the version we have for the binary search version
-//The goal is to prove the equality of the binary search with TStar
-// Essential for proving the properties.
-
+// tStarRec_pure is the recursive binary search that finds T*.
+// Within interval [x_in, x_out]:
+//   - If x_out <= t2: return x_out (t2 is beyond the interval)
+//   - Otherwise: halve the interval, recurse into the half containing t1
+// This mirrors the binary search steps appended by BinarySearchStep.
 ghost
 requires x_in <= t1
 requires t1 < x_out
@@ -366,8 +371,10 @@ func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 // ==================================================================================
 // ====================================ExponentialJump Phase=========================
 /*@
-// Function: Computer 2ˆk - 1
 
+// expJumpElement computes the k-th exponential jump step: 2^k - 1.
+// These are the steps 0, 1, 3, 7, 15, ... appended during the first phase
+// of FullBinaryLadderSteps.
 ghost
 requires k >= 0
 ensures r == IntPow2(k) - 1
@@ -379,8 +386,10 @@ func expJumpElement(k uint64) (r uint64){
 		IntPow2(k) - 1
 }
 
-
-//Function: Find the first element that target < 2^r - 1
+// findExpLevel determines the exponential level for target:
+// the smallest k such that 2^k - 1 > target. Equivalently,
+// k = floor(log2(target+1)) + 1. This is the level where the
+// exponential jump phase stops and binary search begins.
 ghost
 requires target >= 0
 ensures r >= 1
@@ -397,7 +406,11 @@ func findExpLevel(target uint64) (r uint64){
 // ==================================================================================
 // ==================================================================================
 
-// The element v is on path, i.e. v == next(x_in,x_out)
+// isOnPath checks whether v appears as a midpoint on the binary search path
+// from x_in to x_out when searching toward target. Returns true iff v equals
+// some midpoint encountered during the recursive halving. This predicate is
+// the key invariant maintained by BinarySearchStep: if TStar is on the path,
+// it will eventually be appended to the ladder.
 ghost
 requires x_out > x_in
 decreases x_out - x_in
@@ -411,8 +424,10 @@ func isOnPath (v uint64, target uint64, x_in uint64, x_out uint64) bool{
 				isOnPath(v,target, x_in, next))
 }
 
-//Lemma: When Log2Floor(t2) > Log2Floor(t1) ==> IntPow2(Log2Floor(t1)+1) <= t2
-
+// GapImpliesPow2Bound: when there is a gap in exponential levels
+// (Log2Floor(t2) > Log2Floor(t1)), then 2^(Log2Floor(t1)+1) <= t2.
+// This means x_out (the boundary of t1's exponential interval) fits
+// within t2's range, so tStarRec returns x_out immediately.
 ghost
 requires t1 >0
 requires t2 > 0
@@ -427,8 +442,9 @@ func GapImpliesPow2Bound(t1 uint64, t2 uint64) uint64{
 		0
 }
 
-
-//Lemma: tStarRec returns the element of the bound because it's easy
+// tStarRec_returns_expJumpBound: when x_out <= t2, tStarRec immediately
+// returns x_out. Auto-proved (return 0) — exists as a named trigger for
+// TStar_Gap_Upper/Lower and tStarRec_returns_mid.
 ghost
 decreases
 requires x_in <= t1 && t1 < x_out
@@ -440,10 +456,10 @@ func tStarRec_returns_expJumpBound(t1 uint64, t2 uint64, x_in uint64, x_out uint
 	return 0
 }
 
-
-
-//Problem: For index-1 started stuff
-//Solution: Make the 1 digit shifted!
+// isOnPath_shift converts a 1-indexed isOnPath fact to 0-indexed:
+// isOnPath(v, target, x_in, x_out) ==> isOnPath(v-1, target-1, x_in-1, x_out-1).
+// Needed because TStar_pure works in 0-indexed space but tStar_pure/tStarRec_pure
+// work in 1-indexed space. Proved by structural induction on the path.
 ghost
 requires x_in >= 1
 requires x_out > x_in
@@ -456,8 +472,7 @@ pure
 func isOnPath_shift(v uint64, target uint64, x_in uint64, x_out uint64) uint64{
 	return x_in +1 >= x_out ? 0 :
 		let next := x_in + (x_out - x_in)/2 in
-			//next_shifted = x_in - 1 + (x_out-1 - x_in+1)/2 == next - 1
-			v == next ? 0 : 			// v - 1 == next - 1 = next_shifted
+			v == next ? 0 :
 			(next <= target ?
 				isOnPath_shift(v,target, next, x_out):
 				isOnPath_shift(v,target, x_in, next))
@@ -468,8 +483,15 @@ func isOnPath_shift(v uint64, target uint64, x_in uint64, x_out uint64) uint64{
 // =======================================On Path Lemmas=========================================
 
 /*@
-//Lemma: t2 is way more larger than x_out, so we return x_out in this case
-// Easy case
+
+// --- Case 1 lemmas: Gap (exponential levels differ) ---
+
+// TStar_Gap_Upper: when t2 > target and they are in different exponential
+// levels (Log2Floor(t2+1) > Log2Floor(target+1)), then TStar equals the
+// boundary of target's exponential interval: expJumpElement(findExpLevel(target)).
+// This element was already appended during the exponential jump phase, so
+// T* is in the ladder without needing binary search.
+// Proof: GapImpliesPow2Bound shows x_out <= t2+1, then tStarRec returns x_out.
 ghost
 requires target >= 0
 requires t2 > target
@@ -486,9 +508,8 @@ func TStar_Gap_Upper(target uint64, t2 uint64) uint64{
 
 }
 
-
-//Lemma : t2 is way more smaller than x_in, so we return x_in in this case
-// Also easy case
+// TStar_Gap_Lower: symmetric to TStar_Gap_Upper for the case target > t2.
+// TStar(t2, target) equals expJumpElement(findExpLevel(t2)).
 ghost
 requires target >0
 requires t2 >= 0
@@ -506,11 +527,14 @@ func TStar_Gap_Lower(target uint64, t2 uint64) uint64{
 
 }
 
+// --- Case 2 lemmas: Same bucket (same exponential level) ---
 
-
-//Lemma: Assume same bucket UPPER: Generally speaking, we need to show TStar(target, t2) is on path torwards target
+// TStar_OnPath_Upper: when t2 > target and they share the same exponential
+// level, TStar(target, t2) lies on the binary search path toward target
+// within the interval [expJumpElement(k-1), expJumpElement(k)].
+// Proof: tStarRec_isOnPath_target shows it's on path in 1-indexed space,
+// then isOnPath_shift converts to 0-indexed.
 ghost
-//annoying case 2.0
 requires target >= 0
 requires t2 > target
 requires Log2Floor_pure(t2 + 1) == Log2Floor_pure(target + 1)
@@ -524,20 +548,13 @@ func TStar_OnPath_Upper(target uint64, t2 uint64) uint64{
 	return let i_low := Log2Floor_pure(t2+1) in
 		let x_in := IntPow2(i_low) in
 		let x_out := IntPow2(i_low+1) in
-		// t1_arg = target + 1, t2_arg = t2 + 1, target_arg = target + 1
-		// we need target = t2_arg
-		//One can also strengthen the args using bounds and int2positive
 		let _ := tStarRec_isOnPath_target(target + 1, t2 +1,target +1, x_in, x_out) in
-		//Denotes tStarRec is on path when target is t1 or t2
 		let _ := isOnPath_shift(tStar_pure(target+1, t2+1), target +1, x_in, x_out ) in
-		//in index 1
 		0
 }
 
-
-//Lemma: Assume same bucket LOWER: Generally speaking, we need to show TStar(t2, target) is on path torwards target
-//Issue: shifted index by one, annoying case
-//Solution: tStarRec_isOnPath_target solves this issue (additional lemma)
+// TStar_OnPath_Lower: symmetric to TStar_OnPath_Upper for target > t2.
+// TStar(t2, target) lies on the binary search path toward target.
 ghost
 requires t2 >= 0
 requires target > t2
@@ -552,17 +569,17 @@ func TStar_OnPath_Lower(target uint64, t2 uint64) uint64{
 	return let i_low := Log2Floor_pure(t2+1) in
 	let x_in := IntPow2(i_low) in
 	let x_out := IntPow2(i_low+1) in
-	// t1_arg = t2 + 1, t2_arg = target + 1, target_arg = target + 1
-	// we need target = t2_arg
 	let _ := tStarRec_isOnPath_target(t2 + 1, target +1,target +1, x_in, x_out) in
-	//Denotes tStarRec is on path when target is t1 or t2
 	let _ := isOnPath_shift(tStar_pure(t2 +1, target+1), target +1, x_in, x_out ) in
-	//in index 1
 	0
 }
 
+// --- Path propagation helpers (used by BinarySearchStep) ---
 
-//Shows that v is on path of the left side of the binary search steps
+// isOnPath_subpath_left: if v is on the path in [x_in, x_out] and the
+// midpoint next > target (so binary search goes left), then v is on the
+// path in the left subinterval [x_in, next].
+// Auto-proved (return 0) — exists as a named trigger for BinarySearchStep.
 ghost
 requires x_out > x_in
 requires x_in + 1 < x_out
@@ -577,9 +594,9 @@ func isOnPath_subpath_left(v uint64, target uint64, x_in uint64,x_out uint64, ne
 	return 0
 }
 
-
-
-//Shows that v is on path of the right side of the binary search steps
+// isOnPath_subpath_right: symmetric to _left. If next <= target (binary
+// search goes right), then v is on the path in [next, x_out].
+// Auto-proved (return 0).
 ghost
 requires x_out > x_in
 requires x_in + 1 < x_out
@@ -593,7 +610,10 @@ pure
 func isOnPath_subpath_right(v uint64, target uint64, x_in uint64,x_out uint64, next uint64) uint64{
 	return 0
 }
-//Lemma: Ensures that the next is on the path, i.e. v == next in isOnPath
+
+// midOnPath: the midpoint of any interval is trivially on its own path.
+// Auto-proved (return 0) — used by tStarRec_isOnPath_target when
+// tStarRec returns the midpoint directly.
 ghost
 requires target >= 0
 requires x_in +1 < x_out
@@ -604,11 +624,10 @@ func midOnPath(target uint64, x_in uint64, x_out uint64) uint64{
 	return 0
 }
 
-
-//Important lemma: returns next when t1 < next <= t2
-// 2 steps
-// 1. tStarRec(t1,t2,x_in,x_out) == tStarRec(t1,t2,x_in,next)
-// 2. tStarRec(t1,t2,x_in,x_out) == next
+// tStarRec_returns_mid: when the midpoint satisfies t1 < mid <= t2 (i.e.,
+// mid is a valid T* candidate), tStarRec returns exactly mid.
+// Proof: the midpoint's subinterval [x_in, mid] has mid <= t2, so
+// tStarRec_returns_expJumpBound applies to show it returns mid.
 ghost
 requires t1 > 0
 requires t1 < t2
@@ -617,7 +636,7 @@ requires t2 < x_out
 requires x_in +1 < x_out
 requires let next := x_in + (x_out - x_in) / 2 in next > t1
 requires let next := x_in + (x_out - x_in) / 2 in next <= t2
-ensures let next := x_in + (x_out - x_in) / 2 in tStarRec_pure(t1,t2,x_in,x_out) == next 			//It exactly says that tStarRec RETURNS the value!
+ensures let next := x_in + (x_out - x_in) / 2 in tStarRec_pure(t1,t2,x_in,x_out) == next
 decreases x_out - x_in
 pure
 func tStarRec_returns_mid(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint64{
@@ -625,36 +644,38 @@ func tStarRec_returns_mid(t1 uint64, t2 uint64, x_in uint64, x_out uint64) uint6
 		let _:= tStarRec_returns_expJumpBound(t1,t2,x_in,next) in 0
 }
 
-
-// Lemma: Base case of the tStarRec_isOnPath
-// Here, we have already found target == t1 and target == t2
-//Problem: We need to show that tStarRec is on path of the target
+// tStarRec_isOnPath_target: the core "same bucket" lemma. Proves that
+// tStarRec_pure(t1, t2, x_in, x_out) is on the binary search path toward
+// target (where target is t1 or t2). Three cases per recursion step:
+//   - mid <= t1: recurse right (both t1 and t2 are in [mid, x_out])
+//   - t2 < mid:  recurse left  (both t1 and t2 are in [x_in, mid])
+//   - t1 < mid <= t2: tStarRec returns mid, and midOnPath proves it's on path
 ghost
 requires t1 > 0
 requires t1 < t2
-requires x_in <= t1 && t1 < x_out // Constraints on t1
+requires x_in <= t1 && t1 < x_out
 requires t2 < x_out
 requires target == t1 || target == t2
 ensures isOnPath(tStarRec_pure(t1,t2,x_in,x_out), target, x_in, x_out)
 decreases x_out - x_in
 pure
 func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, x_out uint64) uint64{
-	return x_in + 1 >= x_out ? 0 : //Base case
+	return x_in + 1 >= x_out ? 0 :
 		let next := x_in + (x_out-x_in)/2 in
 		(next <= t1 ?
 			tStarRec_isOnPath_target(t1,t2,target,next, x_out):
-			// Go left: next > target
-			// Need to check t2 < next
 			(t2 < next ?
-				// t2 >= next means tStarRec will return next a midpoint
 				tStarRec_isOnPath_target(t1,t2,target,x_in,next):
-				//t1 < next <= t2
-				// So v == mid is true, so isOnPath returns true
 				let _ := tStarRec_returns_mid(t1, t2, x_in, x_out) in
 				midOnPath(target, x_in, x_out)))
 }
 
-//Lemma: Link k with findExpLevel(target)
+// --- Linking lemma ---
+
+// findExpTarget_link_loop links the loop counter k from the exponential
+// jump phase to findExpLevel(target). Given that 2^(k-1) <= target+1 < 2^k
+// (maintained as a loop invariant in FullBinaryLadderSteps), derives
+// k == findExpLevel(target) via Log2Floor_equal.
 ghost
 decreases
 requires target >= 0
@@ -663,10 +684,6 @@ requires IntPow2(k - 1) <= target + 1
 requires IntPow2(k) > target + 1
 ensures k == findExpLevel(target)
 func findExpTarget_link_loop(target uint64, k uint64){
-	// given IntPow2(k - 1) <= target + 1 < IntPow2(k)
-	// By equal lemma: Log2Floor(target+1) == k - 1
-	// So findExpLevel(target) == Log2Floor(target+1) +1 == k -1+1==k
-	// Q.E.D
 	Log2Floor_equal(target + 1, k - 1)
 }
 
@@ -873,6 +890,9 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 }
 
 /*@
+// GetUInt64 is a ghost function stub that non-deterministically returns
+// a positive uint64. Used by FullBinaryLadderSteps_wrapper to introduce
+// the universally quantified t2 witness.
 ghost
 ensures res > 0
 decreases
@@ -881,6 +901,11 @@ func GetUInt64() (res uint64)
 @*/
 
 /*@
+// TStar_wrapper is a predicate that packages the "TStar appears in the ladder"
+// property into a triggerable form. For a ladder r1 and versions t1 < t2,
+// it asserts that some index idx in r1 holds TStar_pure(t1, t2).
+// Used in hyper-mode (client.go) by EstablishTStarWitnesses and FindTStarIdx
+// to extract the witness index.
 ghost
 decreases
 requires acc(r1)

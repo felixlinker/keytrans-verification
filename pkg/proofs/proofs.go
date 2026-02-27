@@ -104,13 +104,15 @@ type CombinedTreeProof struct {
 	Timestamps    []uint64
 	Prefix_proofs []PrefixProof
 	Prefix_roots  []NodeValue
+	Full_subtrees []NodeValue
 }
 
 /*@
 pred (c CombinedTreeProof) Inv() {
 	acc(c.Timestamps) &&
 	acc(c.Prefix_proofs) &&
-	acc(c.Prefix_roots)
+	acc(c.Prefix_roots) &&
+	acc(c.Full_subtrees)
 }
 @*/
 

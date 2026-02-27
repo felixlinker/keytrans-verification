@@ -467,9 +467,9 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		timestamps := make([]uint64, len(prf.Timestamps))
 		copy(timestamps, prf.Timestamps /*@, p/2 @*/)
 		st.Frontier_timestamps = timestamps
-		// Initialize Full_subtrees from prefix roots
-		subtrees := make([]proofs.NodeValue, len(prf.Prefix_roots))
-		copy(subtrees, prf.Prefix_roots)
+		// Initialize Full_subtrees from proof's Full_subtrees
+		subtrees := make([]proofs.NodeValue, len(prf.Full_subtrees))
+		copy(subtrees, prf.Full_subtrees)
 		st.Full_subtrees = subtrees
 	} else {
 		pathToOldHead, pathErr := newSearchTree.PathTo(st.Size - 1 /*@, 1/2 @*/)
@@ -485,14 +485,14 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		for ; i < len(pathToOldHead) && i < len(oldFrontier) && pathToOldHead[i] == oldFrontier[i]; i++ {
 		}
 
-		// Verify consistency: old frontier hashes must match prefix roots
-		if i > len(st.Full_subtrees) || i > len(prf.Prefix_roots) {
+		// Verify consistency: old frontier hashes must match Full_subtrees
+		if i > len(st.Full_subtrees) || i > len(prf.Full_subtrees) {
 			//@ fold st.Inv()
 			//@ fold acc(prf.Inv(), p)
 			return errors.New("consistency check failed: insufficient frontier data")
 		}
 		for j := 0; j < i; j++ {
-			if st.Full_subtrees[j] != prf.Prefix_roots[j] {
+			if st.Full_subtrees[j] != prf.Full_subtrees[j] {
 				//@ fold st.Inv()
 				//@ fold acc(prf.Inv(), p)
 				return errors.New("consistency check failed: frontier hash mismatch")
@@ -513,8 +513,8 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		return errors.New("incorrect number of timestamps provided")
 	}
 
-	newSubtrees := make([]proofs.NodeValue, len(prf.Prefix_roots))
-	copy(newSubtrees, prf.Prefix_roots)
+	newSubtrees := make([]proofs.NodeValue, len(prf.Full_subtrees))
+	copy(newSubtrees, prf.Full_subtrees)
 	st.Full_subtrees = newSubtrees
 
 	st.Size = new_head.Tree_head.Tree_size

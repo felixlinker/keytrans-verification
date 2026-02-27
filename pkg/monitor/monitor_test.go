@@ -262,6 +262,212 @@ func TestVerifyMonitor_HappyPath_SingleEntry(t *testing.T) {
 	}
 }
 
+// ==================================================================================
+// ================ Large Happy-Path Helpers (Spec-aligned) ========================
+// ==================================================================================
+
+// buildHappyPathMonitorResponse constructs a valid MonitorResponse for a tree
+// of the given treeSize. Frontier positions get Inclusion PrefixProofs for
+// version 0; non-frontier positions get copath nodes.
+func buildHappyPathMonitorResponse(label []byte, treeSize uint64) MonitorResponse {
+	version := uint32(0)
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	searchTree := client.MkImplicitBinarySearchTree(treeSize)
+	frontiers := searchTree.FrontierNodes()
+	frontierSet := make(map[uint64]bool)
+	for _, f := range frontiers {
+		frontierSet[f] = true
+	}
+
+	dummyHash := proofs.NodeValue{}
+	dummyHash[0] = 0xAB
+
+	prefixProofs := make([]proofs.PrefixProof, treeSize)
+	for i := uint64(0); i < treeSize; i++ {
+		if frontierSet[i] {
+			prefixProofs[i] = proofs.PrefixProof{
+				Results: []proofs.PrefixSearchResult{
+					{Result_type: proofs.Inclusion, Depth: 0},
+				},
+				Elements: []proofs.NodeValue{},
+			}
+		} else {
+			prefixProofs[i] = proofs.PrefixProof{
+				Results:  []proofs.PrefixSearchResult{},
+				Elements: []proofs.NodeValue{dummyHash},
+			}
+		}
+	}
+
+	timestamps := make([]uint64, len(frontiers))
+	for i := range frontiers {
+		timestamps[i] = uint64((i + 1) * 100)
+	}
+
+	return MonitorResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: treeSize, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    timestamps,
+			Prefix_proofs: prefixProofs,
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+	}
+}
+
+// ==================================================================================
+// =================== Large VerifyMonitor Happy-Path Tests ========================
+// ==================================================================================
+
+func TestVerifyMonitor_HappyPath_Size4_RootEntry(t *testing.T) {
+	// tree_size=4, frontier=[3]. Monitoring map entry at the root (position 3).
+	// DirectPathRight from 3: PathTo(3)=[3], filtered >=3 → [3].
+	// CheckGreatest at position 3 → Inclusion for version 0 → res=0 → success.
+	st := newUserState()
+	label := []byte("alice")
+	config := &client.Configuration{
+		Mode:                       client.DeploymentContractMonitoring,
+		ReasonableMonitoringWindow: 1000,
+	}
+	resp := buildHappyPathMonitorResponse(label, 4)
+	monitorMap := []client.MonitoringMapEntry{
+		{Position: 3, Version: 0},
+	}
+
+	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	if err != nil {
+		t.Fatalf("VerifyMonitor(size=4, root entry) returned error: %v", err)
+	}
+	if len(newMap) != 1 {
+		t.Fatalf("newMap len = %d; want 1", len(newMap))
+	}
+	if newMap[0].Version != 0 {
+		t.Errorf("newMap[0].Version = %d; want 0", newMap[0].Version)
+	}
+}
+
+func TestVerifyMonitor_HappyPath_Size5_TwoFrontierEntries(t *testing.T) {
+	// tree_size=5, frontier=[3, 4]. Two monitoring entries at frontier positions.
+	// Each entry's DirectPathRight stays within its own frontier position.
+	st := newUserState()
+	label := []byte("bob")
+	config := &client.Configuration{
+		Mode:                       client.DeploymentContractMonitoring,
+		ReasonableMonitoringWindow: 1000,
+	}
+	resp := buildHappyPathMonitorResponse(label, 5)
+	monitorMap := []client.MonitoringMapEntry{
+		{Position: 3, Version: 0}, // root frontier
+		{Position: 4, Version: 0}, // right frontier
+	}
+
+	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	if err != nil {
+		t.Fatalf("VerifyMonitor(size=5, two entries) returned error: %v", err)
+	}
+	if len(newMap) != 2 {
+		t.Fatalf("newMap len = %d; want 2", len(newMap))
+	}
+	for i, entry := range newMap {
+		if entry.Version != 0 {
+			t.Errorf("newMap[%d].Version = %d; want 0", i, entry.Version)
+		}
+	}
+}
+
+func TestVerifyMonitor_HappyPath_Size8_ManyEntries(t *testing.T) {
+	// tree_size=8, frontier=[7]. Five monitoring entries all at the root.
+	// Tests the always-append pattern with multiple entries at the same position.
+	st := newUserState()
+	label := []byte("charlie")
+	config := &client.Configuration{
+		Mode:                       client.DeploymentContractMonitoring,
+		ReasonableMonitoringWindow: 1000,
+	}
+	resp := buildHappyPathMonitorResponse(label, 8)
+	monitorMap := make([]client.MonitoringMapEntry, 5)
+	for i := range monitorMap {
+		monitorMap[i] = client.MonitoringMapEntry{Position: 7, Version: 0}
+	}
+
+	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	if err != nil {
+		t.Fatalf("VerifyMonitor(size=8, 5 entries) returned error: %v", err)
+	}
+	if len(newMap) != 5 {
+		t.Fatalf("newMap len = %d; want 5", len(newMap))
+	}
+	for i, entry := range newMap {
+		if entry.Version != 0 {
+			t.Errorf("newMap[%d].Version = %d; want 0", i, entry.Version)
+		}
+	}
+}
+
+func TestVerifyMonitor_HappyPath_Size14_ThreeFrontierEntries(t *testing.T) {
+	// tree_size=14, frontier=[7, 11, 13]. One entry per frontier position.
+	// Tests monitoring across multiple frontier nodes (Section 8.2).
+	st := newUserState()
+	label := []byte("dave")
+	config := &client.Configuration{
+		Mode:                       client.DeploymentContractMonitoring,
+		ReasonableMonitoringWindow: 1000,
+	}
+	resp := buildHappyPathMonitorResponse(label, 14)
+	monitorMap := []client.MonitoringMapEntry{
+		{Position: 7, Version: 0},
+		{Position: 11, Version: 0},
+		{Position: 13, Version: 0},
+	}
+
+	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	if err != nil {
+		t.Fatalf("VerifyMonitor(size=14, three entries) returned error: %v", err)
+	}
+	if len(newMap) != 3 {
+		t.Fatalf("newMap len = %d; want 3", len(newMap))
+	}
+	for i, entry := range newMap {
+		if entry.Version != 0 {
+			t.Errorf("newMap[%d].Version = %d; want 0", i, entry.Version)
+		}
+	}
+}
+
+func TestVerifyMonitor_HappyPath_Size50(t *testing.T) {
+	// tree_size=50, frontier=[31, 47, 49]. Spec example.
+	// Entries at all three frontier positions.
+	st := newUserState()
+	label := []byte("eve")
+	config := &client.Configuration{
+		Mode:                       client.DeploymentContractMonitoring,
+		ReasonableMonitoringWindow: 1000,
+	}
+	resp := buildHappyPathMonitorResponse(label, 50)
+	monitorMap := []client.MonitoringMapEntry{
+		{Position: 31, Version: 0},
+		{Position: 47, Version: 0},
+		{Position: 49, Version: 0},
+	}
+
+	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	if err != nil {
+		t.Fatalf("VerifyMonitor(size=50) returned error: %v", err)
+	}
+	if len(newMap) != 3 {
+		t.Fatalf("newMap len = %d; want 3", len(newMap))
+	}
+}
+
 func TestVerifyMonitor_HappyPath_MultipleEntries(t *testing.T) {
 	// tree_size=1, 3 monitoring map entries all at position 0, version 0.
 	// All share the same prefix tree → CheckGreatest returns 0 for each.

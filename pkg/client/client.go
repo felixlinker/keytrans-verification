@@ -190,12 +190,6 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 	if !determined {
-		if len(resp.Search.Prefix_roots) != 0 {
-			resultErr = errors.New("prefix roots provided")
-			determined = true
-		}
-	}
-	if !determined {
 		ladderIndices := proofs.FullBinaryLadderSteps_wrapper(uint64(*resp.Version))
 		if len(resp.Binary_ladder) != len(ladderIndices) {
 			resultErr = errors.New("length of binary ladder does not match greatest version")

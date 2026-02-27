@@ -458,6 +458,225 @@ func TestVerifyUpdate_HappyPath_SingleVersion(t *testing.T) {
 // ========================== VerifyHistory Happy-Path Tests ========================
 // ==================================================================================
 
+// ==================================================================================
+// ================== Large Happy-Path Helpers (Spec-aligned) ======================
+// ==================================================================================
+
+// buildHappyPathUpdateResponse constructs a valid UpdateResponse for version 0
+// in a tree of the given treeSize. Frontier positions get Inclusion PrefixProofs,
+// non-frontier positions get copath nodes, and there are no previous versions.
+func buildHappyPathUpdateResponse(label []byte, treeSize uint64) UpdateResponse {
+	version := uint32(0)
+	ladderSteps := proofs.FullBinaryLadderSteps_wrapper(uint64(version))
+
+	binaryLadder := make([]proofs.BinaryLadderStep, len(ladderSteps))
+	for i := range ladderSteps {
+		binaryLadder[i] = makeBinaryLadderStep(label, uint32(ladderSteps[i]))
+	}
+
+	searchTree := client.MkImplicitBinarySearchTree(treeSize)
+	frontiers := searchTree.FrontierNodes()
+	frontierSet := make(map[uint64]bool)
+	for _, f := range frontiers {
+		frontierSet[f] = true
+	}
+
+	dummyHash := proofs.NodeValue{}
+	dummyHash[0] = 0xAB
+
+	prefixProofs := make([]proofs.PrefixProof, treeSize)
+	for i := uint64(0); i < treeSize; i++ {
+		if frontierSet[i] {
+			prefixProofs[i] = proofs.PrefixProof{
+				Results: []proofs.PrefixSearchResult{
+					{Result_type: proofs.Inclusion, Depth: 0},
+				},
+				Elements: []proofs.NodeValue{},
+			}
+		} else {
+			prefixProofs[i] = proofs.PrefixProof{
+				Results:  []proofs.PrefixSearchResult{},
+				Elements: []proofs.NodeValue{dummyHash},
+			}
+		}
+	}
+
+	timestamps := make([]uint64, len(frontiers))
+	for i := range frontiers {
+		timestamps[i] = uint64((i + 1) * 100)
+	}
+
+	return UpdateResponse{
+		Full_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Tree_size: treeSize, Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		Prev_tree_head: client.FullTreeHead{
+			Tree_head: client.TreeHead{Signature: []byte{}},
+			RootHash:  makeRootHash(),
+		},
+		New_version:   version,
+		Prev_greatest: nil,
+		Binary_ladder: binaryLadder,
+		Search: proofs.CombinedTreeProof{
+			Timestamps:    timestamps,
+			Prefix_proofs: prefixProofs,
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Prev_search: proofs.CombinedTreeProof{
+			Timestamps:    []uint64{},
+			Prefix_proofs: []proofs.PrefixProof{},
+			Prefix_roots:  []proofs.NodeValue{},
+		},
+		Values:   []proofs.UpdateValue{{Value: append([]byte{}, append(label, []byte("-key-v0")...)...)}},
+		Openings: [][]byte{[]byte("opening-0")}, // expectedCount = 0+1 = 1
+	}
+}
+
+// ==================================================================================
+// ==================== Large VerifyUpdate Happy-Path Tests ========================
+// ==================================================================================
+
+func TestVerifyUpdate_HappyPath_Size4(t *testing.T) {
+	// tree_size=4: BST root=3, frontier=[3]. Single frontier check.
+	// Verifies that VerifyUpdate handles larger trees with non-frontier
+	// copath nodes correctly (Section 9.1).
+	label := []byte("alice")
+	st := newUserState()
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 4)
+
+	err := VerifyUpdate(st, label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyUpdate(size=4) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyUpdate_HappyPath_Size5_TwoFrontiers(t *testing.T) {
+	// tree_size=5: frontier=[3, 4]. Two frontier checks.
+	label := []byte("bob")
+	st := newUserState()
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 5)
+
+	err := VerifyUpdate(st, label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyUpdate(size=5) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyUpdate_HappyPath_Size8(t *testing.T) {
+	// tree_size=8 (power of two): frontier=[7]. Single frontier.
+	label := []byte("charlie")
+	st := newUserState()
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 8)
+
+	err := VerifyUpdate(st, label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyUpdate(size=8) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyUpdate_HappyPath_Size14_ThreeFrontiers(t *testing.T) {
+	// tree_size=14: frontier=[7, 11, 13]. Three frontier checks.
+	label := []byte("dave")
+	st := newUserState()
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 14)
+
+	err := VerifyUpdate(st, label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyUpdate(size=14) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyUpdate_HappyPath_Size50(t *testing.T) {
+	// tree_size=50: frontier=[31, 47, 49]. Spec example from Section 4.1.
+	label := []byte("eve")
+	st := newUserState()
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 50)
+
+	err := VerifyUpdate(st, label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyUpdate(size=50) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyUpdate_HappyPath_CommitmentCountExact(t *testing.T) {
+	// Verify that the commitment opening count check passes with
+	// exactly the right number (New_version + 1 when Prev_greatest is nil).
+	// Section 9.1 step 3.
+	label := []byte("frank")
+	st := newUserState()
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 4)
+
+	// Default has 1 opening (version 0 + 1 = 1). Verify it's correct.
+	if len(resp.Openings) != 1 {
+		t.Fatalf("expected 1 opening, got %d", len(resp.Openings))
+	}
+
+	err := VerifyUpdate(st, label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyUpdate with exact commitment count returned error: %v", err)
+	}
+}
+
+// ==================================================================================
+// ==================== Large VerifyHistory Happy-Path Tests ========================
+// ==================================================================================
+
+func TestVerifyHistory_HappyPath_Size4(t *testing.T) {
+	// tree_size=4, New_version=0, Prev_greatest=nil → verify v=0.
+	// Exercises VerifyHistory with a 4-node tree and single-version range.
+	label := []byte("alice")
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 4)
+
+	err := VerifyHistory(label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyHistory(size=4) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyHistory_HappyPath_Size8(t *testing.T) {
+	// tree_size=8, single frontier, single version.
+	label := []byte("bob")
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 8)
+
+	err := VerifyHistory(label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyHistory(size=8) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyHistory_HappyPath_Size14(t *testing.T) {
+	// tree_size=14, three frontiers, single version.
+	label := []byte("charlie")
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 14)
+
+	err := VerifyHistory(label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyHistory(size=14) returned unexpected error: %v", err)
+	}
+}
+
+func TestVerifyHistory_HappyPath_Size50(t *testing.T) {
+	// tree_size=50, spec example tree size.
+	label := []byte("dave")
+	config := &client.Configuration{Mode: client.DeploymentContractMonitoring}
+	resp := buildHappyPathUpdateResponse(label, 50)
+
+	err := VerifyHistory(label, resp, config)
+	if err != nil {
+		t.Fatalf("VerifyHistory(size=50) returned unexpected error: %v", err)
+	}
+}
+
 func TestVerifyHistory_HappyPath_SingleVersion(t *testing.T) {
 	// tree_size=1, New_version=0, Prev_greatest=nil → start=0, end=0.
 	// Loop iterates once for v=0. VerifyUpdateKey succeeds (version 0 is greatest).
