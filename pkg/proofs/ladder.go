@@ -1,6 +1,70 @@
 package proofs
 
-//TODO: Lemmas kombinieren, simplifizieren.
+// ===========================================================================================
+// PROOF OVERVIEW — Binary Ladder & TStar
+// ===========================================================================================
+//
+// Goal:
+//   Prove that FullBinaryLadderSteps(target) produces a ladder containing
+//   TStar_pure(target, t2) for ANY other version t2. This guarantees that
+//   two hyper-mode executions with different claimed versions t and t' will
+//   both have TStar(t, t') in their ladders — so they query the same prefix
+//   tree entry and must agree, establishing low(t).
+//
+// Key definitions:
+//   - TStar_pure(t1, t2): the deterministic pivot between t1 < t2, computed
+//     by binary search within the exponential interval containing t1.
+//   - expJumpElement(k) = 2^k - 1: the k-th exponential jump step.
+//   - findExpLevel(t) = floor(log2(t+1)) + 1: the exponential level for t.
+//   - isOnPath(v, target, x_in, x_out): v appears on the binary search path
+//     from x_in to x_out when searching toward target.
+//
+// Proof structure (two cases for t2 > target; symmetric for t2 < target):
+//
+//   Case 1 — "Gap": Log2Floor(t2+1) > Log2Floor(target+1)
+//     The exponential levels differ, so TStar equals expJumpElement(findExpLevel(target)),
+//     which is already in the ladder from the exponential jump phase.
+//     Chain: GapImpliesPow2Bound -> tStarRec_returns_expJumpBound -> TStar_Gap_Upper
+//
+//   Case 2 — "Same bucket": Log2Floor(t2+1) == Log2Floor(target+1)
+//     Both versions are in the same exponential interval. TStar lies on the binary
+//     search path toward target, so it will be appended during BinarySearchStep.
+//     Chain: tStarRec_isOnPath_target -> isOnPath_shift -> TStar_OnPath_Upper
+//     Then:  isOnPath_subpath_left/right (propagate through binary search steps)
+//
+// Lemma layers (bottom-up):
+//
+//   Layer 1 — Foundations:
+//     IntPow2, IntPow2Positive, IntPow2Monotonic
+//     Log2Floor_pure, Log2FloorUpperBound, Log2FloorMonotonic, Log2Floor_equal
+//
+//   Layer 2 — TStar core:
+//     tStarRec_pure, tStar_pure, TStar_pure
+//     expJumpElement, findExpLevel
+//
+//   Layer 3 — Path machinery:
+//     isOnPath, isOnPath_shift, isOnPath_subpath_left/right, midOnPath
+//     tStarRec_returns_expJumpBound, tStarRec_returns_mid
+//     tStarRec_isOnPath_target, GapImpliesPow2Bound
+//
+//   Layer 4 — Case lemmas (Upper/Lower symmetric pairs):
+//     TStar_Gap_Upper / TStar_Gap_Lower           (Case 1)
+//     TStar_OnPath_Upper / TStar_OnPath_Lower     (Case 2)
+//     Log2FloorEqWhenNotGap_Upper / _Lower        (establish equality for Case 2)
+//
+//   Layer 5 — Top-level:
+//     findExpTarget_link_loop (links loop variable k to findExpLevel)
+//     FullBinaryLadderSteps (combines exp jump + binary search, invokes case lemmas)
+//     BinarySearchStep (binary search phase, propagates isOnPath through recursion)
+//     FullBinaryLadderSteps_wrapper (universally quantifies over all t2)
+//
+// Note: Several lemmas (tStarRec_returns_expJumpBound, isOnPath_subpath_left/right,
+// midOnPath) have body "return 0" — they are auto-proved by Gobra's SMT solver but
+// must exist as named functions so callers can explicitly trigger the proof obligation.
+// Upper/Lower pairs exist because TStar_pure(t1, t2) requires t1 < t2, forcing
+// separate lemmas for the two orderings of target vs t2.
+//
+// ===========================================================================================
 
 // ===========================================================================================
 // =====================================Log2Floor Lemmas======================================
@@ -187,6 +251,13 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 }
 
 @*/
+// Log2Floor computes floor(log2(base)) by repeated halving.
+//
+// Preconditions: base > 0.
+// Postconditions: IntPow2(r) <= base < IntPow2(r+1), r == Log2Floor_pure(base).
+//
+// Returns: r — the floor of log base 2.
+//
 // @ requires base > 0
 // @ ensures r >= 0
 // @ ensures IntPow2(r) <= base
@@ -204,6 +275,13 @@ func Log2Floor(base uint64) (r uint64) {
 	}
 }
 
+// PowOf2 computes 2^exp iteratively.
+//
+// Preconditions: exp >= 0.
+// Postconditions: r == IntPow2(exp) (i.e., r == 2^exp).
+//
+// Returns: r — the value 2^exp.
+//
 // @ requires exp >= 0
 // @ ensures r == IntPow2(exp)
 // @ decreases
@@ -219,7 +297,16 @@ func PowOf2(exp uint64) (r uint64) {
 	return r
 }
 
-// TStar returns a value r such that t1 < r <= t2
+// TStar computes the T* value — a deterministic pivot between two versions t1
+// and t2 (where t1 < t2). T* is the key element in the binary ladder that both
+// executions must agree on, enabling the hyper-property proof. Delegates to
+// tStar with 1-indexed arguments and subtracts 1.
+//
+// Preconditions: t1 >= 0, t2 > t1.
+// Postconditions: t_star >= 1, t_star == TStar_pure(t1, t2), t1 < t_star <= t2.
+//
+// Returns: t_star — the deterministic pivot value between t1 and t2.
+//
 // @ requires t1 >= 0
 // @ requires t2 > t1
 // @ ensures t_star >= 1
@@ -229,6 +316,14 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1) - 1
 }
 
+// tStar computes T* for 1-indexed versions. Finds the log2 floor of t1 to
+// determine the initial binary search bounds, then delegates to tStarRec.
+//
+// Preconditions: t1 > 0, t2 > t1.
+// Postconditions: t1 < t_star <= t2, t_star == tStar_pure(t1, t2).
+//
+// Returns: t_star — the 1-indexed T* pivot.
+//
 // @ requires t1>0
 // @ requires t2 > t1
 // @ ensures t_star > t1 && t_star <= t2
@@ -239,6 +334,15 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
 }
 
+// tStarRec performs the recursive binary search to find T*. It narrows the
+// interval [x_in, x_out] by halving: if the midpoint <= t1 it recurses right,
+// if x_out <= t2 it returns x_out, otherwise it recurses left.
+//
+// Preconditions: t1 > 0, t2 > t1, x_in <= t1 < x_out.
+// Postconditions: t1 < r <= t2, r == tStarRec_pure(t1, t2, x_in, x_out).
+//
+// Returns: r — the T* value found by binary search.
+//
 // @ requires t1 > 0
 // @ requires t2 > t1
 // @ requires t1 >= x_in
@@ -572,6 +676,24 @@ func findExpTarget_link_loop(target uint64, k uint64){
 // ============================================================================================
 // ======================================Core Lemma============================================
 
+// FullBinaryLadderSteps constructs the full binary ladder for a given target
+// version. The ladder consists of two phases:
+//  1. Exponential jump phase: powers-of-two minus one (0, 1, 3, 7, 15, ...)
+//     until overshooting target
+//  2. Binary search phase: narrows down within the last exponential interval
+//
+// The key property is that for any other version t2, the T* pivot value
+// TStar_pure(target, t2) (or TStar_pure(t2, target)) is guaranteed to appear
+// in the returned ladder at some index idx.
+//
+// Preconditions: target >= 0, t2 >= 0 (ghost), t2 != target.
+// Postconditions: r[idx] == TStar_pure(min, max) where min/max are the ordered
+// pair of target and t2. All elements are >= 0, r[0] == 0.
+//
+// Returns:
+//   - r: the binary ladder steps
+//   - idx (ghost): index in r where T* appears
+//
 // @ requires target >= 0
 // @ requires t2 >= 0
 // @ requires t2 != target
@@ -648,6 +770,23 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	return r /*@, idx@*/
 }
 
+// BinarySearchStep performs the binary search phase of the full binary ladder.
+// Starting from the interval [x_in, x_out], it repeatedly halves the interval,
+// appending each midpoint to r. It tracks (via ghost state) whether T* has been
+// found among the appended elements, and uses isOnPath lemmas to maintain the
+// invariant that T* will eventually appear.
+//
+// Preconditions: r is an owned slice containing the exponential jump elements,
+// x_in < x_out, target >= 0, ghost parameter foundTStar tracks if T* was
+// already located in the exponential phase.
+//
+// Postconditions: returns the extended ladder with res[resIdx] == TStar_pure(...).
+// All elements >= 0, res[0] == 0.
+//
+// Returns:
+//   - res: the extended binary ladder (appended midpoints)
+//   - resIdx (ghost): index where T* appears in res
+//
 // @ requires acc(r)
 // @ requires x_in < x_out
 //@ requires x_in >= 0
@@ -751,6 +890,18 @@ func TStar_wrapper(r1 []uint64, t1 uint64, t2 uint64) bool{
 }
 @*/
 
+// FullBinaryLadderSteps_wrapper is the public entry point for computing the full
+// binary ladder. It wraps FullBinaryLadderSteps and lifts the single-t2 guarantee
+// to a universal quantifier: for ALL possible t2 values, the returned ladder
+// contains TStar_pure(target, t2) (or TStar_pure(t2, target)). This is the
+// key interface used by CheckGreatest to obtain the ladder steps.
+//
+// Preconditions: target >= 0.
+// Postconditions: for every t2, TStar appears in r1. TStar_wrapper holds for
+// all t2 in both orderings. All elements >= 0, r1[0] == 0.
+//
+// Returns: r1 — the full binary ladder steps for target.
+//
 // @ requires target >= 0
 // @ ensures acc(r1)
 // @ ensures forall t2 uint64 :: exists idx1 int :: target < t2 ==> 0 <= idx1 && idx1 < len(r1) && TStar_pure(target, t2) == r1[idx1] && target <  TStar_pure(target,t2)  && TStar_pure(target,t2) <= t2

@@ -67,6 +67,22 @@ VerifyUpdateKey Algorithms:
 
 */
 
+// VerifyUpdateKey verifies that new_version is the greatest version for a label
+// in the current log, analogous to VerifyLatestKey but for update verification.
+// It iterates over all frontier nodes and calls CheckGreatest on each. For non-last
+// frontiers, a result of 1 (greater version exists) is a failure. For the last
+// frontier, the result must be exactly 0.
+//
+// Preconditions: prefixTrees must have length >= size with all entries non-nil and
+// valid, label must be non-nil and low (public), size must be low and > 0.
+//
+// Postconditions (hyper-property): if err==nil and res==true, then new_version
+// is low — two executions with the same root hash agree on the version.
+//
+// Returns:
+//   - res: true if new_version is verified as the greatest
+//   - err: non-nil describing the failure reason
+//
 // @ requires noPerm < p
 // @ requires acc(prefixTrees, p)
 // @ requires acc(prefixRootHash, p)
@@ -128,7 +144,7 @@ func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 					determined = true
 				}
 
-				LtGtOrEq, cgErr := client.CheckGreatest_wrapper(Prefix_tree, label, tVal, rootHash[:], size)
+				LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, label, tVal, rootHash[:], size)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -160,7 +176,7 @@ func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 
-			LtGtOrEq, cgErr := client.CheckGreatest_wrapper(Prefix_tree, label, tVal, rootHash[:], size)
+			LtGtOrEq, cgErr := client.CheckGreatest(Prefix_tree, label, tVal, rootHash[:], size)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr
@@ -186,7 +202,18 @@ func VerifyUpdateKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 // ==================================================================================
 // ============================= buildUpdatePrefixTrees =============================
 
-// buildUpdatePrefixTrees constructs prefix trees from an UpdateResponse's prefix proofs.
+// buildUpdatePrefixTrees constructs prefix trees from an UpdateResponse's
+// prefix proofs. Analogous to client.buildPrefixTrees but for update responses.
+//
+// Preconditions: resp must satisfy its invariant with permission p.
+// Postconditions: on success, returns n trees with valid invariants and n root
+// hashes whose bytes are all low. On error, resp.Inv() permission is returned.
+//
+// Returns:
+//   - trees: slice of n non-nil PrefixTree pointers
+//   - rootHashes: slice of n sha256 root hashes (all bytes low)
+//   - err: non-nil if any prefix proof cannot be converted
+//
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(resp.Inv(), p)
@@ -241,6 +268,23 @@ But it's literally CheckGreatest + VerifyLatestKey in combination...
 */
 
 // VerifyUpdate verifies that a new version was correctly inserted (Section 9.1).
+// It performs five phases:
+//  1. UpdateView — advance the user's local tree view
+//  2. Validation — check new_version > prev_greatest, insertion position ordering,
+//     and commitment opening count
+//  3. Build prefix trees from the response's proofs
+//  4. VerifyUpdateKey — verify the version is greatest across all frontier nodes
+//  5. Return result
+//
+// Preconditions: st.Inv() must hold, resp must satisfy Inv() with permission p,
+// label must be non-nil and low, tree size must be low and > 0.
+//
+// Postconditions (hyper-property): if err==nil, then resp.New_version is low —
+// two executions with the same root hash agree on the new version number.
+//
+// Returns: err — non-nil if any verification step fails.
+//
+
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ requires acc(resp.Inv(), p)
@@ -329,7 +373,6 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 			prev_greatest = *resp.Prev_greatest
 		}
 
-		//@ assert size <= uint64(len(trees))
 		decision, resultErr = VerifyUpdateKey(trees, rootHashes, size, label, resp.New_version, prev_greatest, config /*@, p/4 @*/)
 
 		if !decision || resultErr != nil {
@@ -353,10 +396,27 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 // ==================================================================================
 // ============================= VerifyHistory ======================================
 
-// VerifyHistory verifies that the newly committed versions
-// (Prev_greatest+1..New_version) exist in the current log (Section 8.3).
-// Functional correctness: every version passed to VerifyUpdateKey is in [startV, New_version].
-
+// VerifyHistory verifies that all newly committed versions in the range
+// [Prev_greatest+1, New_version] (or [0, New_version] if no previous version)
+// exist in the current log (Section 8.3). For each version in range, it rebuilds
+// the prefix trees and calls VerifyUpdateKey.
+//
+// Functional correctness (ghost returns): every version in the output `verified`
+// sequence satisfies startV <= verified[j] <= New_version, and numVerified ==
+// len(verified).
+//
+// Preconditions: resp must satisfy Inv() with permission p, label must be non-nil
+// and low, tree size must be low and > 0, New_version must be low.
+//
+// Postconditions: resp.Inv(), label, and config permissions are returned.
+// Ghost returns provide functional correctness bounds on verified versions.
+//
+// Returns:
+//   - err: non-nil if any version fails verification
+//   - verified (ghost): sequence of successfully verified version numbers
+//   - numVerified (ghost): count of verified versions (== len(verified))
+//   - startV (ghost): the computed start version of the range
+//
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)
 // @ requires acc(label, p)
@@ -435,7 +495,6 @@ func VerifyHistory(label []byte, resp UpdateResponse, config *client.Configurati
 				if v > 0 {
 					prev = v - 1
 				}
-				//@ assert size <= uint64(len(trees))
 				ok, verifyErr := VerifyUpdateKey(trees, rootHashes, size, label, v, prev, config /*@, p/4 @*/)
 				if verifyErr != nil {
 					resultErr = verifyErr

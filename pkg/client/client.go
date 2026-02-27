@@ -136,6 +136,21 @@ pred (s SearchResponse) Inv() {
 }
 @*/
 
+// VerifyLatest verifies that the version claimed in resp is indeed the latest
+// version for the queried label. It updates the user's view of the tree, validates
+// the response fields, builds prefix trees, and delegates to VerifyLatestKey.
+//
+// Preconditions: resp must have a non-nil Version, a non-empty tree, the tree size
+// must be low (public), and the query label must be low (public).
+//
+// Postconditions (hyper-property): if err==nil, resp.Version is low — meaning
+// two executions with the same root hash agree on the latest version.
+//
+// Returns:
+//   - res: the update value associated with the label (non-nil on success)
+//   - err: non-nil if any verification step fails
+//
+
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ preserves acc(query.Inv(), p)
@@ -344,16 +359,24 @@ func FindTStarIdx(steps []uint64, t uint64) (idx int) {
 }
 @*/
 
-/*
-CheckGreatest verifies if t is the greatest version
- Returns:
-
-	-1: Greatest version < t (found hole at or below t), the greatest version does not exist so far
-	 0: t is the greatest version
-	 1: Greatest version > t (found commitment above t), violates t being the greatest version
-
-*/
-
+// CheckCommitment walks the binary ladder steps for a label and checks whether
+// version t is the greatest committed version in the prefix tree.
+//
+// For each step, it queries the prefix tree for a commitment at that version.
+// A non-inclusion proof at step <= t means t is not yet the greatest (hole found).
+// An inclusion proof at step > t means a greater version exists (violation).
+//
+// Preconditions: label and RootHash must be non-nil and low (public), t >= 0,
+// prefixTree (if non-nil) must satisfy its invariant, tStarIdx must index a low
+// step equal to TStar(t_exec0, t_exec1).
+//
+// Postconditions (hyper-property): if err==nil and res==0, then t is low —
+// two executions with the same tree agree on the greatest version.
+//
+// Returns:
+//   - res: -1 (greatest < t), 0 (t is greatest), 1 (greatest > t), 404 (tree error)
+//   - err: non-nil on tree lookup errors
+//
 // @ requires label != nil
 // @ requires acc(label)
 // @ requires acc(RootHash)
@@ -368,7 +391,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires steps[tStarIdx] == TStar(rel(t, 0), rel(t, 1))
 // Correct postcondition
 // @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int@*/) (res int, err error) {
+func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int@*/) (res int, err error) {
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
@@ -434,7 +457,19 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 
 }
 
-// CheckGreatest_wrapper computes the binary ladder steps and calls CheckGreatest.
+// CheckGreatest computes the full binary ladder steps for version t and then
+// delegates to CheckCommitment to verify whether t is the greatest version.
+//
+// Preconditions: label and RootHash must be non-nil and low (public), t >= 0,
+// prefixTree (if non-nil) must satisfy its invariant.
+//
+// Postconditions (hyper-property): if err==nil and res==0, then t is low.
+//
+// Returns:
+//   - res: -1 (greatest < t), 0 (t is greatest), 1 (greatest > t), 404 (tree error)
+//   - err: non-nil on tree lookup errors
+//
+
 // @ requires label != nil
 // @ requires acc(label)
 // @ requires acc(RootHash)
@@ -443,15 +478,10 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 // @ requires t >= 0
 // @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest_wrapper(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64) (res int, err error) {
+func CheckGreatest(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64) (res int, err error) {
 	steps := proofs.FullBinaryLadderSteps_wrapper(t)
 	//@ tStarIdx := FindTStarIdx(steps, t)
-	//@ assert acc(steps)
-	//@ assert forall j int :: {steps[j]} j >= 0 && j < len(steps) ==> steps[j] >= 0
-	//@ assert 0 <= tStarIdx && tStarIdx < len(steps)
-	//@ assert low(steps[tStarIdx])
-	//@ assert steps[tStarIdx] == TStar(rel(t, 0), rel(t, 1))
-	return CheckGreatest(prefixTree, steps, label, t, RootHash, size /*@, tStarIdx @*/)
+	return CheckCommitment(prefixTree, steps, label, t, RootHash, size /*@, tStarIdx @*/)
 }
 
 type MonitoringMapEntry struct {
@@ -459,6 +489,23 @@ type MonitoringMapEntry struct {
 	Version  uint32
 }
 
+// VerifyLatestKey iterates over all frontier nodes of the implicit binary search
+// tree and calls CheckGreatest on each to verify that the claimed version is
+// the greatest. For non-last frontiers, a result of 1 (greater version exists)
+// is a failure. For the last frontier, the result must be exactly 0 (t is greatest).
+// Optionally appends to monitor_map if the entry needs future monitoring.
+//
+// Preconditions: prefixTrees and rootHashes must have length >= size, all trees
+// non-nil with valid invariants, resp.Version non-nil, size > 0, label and size
+// must be low (public).
+//
+// Postconditions (hyper-property): if err==nil and res==true, then resp.Version
+// is low — two executions with the same tree agree on the latest version.
+//
+// Returns:
+//   - res: true if the claimed version is verified as the greatest
+//   - err: non-nil describing the failure reason
+//
 // @ requires noPerm < p
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version,p)
@@ -492,11 +539,6 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	resultRes := true
 	var resultErr error = nil
 	frontiers := search_tree.FrontierNodes( /*@p, size@*/ )
-	//@ assert len(frontiers) > 0
-	//@ assert low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
-	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < size
-	//@ assert size <= uint64(len(prefixTrees))
-	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	terminalLogEntry := -1
 	determined := false
 
@@ -528,8 +570,6 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	for fIdx := 0; fIdx < len(frontiers)-1; fIdx++ {
 		frontier := frontiers[fIdx]
 		if !determined {
-			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
-			//@ assert acc(prefixTrees[frontier])
 			Prefix_tree := prefixTrees[frontier]
 			if prefixTrees[frontier] == nil {
 				resultRes = false
@@ -537,14 +577,13 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			} else {
 				rootHash := prefixRootHash[frontier]
-				//@ assert acc(query.Label)
 				if frontier >= size {
 					resultRes = false
 					resultErr = errors.New("version out of bounds")
 					determined = true
 				}
 
-				LtGtOrEq, cgErr := CheckGreatest_wrapper(Prefix_tree, query.Label, tVal, rootHash[:], size)
+				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -576,7 +615,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 
-			LtGtOrEq, cgErr := CheckGreatest_wrapper(Prefix_tree, query.Label, tVal, rootHash[:], size)
+			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr
@@ -606,10 +645,20 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	return resultRes, resultErr
 }
 
-// buildPrefixTrees constructs prefix trees from the response's prefix proofs.
-// This part is according to our document assumed as low.
-//TODO: We maybe need to consider different views in the end?
-//TODO: Documentation
+// buildPrefixTrees constructs prefix trees from the SearchResponse's prefix proofs.
+// Each prefix proof is converted into a PrefixTree and its root hash is extracted.
+// The root hashes are assumed to be low (public) per the protocol specification.
+//
+// Preconditions: resp must satisfy its invariant with permission p.
+//
+// Postconditions: on success, returns n trees with valid invariants and n root
+// hashes whose bytes are all low. On error, resp.Inv() permission is returned.
+//
+// Returns:
+//   - trees: slice of n non-nil PrefixTree pointers
+//   - rootHashes: slice of n sha256 root hashes (all bytes low)
+//   - err: non-nil if any prefix proof cannot be converted
+//
 
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)

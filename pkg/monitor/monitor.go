@@ -41,7 +41,18 @@ pred (m MonitorResponse) Inv() {
 // ==================================================================================
 // ============================= buildMonitorPrefixTrees ============================
 
-// buildMonitorPrefixTrees constructs prefix trees from a MonitorResponse's prefix proofs.
+// buildMonitorPrefixTrees constructs prefix trees from a MonitorResponse's
+// prefix proofs. Analogous to client.buildPrefixTrees but for monitor responses.
+//
+// Preconditions: resp must satisfy its invariant with permission p.
+// Postconditions: on success, returns n trees with valid invariants and n root
+// hashes whose bytes are all low. On error, resp.Inv() permission is returned.
+//
+// Returns:
+//   - trees: slice of n non-nil PrefixTree pointers
+//   - rootHashes: slice of n sha256 root hashes (all bytes low)
+//   - err: non-nil if any prefix proof cannot be converted
+//
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(resp.Inv(), p)
@@ -76,11 +87,30 @@ func buildMonitorPrefixTrees(resp MonitorResponse, n int /*@, ghost p perm @*/) 
 // ==================================================================================
 // ============================= VerifyMonitor ======================================
 
-// VerifyMonitor verifies that previously-searched label-version pairs remain in the
-// log (Section 8.2 — Contact Monitoring).
-
+// VerifyMonitor verifies that previously-searched label-version pairs remain in
+// the log (Section 8.2 — Contact Monitoring). For each entry in monitor_map, it
+// computes the direct path right from the entry's position to the first
+// distinguished node, then calls CheckGreatest at each position along that path.
+// Entries where a "hole" is found (version not included) cause a failure.
+//
+// The function updates the user's tree view, builds prefix trees, computes the
+// distinguished set using the reasonable monitoring window, and produces an
+// updated monitoring map with new positions.
+//
+// Preconditions: st.Inv() must hold, resp must satisfy Inv(), label must be
+// non-nil and low, tree size must be low and > 0, all monitor_map entries'
+// Version and Position must be low, config.ReasonableMonitoringWindow must be low.
+//
+// Postconditions (hyper-property): if err==nil, the output new_map has low length
+// and all entries have low Version and Position — two executions with the same
+// root hash agree on the monitoring map contents.
+//
+// Returns:
+//   - new_map: updated monitoring map with new positions for each entry
+//   - err: non-nil if any monitoring check fails
+//
 //TODO: I think the current spec is too weak and we need other implementations to make sure that the security property is implemented
-// The issue here is that the current implementation shows the non-equivocation but not the consistency that the users will reach to a consensus that they'll see 
+// The issue here is that the current implementation shows the non-equivocation but not the consistency that the users will reach to a consensus that they'll see
 
 // @ requires noPerm < p
 // @ preserves st.Inv()
@@ -144,8 +174,6 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 	if !determined {
 		search_tree := client.MkImplicitBinarySearchTree(size)
 		distinguished := client.ComputeDistinguishedSet(search_tree, timestamps, config.ReasonableMonitoringWindow /*@, 1/2 @*/)
-		//@ assert size <= uint64(len(trees))
-
 		// Process entries
 		//@ ghost var versions seq[uint32] = seq[uint32]{}
 		//@ ghost var positions seq[uint64] = seq[uint64]{}
@@ -231,7 +259,7 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 						Prefix_tree := trees[posIdx]
 						rootHash := rootHashes[posIdx]
 						if Prefix_tree != nil {
-							cgRes, cgErr := client.CheckGreatest_wrapper(Prefix_tree, label, tVal, rootHash[:], size)
+							cgRes, cgErr := client.CheckGreatest(Prefix_tree, label, tVal, rootHash[:], size)
 							if cgErr != nil {
 								resultErr = cgErr
 								determined = true

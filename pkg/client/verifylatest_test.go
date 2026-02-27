@@ -93,10 +93,10 @@ func TestRootNode_SpecCompliance(t *testing.T) {
 }
 
 // ==================================================================================
-// ============================ CheckGreatest Tests ================================
+// ============================ CheckCommitment Tests ================================
 // ==================================================================================
 
-func TestCheckGreatest_IsGreatest(t *testing.T) {
+func TestCheckCommitment_IsGreatest(t *testing.T) {
 	// Build a tree with (label, version=0) included.
 	// With t=0 and steps=[0,1]:
 	//   step 0: inclusion (version 0 matches leaf) → step <= t → ok
@@ -107,16 +107,16 @@ func TestCheckGreatest_IsGreatest(t *testing.T) {
 	rootHash := makeRootHash()
 	steps := proofs.FullBinaryLadderSteps_wrapper(0)
 
-	res, err := CheckGreatest(tree, steps, label, 0, rootHash, 4)
+	res, err := CheckCommitment(tree, steps, label, 0, rootHash, 4)
 	if err != nil {
-		t.Fatalf("CheckGreatest returned unexpected error: %v", err)
+		t.Fatalf("CheckCommitment returned unexpected error: %v", err)
 	}
 	if res != 0 {
-		t.Errorf("CheckGreatest = %d; want 0 (is greatest)", res)
+		t.Errorf("CheckCommitment = %d; want 0 (is greatest)", res)
 	}
 }
 
-func TestCheckGreatest_HoleBelow(t *testing.T) {
+func TestCheckCommitment_HoleBelow(t *testing.T) {
 	// Build a tree with (label, version=5) included (NOT version 0).
 	// With t=0 and steps=[0,1]:
 	//   step 0: non-inclusion → step 0 <= t 0 → hole
@@ -126,16 +126,16 @@ func TestCheckGreatest_HoleBelow(t *testing.T) {
 	rootHash := makeRootHash()
 	steps := proofs.FullBinaryLadderSteps_wrapper(0)
 
-	res, err := CheckGreatest(tree, steps, label, 0, rootHash, 4)
+	res, err := CheckCommitment(tree, steps, label, 0, rootHash, 4)
 	if err != nil {
-		t.Fatalf("CheckGreatest returned unexpected error: %v", err)
+		t.Fatalf("CheckCommitment returned unexpected error: %v", err)
 	}
 	if res != -1 {
-		t.Errorf("CheckGreatest = %d; want -1 (hole below t)", res)
+		t.Errorf("CheckCommitment = %d; want -1 (hole below t)", res)
 	}
 }
 
-func TestCheckGreatest_NilTree(t *testing.T) {
+func TestCheckCommitment_NilTree(t *testing.T) {
 	// A nil PrefixTree: SearchForCommitment handles nil gracefully
 	// and returns (nil, nil), meaning non-inclusion.
 	// At step 0 (step <= t), non-inclusion → hole → res=-1.
@@ -143,28 +143,28 @@ func TestCheckGreatest_NilTree(t *testing.T) {
 	rootHash := makeRootHash()
 	steps := proofs.FullBinaryLadderSteps_wrapper(0)
 
-	res, err := CheckGreatest(nil, steps, label, 0, rootHash, 4)
+	res, err := CheckCommitment(nil, steps, label, 0, rootHash, 4)
 	if err != nil {
-		t.Fatalf("CheckGreatest returned unexpected error: %v", err)
+		t.Fatalf("CheckCommitment returned unexpected error: %v", err)
 	}
 	if res != -1 {
-		t.Errorf("CheckGreatest = %d; want -1 (hole, nil tree returns non-inclusion)", res)
+		t.Errorf("CheckCommitment = %d; want -1 (hole, nil tree returns non-inclusion)", res)
 	}
 }
 
-func TestCheckGreatest_EmptySteps(t *testing.T) {
+func TestCheckCommitment_EmptySteps(t *testing.T) {
 	// With empty steps slice, the loop doesn't execute.
 	// Result: res=0, err=nil (vacuously greatest)
 	label := []byte("alice")
 	tree := buildSingleLeafTree(label, 0)
 	rootHash := makeRootHash()
 
-	res, err := CheckGreatest(tree, []uint64{}, label, 0, rootHash, 4)
+	res, err := CheckCommitment(tree, []uint64{}, label, 0, rootHash, 4)
 	if err != nil {
-		t.Fatalf("CheckGreatest with empty steps returned error: %v", err)
+		t.Fatalf("CheckCommitment with empty steps returned error: %v", err)
 	}
 	if res != 0 {
-		t.Errorf("CheckGreatest = %d; want 0 (vacuously greatest)", res)
+		t.Errorf("CheckCommitment = %d; want 0 (vacuously greatest)", res)
 	}
 }
 
@@ -234,7 +234,7 @@ func TestVerifyLatestKey_VersionEqualToSize(t *testing.T) {
 
 func TestVerifyLatestKey_IsGreatest_SingleFrontier(t *testing.T) {
 	// size=1: single frontier node at position 0.
-	// Tree has (label, version=0) included → CheckGreatest returns 0.
+	// Tree has (label, version=0) included → CheckCommitment returns 0.
 	// Result: (true, nil)
 	label := []byte("alice")
 	version := uint32(0)
@@ -471,7 +471,7 @@ func TestVerifyLatest_HappyPath_Size1(t *testing.T) {
 	// Simplest happy path: tree_size=1, version=0, label="alice"
 	// FullBinaryLadderSteps_wrapper(0) = [0, 1] → 2 binary ladder steps
 	// 1 prefix proof with Results: [{Inclusion, depth=0}], Elements: [] → leaf
-	// CheckGreatest: step 0 → inclusion (<=t) ok; step 1 → non-inclusion (>t) ok → res=0
+	// CheckCommitment: step 0 → inclusion (<=t) ok; step 1 → non-inclusion (>t) ok → res=0
 	// Expected: VerifyLatest returns (&UpdateValue{...}, nil)
 	label := []byte("alice")
 	version := uint32(0)
