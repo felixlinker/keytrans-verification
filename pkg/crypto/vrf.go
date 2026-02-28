@@ -41,12 +41,16 @@ func VRF_prove(sk []byte, input VrfInput) [32]byte {
 	return VRF_hash(sk, input)
 }
 
-func VRF_proof_to_hash(prf [32]byte) [32]byte {
-	return prf
+func VRF_proof_to_hash(prf []byte) [32]byte {
+	var out [32]byte
+	copy(out[:], prf)
+	return out
 }
 
 // @ trusted
 // @ preserves acc(pk) && input.Inv()
-func VRF_verify(pk []byte, input VrfInput, prf [32]byte) (bool, [32]byte) {
-	return VRF_hash(nil, input) == prf, VRF_proof_to_hash(prf)
+func VRF_verify(pk []byte, input VrfInput, prf []byte) (bool, [32]byte) {
+	hash := VRF_hash(nil, input)
+	proofHash := VRF_proof_to_hash(prf)
+	return hash == proofHash, proofHash
 }

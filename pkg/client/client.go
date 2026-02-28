@@ -103,7 +103,7 @@ pure func (f FullTreeHead) Size() uint64 {
 @*/
 
 type SearchRequest struct {
-	Last  *uint32
+	Last  *uint64
 	Label []byte
 	// TODO: optional<uint32> version
 }
@@ -119,7 +119,6 @@ type SearchResponse struct {
 	Version        *uint32 // version; only present for latest-key queries
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
-	Inclusion      proofs.InclusionProof
 	Opening        []byte
 	Value          proofs.UpdateValue // value associated with queried label
 }
@@ -128,9 +127,8 @@ type SearchResponse struct {
 pred (s SearchResponse) Inv() {
 	s.Full_tree_head.Inv() &&
 	(s.Version != nil ==> acc(s.Version)) &&
-	acc(s.Binary_ladder) && // `proofs.BinaryLadderStep` does not have an invariant as it's just a value
+	acc(s.Binary_ladder) &&
 	s.Search.Inv() &&
-	s.Inclusion.Inv() &&
 	acc(s.Opening) &&
 	s.Value.Inv()
 }

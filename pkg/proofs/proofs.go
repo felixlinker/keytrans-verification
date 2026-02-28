@@ -28,8 +28,8 @@ type CommitmentValue struct {
 }
 
 type BinaryLadderStep struct {
-	Proof      [sha256.Size]byte
-	Commitment [sha256.Size]byte
+	Proof      []byte             // opaque proof[VRF.Np] — variable length per VRF scheme
+	Commitment *[sha256.Size]byte // optional<HashValue> — nil for non-existing/target versions
 }
 type VRFInput struct {
 	Label   []byte
@@ -51,12 +51,12 @@ type VRFProof struct {
 }
 
 type InclusionProof struct {
-	VRFProofs []VRFProof // A list of mappings from label-version to the boolean, true => inclusion, false => inclusion
+	Elements []NodeValue // HashValue elements — log-tree inclusion/consistency batch proof
 }
 
 /*@
 pred (i InclusionProof) Inv() {
-	true
+	acc(i.Elements)
 }
 @*/
 
@@ -104,7 +104,7 @@ type CombinedTreeProof struct {
 	Timestamps    []uint64
 	Prefix_proofs []PrefixProof
 	Prefix_roots  []NodeValue
-	Full_subtrees []NodeValue
+	Inclusion     InclusionProof
 }
 
 /*@
@@ -112,7 +112,7 @@ pred (c CombinedTreeProof) Inv() {
 	acc(c.Timestamps) &&
 	acc(c.Prefix_proofs) &&
 	acc(c.Prefix_roots) &&
-	acc(c.Full_subtrees)
+	c.Inclusion.Inv()
 }
 @*/
 
@@ -133,10 +133,14 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 	sortBinaryLadderSteps(sortedSteps)
 
 	for i, step := range sortedSteps {
+		var commitment [sha256.Size]byte
+		if step.Commitment != nil {
+			commitment = *step.Commitment
+		}
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
 				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
-				Commitment: step.Commitment,
+				Commitment: commitment,
 			},
 			Result: results[i],
 		})
@@ -153,5 +157,6 @@ func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
 		hashB := crypto.VRF_proof_to_hash(b.Proof)
 		return bytes.Compare(hashA[:], hashB[:])
 	})
+
 	return
 }

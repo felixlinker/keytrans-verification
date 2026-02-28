@@ -374,7 +374,6 @@ func TestVerifyLatest_NilVersion(t *testing.T) {
 			Prefix_proofs: []proofs.PrefixProof{{}},
 			Prefix_roots:  []proofs.NodeValue{},
 		},
-		Inclusion: proofs.InclusionProof{},
 		Opening:   []byte{},
 		Value:     proofs.UpdateValue{Value: []byte{}},
 	}
@@ -406,7 +405,6 @@ func TestVerifyLatest_WrongLadderLength(t *testing.T) {
 			Prefix_proofs: []proofs.PrefixProof{{}, {}, {}, {}},
 			Prefix_roots:  []proofs.NodeValue{},
 		},
-		Inclusion: proofs.InclusionProof{},
 		Opening:   []byte{},
 		Value:     proofs.UpdateValue{Value: []byte{}},
 	}
@@ -432,7 +430,7 @@ func makeBinaryLadderStep(label []byte, version uint32) proofs.BinaryLadderStep 
 	vrfInput := crypto.VrfInput{Label: label, Version: version}
 	vrfProof := crypto.VRF_hash(nil, vrfInput)
 	commitment := sha256.Sum256(append([]byte("commit-"), byte(version)))
-	return proofs.BinaryLadderStep{Proof: vrfProof, Commitment: commitment}
+	return proofs.BinaryLadderStep{Proof: vrfProof[:], Commitment: &commitment}
 }
 
 func TestVerifyLatest_HappyPath_Size1(t *testing.T) {
@@ -472,7 +470,6 @@ func TestVerifyLatest_HappyPath_Size1(t *testing.T) {
 			Prefix_proofs: []proofs.PrefixProof{prefixProof},
 			Prefix_roots:  []proofs.NodeValue{},
 		},
-		Inclusion: proofs.InclusionProof{},
 		Opening:   []byte{},
 		Value:     proofs.UpdateValue{Value: []byte("alice-key-v0")},
 	}
@@ -532,7 +529,6 @@ func TestVerifyLatest_HappyPath_Size2(t *testing.T) {
 			Prefix_proofs: prefixProofs,
 			Prefix_roots:  []proofs.NodeValue{},
 		},
-		Inclusion: proofs.InclusionProof{},
 		Opening:   []byte{},
 		Value:     proofs.UpdateValue{Value: []byte("bob-key-v0")},
 	}
@@ -597,7 +593,6 @@ func TestVerifyLatest_HappyPath_Size3(t *testing.T) {
 			Prefix_proofs: prefixProofs,
 			Prefix_roots:  []proofs.NodeValue{},
 		},
-		Inclusion: proofs.InclusionProof{},
 		Opening:   []byte{},
 		Value:     proofs.UpdateValue{Value: []byte("charlie-key-v0")},
 	}
@@ -653,7 +648,6 @@ func TestVerifyLatest_HappyPath_UpdatesUserState(t *testing.T) {
 			Prefix_proofs: []proofs.PrefixProof{prefixProof},
 			Prefix_roots:  []proofs.NodeValue{},
 		},
-		Inclusion: proofs.InclusionProof{},
 		Opening:   []byte{},
 		Value:     proofs.UpdateValue{Value: []byte("dave-key-v0")},
 	}
@@ -789,7 +783,7 @@ func TestUpdateView_InitializesFullSubtrees(t *testing.T) {
 		Timestamps:    []uint64{100},
 		Prefix_proofs: []proofs.PrefixProof{},
 		Prefix_roots:  []proofs.NodeValue{},
-		Full_subtrees: []proofs.NodeValue{hash1},
+		Inclusion: proofs.InclusionProof{Elements: []proofs.NodeValue{hash1}},
 	}
 
 	err := st.UpdateView(newHead, prf)
@@ -826,7 +820,7 @@ func TestUpdateView_ConsistencyCheckPasses(t *testing.T) {
 		Timestamps:    []uint64{100},
 		Prefix_proofs: []proofs.PrefixProof{},
 		Prefix_roots:  []proofs.NodeValue{},
-		Full_subtrees: []proofs.NodeValue{hash1},
+		Inclusion: proofs.InclusionProof{Elements: []proofs.NodeValue{hash1}},
 	}
 	if err := st.UpdateView(newHead1, prf1); err != nil {
 		t.Fatalf("First UpdateView failed: %v", err)
@@ -845,7 +839,7 @@ func TestUpdateView_ConsistencyCheckPasses(t *testing.T) {
 		Timestamps:    []uint64{100, 200},
 		Prefix_proofs: []proofs.PrefixProof{},
 		Prefix_roots:  []proofs.NodeValue{},
-		Full_subtrees: []proofs.NodeValue{hash1, hash2},
+		Inclusion: proofs.InclusionProof{Elements: []proofs.NodeValue{hash1, hash2}},
 	}
 	if err := st.UpdateView(newHead2, prf2); err != nil {
 		t.Fatalf("Second UpdateView failed: %v", err)
@@ -879,7 +873,7 @@ func TestUpdateView_ConsistencyCheckFails(t *testing.T) {
 		Timestamps:    []uint64{100},
 		Prefix_proofs: []proofs.PrefixProof{},
 		Prefix_roots:  []proofs.NodeValue{},
-		Full_subtrees: []proofs.NodeValue{hash1},
+		Inclusion: proofs.InclusionProof{Elements: []proofs.NodeValue{hash1}},
 	}
 	if err := st.UpdateView(newHead1, prf1); err != nil {
 		t.Fatalf("First UpdateView failed: %v", err)
@@ -894,7 +888,7 @@ func TestUpdateView_ConsistencyCheckFails(t *testing.T) {
 		Timestamps:    []uint64{100, 200},
 		Prefix_proofs: []proofs.PrefixProof{},
 		Prefix_roots:  []proofs.NodeValue{},
-		Full_subtrees: []proofs.NodeValue{hashWrong, {}},
+		Inclusion: proofs.InclusionProof{Elements: []proofs.NodeValue{hashWrong, {}}},
 	}
 	err := st.UpdateView(newHead2, prf2)
 	if err == nil {
@@ -971,7 +965,6 @@ func buildHappyPathSearchResponse(label []byte, treeSize uint64) SearchResponse 
 			Prefix_proofs: prefixProofs,
 			Prefix_roots:  []proofs.NodeValue{},
 		},
-		Inclusion: proofs.InclusionProof{},
 		Opening:   []byte{},
 		Value:     proofs.UpdateValue{Value: append([]byte{}, append(label, []byte("-key-v0")...)...)},
 	}

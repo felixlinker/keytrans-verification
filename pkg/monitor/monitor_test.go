@@ -198,7 +198,7 @@ func makeBinaryLadderStep(label []byte, version uint32) proofs.BinaryLadderStep 
 	vrfInput := crypto.VrfInput{Label: label, Version: version}
 	vrfProof := crypto.VRF_hash(nil, vrfInput)
 	commitment := sha256.Sum256(append([]byte("commit-"), byte(version)))
-	return proofs.BinaryLadderStep{Proof: vrfProof, Commitment: commitment}
+	return proofs.BinaryLadderStep{Proof: vrfProof[:], Commitment: &commitment}
 }
 
 // ==================================================================================

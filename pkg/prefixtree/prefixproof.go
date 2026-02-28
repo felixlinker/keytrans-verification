@@ -339,7 +339,7 @@ func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []b
 // Gregersen et al.): descend left or right based on the path bits,
 // and return the value at the matching leaf.
 //
-// @preserves tree!= nil ==> tree.Inv()
+// @ preserves tree!= nil ==> tree.Inv()
 // @ trusted
 func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte, error) {
 	if tree == nil {
