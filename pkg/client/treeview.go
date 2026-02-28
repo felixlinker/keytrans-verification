@@ -76,12 +76,12 @@ func RootNode(tree_size uint64) (root uint64) {
 // Preconditions/Postconditions: preserves tree.Inv() when tree is non-nil.
 //
 // @ preserves tree!= nil ==> tree.Inv()
-func (tree *ImplicitBinarySearchTree) OffSet(by uint64) {
+func (tree *ImplicitBinarySearchTree) OffSet(offset uint64) {
 	if tree != nil {
 		//@ unfold tree.Inv()
-		tree.Root += by
-		tree.Left.OffSet(by)
-		tree.Right.OffSet(by)
+		tree.Root += offset
+		tree.Left.OffSet(offset)
+		tree.Right.OffSet(offset)
 		//@ fold tree.Inv()
 	}
 	return
