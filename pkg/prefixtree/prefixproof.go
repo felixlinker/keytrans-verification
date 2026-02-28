@@ -205,8 +205,9 @@ func ToTree(prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep) (tree 
 // @ ensures  err != nil && tree != nil ==> tree.GetValue() != nil
 // @ trusted
 func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
-	hashContent = make([]byte, sha256.Size+1)
+	hashContent = make([]byte, sha256.Size)
 	if tree == nil {
+		// Spec: absent node uses Hash.Nh (32) zero bytes
 		return hashContent, nil
 	} else if tree.Left == nil && tree.Right == nil {
 		if value /*@ @ @*/, err := tree.ComputeHash(); err != nil {
@@ -241,23 +242,29 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 		if tree.Leaf == nil {
 			return [sha256.Size]byte{}, errors.New("neither leaf nor value given for empty node")
 		} else {
-			// TODO: We would have to include length, too, to be compliant with TLS
-			// encoding, but not so important right now because inputs are
-			// fixed-length and this may get changed in the future
-			value /*@ @ @*/ := sha256.Sum256(append( /*@ perm(1/2), @*/ tree.Leaf.Vrf_output[:], tree.Leaf.Commitment[:]...) /*@, perm(1/2) @*/)
+			// Spec: leaf.value = Hash(0x01 || vrf_output || commitment)
+			input := append( /*@ perm(1/2), @*/ []byte{0x01}, tree.Leaf.Vrf_output[:]...)
+			input = append( /*@ perm(1/2), @*/ input, tree.Leaf.Commitment[:]...)
+			value /*@ @ @*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
 			tree.Value = &value
 			return value, nil
 		}
 	} else {
-		if leftContent, err := tree.Left.HashContent(); err != nil {
-			return [sha256.Size]byte{}, err
-		} else if rightContent, err := tree.Right.HashContent(); err != nil {
-			return [sha256.Size]byte{}, err
-		} else {
-			value /*@ @ @*/ := sha256.Sum256(append( /*@ perm(1/2), @*/ leftContent, rightContent...) /*@, perm(1/2) @*/)
-			tree.Value = &value
-			return value, nil
+		// Spec: parent.value = Hash(0x02 || left.value || right.value)
+		// where each child value is a Hash.Nh-byte (32-byte) hash.
+		leftHash, leftErr := tree.Left.ComputeHash()
+		if leftErr != nil {
+			return [sha256.Size]byte{}, leftErr
 		}
+		rightHash, rightErr := tree.Right.ComputeHash()
+		if rightErr != nil {
+			return [sha256.Size]byte{}, rightErr
+		}
+		input := append( /*@ perm(1/2), @*/ []byte{0x02}, leftHash[:]...)
+		input = append( /*@ perm(1/2), @*/ input, rightHash[:]...)
+		value /*@ @ @*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
+		tree.Value = &value
+		return value, nil
 	}
 }
 
