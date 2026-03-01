@@ -304,7 +304,6 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 
 }
 
-//TODO: Change the permission to make sure that the steps[i]>=0 is not necessary.
 
 ghost
 decreases

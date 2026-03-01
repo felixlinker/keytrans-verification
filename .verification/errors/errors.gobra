@@ -1,4 +1,5 @@
 package errors
 
+decreases
 ensures err != nil
 func New(msg string) (err error)

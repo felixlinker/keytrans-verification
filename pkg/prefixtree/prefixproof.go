@@ -16,14 +16,21 @@ pred (t *PrefixTree) Inv() {
 
 pred (t PrefixTree) InvRec() {
 	acc(t.Value) && acc(t.Leaf) && acc(t.Left) && acc(t.Right) &&
+	// Value dereference
+	(t.Value != nil ==> acc(t.Value)) &&
+	// Leaf content access
+	(t.Leaf != nil ==> acc(t.Leaf)) &&
+	// Recursive children
+	(t.Left != nil ==> t.Left.Inv()) &&
+	(t.Right != nil ==> t.Right.Inv()) &&
 	// One of value, leaf, or both children must be defined
 	(t.Value != nil || t.Leaf != nil || (t.Left != nil && t.Right != nil)) &&
 	// If there's one children, there must be two
 	(t.Left != nil) == (t.Right != nil) &&
-// Node is either a leaf or has children
+	// Node is either a leaf or has children
 	(t.Leaf != nil) != (t.Left != nil && t.Right != nil) &&
 	// If a node's value is defined, its children's values must be defined
-	((t.Value != nil && t.Left != nil && t.Right != nil) ==> (t.Left.Value != nil && t.Right.Value != nil))
+	((t.Value != nil && t.Left != nil && t.Right != nil) ==> (t.Left.GetValue() != nil && t.Right.GetValue() != nil))
 }
 
 @*/
@@ -63,7 +70,7 @@ type PrefixTree struct {
 // ascending by steps.Step.Vrf_output and that coPathNodes is sorted ascending
 // too. prefix will be initially empty and reflects the current position in the
 // prefix tree.
-// @ ensures err != nil ==> tree != nil && tree.Inv()
+// @ ensures err == nil ==> tree != nil && tree.Inv()
 // @ trusted
 func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coPathNodes []proofs.NodeValue) (tree *PrefixTree, nextSteps []proofs.CompleteBinaryLadderStep, nextNodes []proofs.NodeValue, err error) {
 	tree = nil
@@ -88,7 +95,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 
 	prefixMatches := true
 	for i := 0; i < len(prefix); i++ {
-		bit := step.Step.Vrf_output[i/8]>>(i%8) == 0x01
+		bit := (step.Step.Vrf_output[i/8]>>uint(i%8))&1 == 1
 		prefixMatches = prefixMatches && bit == prefix[i]
 	}
 
@@ -98,7 +105,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 			// The server tells us that this depth does suffice to identify the
 			// vrf output. Insert the result in one of its children.
 			nextDepth := len(prefix) + 1
-			nextBit := step.Step.Vrf_output[nextDepth/8]>>(nextDepth%8) == 0x01
+			nextBit := (step.Step.Vrf_output[nextDepth/8]>>uint(nextDepth%8))&1 == 1
 			if nextBit {
 				// Go right
 				if len(coPathNodes) == 0 {
@@ -125,7 +132,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 				if left, recSteps, recNodes, e := ToTreeRecursive(append( /*@ perm(1/2), @*/ prefix, false), steps, coPathNodes); e != nil {
 					err = e
 					return
-				} else if right, recSteps2, recNodes2, e := ToTreeRecursive(append( /*@ perm(1/2), @*/ prefix, false), recSteps, recNodes); e != nil {
+				} else if right, recSteps2, recNodes2, e := ToTreeRecursive(append( /*@ perm(1/2), @*/ prefix, true), recSteps, recNodes); e != nil {
 					err = e
 					return
 				} else {
@@ -202,7 +209,7 @@ func ToTree(prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep) (tree 
 
 // @ requires tree != nil ==> tree.Inv()
 // @ ensures  tree != nil ==> tree.Inv()
-// @ ensures  err != nil && tree != nil ==> tree.GetValue() != nil
+// @ ensures  err == nil && tree != nil ==> tree.GetValue() != nil
 // @ trusted
 func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 	hashContent = make([]byte, sha256.Size)
@@ -230,13 +237,12 @@ func (tree *PrefixTree) HashContent() (hashContent []byte, err error) {
 // Recursively compute all hashes of a prefix tree.
 // @ requires tree != nil ==> tree.Inv()
 // @ ensures  tree != nil ==> tree.Inv()
-// @ ensures  tree != nil && err != nil ==> tree.GetValue() != nil && len(tree.GetValueArray()) == len(hash) && (forall i int :: { hash[i] } 0 <= i && i < len(hash) ==> (tree.GetValueArray())[i] == hash[i])
-// @ trusted //TODO
+// @ ensures  tree != nil && err == nil ==> tree.GetValue() != nil && len(tree.GetValueArray()) == len(hash) && (forall i int :: { hash[i] } 0 <= i && i < len(hash) ==> (tree.GetValueArray())[i] == hash[i])
+// @ trusted
 func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 	if tree == nil {
 		return [sha256.Size]byte{}, errors.New("cannot hash empty node")
 	} else if tree.Value != nil {
-		//@ assert acc(tree)
 		return *tree.Value, nil
 	} else if tree.Left == nil && tree.Right == nil {
 		if tree.Leaf == nil {
