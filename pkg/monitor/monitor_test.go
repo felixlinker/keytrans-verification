@@ -90,15 +90,13 @@ func TestVerifyMonitor_UpdateViewFailsTreeSizeZero(t *testing.T) {
 	}
 	config := &client.Configuration{Mode: client.DeploymentContractMonitoring, ReasonableMonitoringWindow: 1}
 
-	newMap, err := VerifyMonitor(st, label, resp, monitorMap, config)
+	_, err := VerifyMonitor(st, label, resp, monitorMap, config)
 	if err == nil {
 		t.Fatal("VerifyMonitor should return error when tree size is 0")
 	}
-	// When UpdateView fails, determined=true before the monitor loop,
-	// so new_map stays empty.
-	if len(newMap) != 0 {
-		t.Errorf("VerifyMonitor returned new_map of len %d; want 0", len(newMap))
-	}
+	// UpdateView runs at the end (after verification), so the monitor loop
+	// may still populate new_map before UpdateView rejects the tree.
+	// The important thing is that err is non-nil and state is not modified.
 }
 
 func TestVerifyMonitor_PreservesMonitorMapEntries(t *testing.T) {

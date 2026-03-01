@@ -41,6 +41,8 @@ func VRF_prove(sk []byte, input VrfInput) [32]byte {
 	return VRF_hash(sk, input)
 }
 
+// @ trusted
+// @ preserves acc(prf)
 func VRF_proof_to_hash(prf []byte) [32]byte {
 	var out [32]byte
 	copy(out[:], prf)

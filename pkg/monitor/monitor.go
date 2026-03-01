@@ -142,13 +142,6 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 	size := resp.Full_tree_head.Tree_head.Tree_size
 	n := len(resp.Search.Prefix_proofs)
 
-	// Phase 1: UpdateView
-	updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
-	if updateErr != nil {
-		resultErr = updateErr
-		determined = true
-	}
-
 	// Copy timestamps while resp.Search.Inv() is still accessible
 	//@ unfold acc(resp.Search.Inv(), p/2)
 	timestamps := make([]uint64, len(resp.Search.Timestamps))
@@ -286,10 +279,18 @@ func VerifyMonitor(st *client.UserState, label []byte, resp MonitorResponse, mon
 		}
 	}
 
-	if determined {
-		err = resultErr
+	// UpdateView: only update state after full verification succeeds
+	if !determined {
+		//@ unfold acc(resp.Inv(), p)
+		updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
+		//@ fold acc(resp.Inv(), p)
+		if updateErr != nil {
+			err = updateErr
+		} else {
+			err = nil
+		}
 	} else {
-		err = nil
+		err = resultErr
 	}
 	return new_map, err
 }

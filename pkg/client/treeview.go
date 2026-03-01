@@ -457,6 +457,11 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	// TODO: Verify proof of consistency
 
 	//@ unfold st.Inv()
+	// Save original state for rollback on error (spec: MUST NOT modify state on failed verification)
+	origSize := st.Size
+	origSubtrees := st.Full_subtrees
+	origTimestamps := st.Frontier_timestamps
+
 	oldSearchTree := MkImplicitBinarySearchTree(st.Size)
 	newSearchTree := MkImplicitBinarySearchTree(new_head.Tree_head.Tree_size)
 	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2, st.Size @*/ )
@@ -508,6 +513,10 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	}
 
 	if len(newFrontier) != len(st.Frontier_timestamps) {
+		// Rollback state (spec: MUST NOT modify state on failed verification)
+		st.Size = origSize
+		st.Full_subtrees = origSubtrees
+		st.Frontier_timestamps = origTimestamps
 		//@ fold st.Inv()
 		//@ fold acc(prf.Inv(), p)
 		return errors.New("incorrect number of timestamps provided")

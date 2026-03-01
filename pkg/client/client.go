@@ -173,19 +173,10 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	determined := false
 	var resultErr error = nil
 
-	// Phase 1: UpdateView
-	updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
-	if updateErr != nil {
-		resultErr = updateErr
+	// Phase 1: Validation checks (resp.Inv() still unfolded)
+	if resp.Version == nil {
+		resultErr = errors.New("no version provided")
 		determined = true
-	}
-
-	// Phase 2: Validation checks (resp.Inv() still unfolded)
-	if !determined {
-		if resp.Version == nil {
-			resultErr = errors.New("no version provided")
-			determined = true
-		}
 	}
 	if !determined {
 		ladderIndices := proofs.FullBinaryLadderSteps_wrapper(uint64(*resp.Version))
@@ -195,7 +186,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 
-	// Phase 3: Build prefix trees
+	// Phase 2: Build prefix trees
 	n := len(resp.Search.Prefix_proofs)
 	//@ fold acc(resp.Inv(), p)
 
@@ -210,7 +201,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 
-	// Phase 4: VerifyLatestKey
+	// Phase 3: VerifyLatestKey
 	decision := false
 	if !determined {
 		//@ unfold acc(resp.Inv(), p)
@@ -233,13 +224,22 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 
-	// Phase 5: Single return
+	// Phase 4: UpdateView + return (only update state after full verification)
 	if !determined && decision {
 		// VerifyLatestKey ensures: err == nil && res ==> low(resp.Version)
-		//@ unfold acc(resp.Value.Inv(), p)
-		res = &proofs.UpdateValue{Value: resp.Value.Value}
-		//@ fold acc(res.Inv(), p)
-		err = nil
+		// Fold permissions needed for UpdateView (Tree_head.Inv() was never unfolded)
+		//@ fold acc(resp.Full_tree_head.Inv(), p)
+		updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
+		if updateErr != nil {
+			//@ fold acc(resp.Inv(), p)
+			res = nil
+			err = updateErr
+		} else {
+			//@ unfold acc(resp.Value.Inv(), p)
+			res = &proofs.UpdateValue{Value: resp.Value.Value}
+			//@ fold acc(res.Inv(), p)
+			err = nil
+		}
 	} else {
 		res = nil
 		err = resultErr

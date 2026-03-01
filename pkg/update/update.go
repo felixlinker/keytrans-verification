@@ -308,14 +308,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 	size := resp.Full_tree_head.Tree_head.Tree_size
 	n := len(resp.Search.Prefix_proofs)
 
-	// Phase 1: UpdateView
-	updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
-	if updateErr != nil {
-		resultErr = updateErr
-		determined = true
-	}
-
-	// Phase 2: Validation checks
+	// Phase 1: Validation checks
 	// Step 1: Verify new version > previous greatest version
 	if !determined {
 		if resp.Prev_greatest != nil {
@@ -350,7 +343,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 	// but do not affect whether the version number is deterministic given the same
 	// root hash. See Section 9.1 of the IETF KT protocol spec.
 
-	// Phase 3: Build prefix trees
+	// Phase 2: Build prefix trees
 	//@ fold acc(resp.Inv(), p)
 
 	var trees []*prefixtree.PrefixTree
@@ -364,7 +357,7 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 		}
 	}
 
-	// Phase 4: VerifyUpdateKey (iterates all frontier nodes)
+	// Phase 3: VerifyUpdateKey (iterates all frontier nodes)
 	decision := false
 	if !determined {
 		prev_greatest := uint32(0)
@@ -384,9 +377,15 @@ func VerifyUpdate(st *client.UserState, label []byte, resp UpdateResponse, confi
 		}
 	}
 
-	// Phase 5: Single return
+	// Phase 4: UpdateView + return (only update state after full verification)
 	if !determined && decision {
-		err = nil
+		updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
+		if updateErr != nil {
+			//@ fold acc(resp.Inv(), p)
+			err = updateErr
+		} else {
+			err = nil
+		}
 	} else {
 		err = resultErr
 	}
