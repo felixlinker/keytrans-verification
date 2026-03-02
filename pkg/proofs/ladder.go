@@ -203,7 +203,7 @@ func IntPow2Monotonic(a uint64, b uint64) uint64{
 // ============================================================================
 /*@
 
-// TStar_pure is the specification-level T* function (0-indexed).
+// TStar_pure is the specification-level tStar function (0-indexed).
 // Given t1 < t2, returns the unique pivot r such that t1 < r <= t2.
 // Converts to 1-indexed, delegates to tStar_pure, then shifts back.
 ghost
@@ -217,7 +217,7 @@ func TStar_pure(t1 uint64, t2 uint64) (r uint64){
 	return tStar_pure(t1 + 1, t2 +1 )-1
 }
 
-// tStar_pure computes T* for 1-indexed versions. Determines the exponential
+// tStar_pure computes tStar for 1-indexed versions. Determines the exponential
 // interval [2^i, 2^(i+1)) containing t1, then delegates to tStarRec_pure
 // which performs binary search within that interval.
 ghost
@@ -232,7 +232,7 @@ func tStar_pure(t1 uint64, t2 uint64) (r uint64){
 				tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low+1))
 }
 
-// tStarRec_pure is the recursive binary search that finds T*.
+// tStarRec_pure is the recursive binary search that finds tStar.
 // Within interval [x_in, x_out]:
 //   - If x_out <= t2: return x_out (t2 is beyond the interval)
 //   - Otherwise: halve the interval, recurse into the half containing t1
@@ -302,8 +302,8 @@ func PowOf2(exp uint64) (r uint64) {
 	return r
 }
 
-// TStar computes the T* value — a deterministic pivot between two versions t1
-// and t2 (where t1 < t2). T* is the key element in the binary ladder that both
+// TStar computes the tStar value — a deterministic pivot between two versions t1
+// and t2 (where t1 < t2). tStar is the key element in the binary ladder that both
 // executions must agree on, enabling the hyper-property proof. Delegates to
 // tStar with 1-indexed arguments and subtracts 1.
 //
@@ -482,7 +482,7 @@ func isOnPath_shift(v uint64, target uint64, x_in uint64, x_out uint64) uint64{
 // levels (Log2Floor(t2+1) > Log2Floor(target+1)), then TStar equals the
 // boundary of target's exponential interval: expJumpElement(findExpLevel(target)).
 // This element was already appended during the exponential jump phase, so
-// T* is in the ladder without needing binary search.
+// tStar is in the ladder without needing binary search.
 // Proof: GapImpliesPow2Bound shows x_out <= t2+1, then tStarRec returns x_out.
 ghost
 requires target >= 0
@@ -617,7 +617,7 @@ func midOnPath(target uint64, x_in uint64, x_out uint64) uint64{
 }
 
 // tStarRec_returns_mid: when the midpoint satisfies t1 < mid <= t2 (i.e.,
-// mid is a valid T* candidate), tStarRec returns exactly mid.
+// mid is a valid tStar candidate), tStarRec returns exactly mid.
 // Proof: the midpoint's subinterval [x_in, mid] has mid <= t2, so
 // tStarRec_returns_expJumpBound applies to show it returns mid.
 ghost
@@ -691,7 +691,7 @@ func findExpTarget_link_loop(target uint64, k uint64){
 //     until overshooting target
 //  2. Binary search phase: narrows down within the last exponential interval
 //
-// The key property is that for any other version t2, the T* pivot value
+// The key property is that for any other version t2, the tStar pivot value
 // TStar_pure(target, t2) (or TStar_pure(t2, target)) is guaranteed to appear
 // in the returned ladder at some index idx.
 //
@@ -701,7 +701,7 @@ func findExpTarget_link_loop(target uint64, k uint64){
 //
 // Returns:
 //   - r: the binary ladder steps
-//   - idx (ghost): index in r where T* appears
+//   - idx (ghost): index in r where tStar appears
 //
 // @ requires target >= 0
 // @ requires t2 >= 0
@@ -781,12 +781,12 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 
 // BinarySearchStep performs the binary search phase of the full binary ladder.
 // Starting from the interval [x_in, x_out], it repeatedly halves the interval,
-// appending each midpoint to r. It tracks (via ghost state) whether T* has been
+// appending each midpoint to r. It tracks (via ghost state) whether tStar has been
 // found among the appended elements, and uses isOnPath lemmas to maintain the
-// invariant that T* will eventually appear.
+// invariant that tStar will eventually appear.
 //
 // Preconditions: r is an owned slice containing the exponential jump elements,
-// x_in < x_out, target >= 0, ghost parameter foundTStar tracks if T* was
+// x_in < x_out, target >= 0, ghost parameter foundTStar tracks if tStar was
 // already located in the exponential phase.
 //
 // Postconditions: returns the extended ladder with res[resIdx] == TStar_pure(...).
@@ -794,7 +794,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 //
 // Returns:
 //   - res: the extended binary ladder (appended midpoints)
-//   - resIdx (ghost): index where T* appears in res
+//   - resIdx (ghost): index where tStar appears in res
 //
 // @ requires acc(r)
 // @ requires x_in < x_out

@@ -333,6 +333,7 @@ func FindTStarIdx(steps []uint64, t uint64) (idx int) {
 			assert low(idx < len(steps))
 			// EstablishTStarWitnesses: rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
 			// Both equal TStar_pure(rel(t,0), rel(t,1)), so low(steps[idx])
+			// Necessary for the precondition
 			assert rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
 			assert low(steps[idx])
 		} else {
