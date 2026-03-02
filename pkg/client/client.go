@@ -156,6 +156,7 @@ pred (s SearchResponse) Inv() {
 // @ requires acc(resp.Inv(), p)
 // @ requires resp.Version != nil
 // @ requires acc(resp.Version, p)
+// @ requires acc(config, p)
 // @ requires *resp.Version >= 0
 // @ requires query.Label != nil
 // @ requires acc(query.Label, p)
@@ -164,7 +165,6 @@ pred (s SearchResponse) Inv() {
 // @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ requires resp.Full_tree_head.RootHash != nil
-// @ requires acc(config, p)
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
 // @ ensures err == nil ==> low(resp.Version)

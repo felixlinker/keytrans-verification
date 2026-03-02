@@ -128,19 +128,15 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 		return completeSteps, errors.New("not enough steps")
 	}
 
-	sortedSteps := make([]BinaryLadderStep, len(results))
+	sortedSteps := make([]BinaryLadderStep, 0, len(results))
 	copy(sortedSteps, steps[:len(results)])
 	sortBinaryLadderSteps(sortedSteps)
 
 	for i, step := range sortedSteps {
-		var commitment [sha256.Size]byte
-		if step.Commitment != nil {
-			commitment = *step.Commitment
-		}
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
 				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
-				Commitment: commitment,
+				Commitment: step.Commitment,
 			},
 			Result: results[i],
 		})
