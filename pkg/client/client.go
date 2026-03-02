@@ -368,6 +368,7 @@ func FindTStarIdx(steps []uint64, t uint64) (idx int) {
 //   - res: -1 (greatest < t), 0 (t is greatest), 1 (greatest > t), 404 (tree error)
 //   - err: non-nil on tree lookup errors
 //
+
 // @ requires label != nil
 // @ requires acc(label)
 // @ requires acc(RootHash)
