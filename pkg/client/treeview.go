@@ -206,66 +206,6 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 	return
 }
 
-// @ requires low(left_ts) && low(right_ts) && low(rmw)
-// @ ensures low(res)
-func IsDistinguished(left_ts, right_ts, rmw uint64) (res bool) {
-	if right_ts >= left_ts {
-		res = (right_ts - left_ts) >= rmw
-	} else {
-		res = false
-	}
-	return
-}
-
-// @ requires noPerm < p
-// @ requires acc(tree.Inv(), p) && acc(timestamps, p)
-// @ requires low(rmw)
-// @ ensures  acc(tree.Inv(), p) && acc(timestamps, p) && acc(result)
-// @ ensures  low(len(result))
-// @ ensures  forall j int :: 0 <= j && j < len(result) ==> low(result[j])
-// @ trusted
-func ComputeDistinguishedSet(tree *ImplicitBinarySearchTree, timestamps []uint64,
-	rmw uint64 /*@, ghost p perm @*/) (result []bool) {
-	if tree == nil {
-		result = make([]bool, 0)
-		return
-	}
-	//@ unfold acc(tree.Inv(), p)
-	size := countNodes(tree)
-	result = make([]bool, size)
-	computeDistinguishedRec(tree, timestamps, rmw, 0, uint64(len(timestamps))-1, result)
-	//@ fold acc(tree.Inv(), p)
-	return
-}
-
-// @ trusted
-func countNodes(tree *ImplicitBinarySearchTree) int {
-	if tree == nil {
-		return 0
-	}
-	return 1 + countNodes(tree.Left) + countNodes(tree.Right)
-}
-
-// @ trusted
-func computeDistinguishedRec(tree *ImplicitBinarySearchTree, timestamps []uint64,
-	rmw uint64, left_ts_idx, right_ts_idx uint64, result []bool) {
-	if tree == nil {
-		return
-	}
-	root := tree.Root
-	if right_ts_idx < uint64(len(timestamps)) && left_ts_idx < uint64(len(timestamps)) {
-		left_ts := timestamps[left_ts_idx]
-		right_ts := timestamps[right_ts_idx]
-		if IsDistinguished(left_ts, right_ts, rmw) {
-			if int(root) < len(result) {
-				result[root] = true
-			}
-			computeDistinguishedRec(tree.Left, timestamps, rmw, left_ts_idx, root, result)
-			computeDistinguishedRec(tree.Right, timestamps, rmw, root, right_ts_idx, result)
-		}
-	}
-}
-
 // @ requires noPerm < p
 // @ requires acc(tree.Inv(), p) && acc(distinguished, p)
 // @ requires low(pos) && low(len(distinguished))
@@ -372,6 +312,7 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		timestamps := make([]uint64, len(prf.Timestamps))
 		copy(timestamps, prf.Timestamps /*@, p/2 @*/)
 		st.Frontier_timestamps = timestamps
+		//TODO: This is rather for subtree implementation. We don't need it I think.
 		subtrees := make([]proofs.NodeValue, len(prf.Inclusion.Elements))
 		copy(subtrees, prf.Inclusion.Elements)
 		st.Full_subtrees = subtrees
@@ -388,12 +329,13 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		//@ invariant acc(pathToOldHead) && acc(oldFrontier)
 		for ; i < len(pathToOldHead) && i < len(oldFrontier) && pathToOldHead[i] == oldFrontier[i]; i++ {
 		}
-
+		//Additional checks
 		if i > len(st.Full_subtrees) || i > len(prf.Inclusion.Elements) {
 			//@ fold st.Inv()
 			//@ fold acc(prf.Inv(), p)
 			return errors.New("consistency check failed: insufficient frontier data")
 		}
+		//TODO: As mentioned, these are tree implementations. Can be removed.
 		for j := 0; j < i; j++ {
 			if st.Full_subtrees[j] != prf.Inclusion.Elements[j] {
 				//@ fold st.Inv()
@@ -411,6 +353,7 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	}
 
 	if len(newFrontier) != len(st.Frontier_timestamps) {
+		//Revert changes: The frontier does not match.
 		st.Size = origSize
 		st.Full_subtrees = origSubtrees
 		st.Frontier_timestamps = origTimestamps

@@ -511,11 +511,10 @@ type MonitoringMapEntry struct {
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 // @ requires acc(resp.Full_tree_head.RootHash, p)
 // @ requires resp.Version != nil
-// @ requires size > 0
 // @ requires *resp.Version >=0
-// @ requires resp.Full_tree_head.RootHash != nil
+// @ requires size > 0 && size <= uint64(len(prefixTrees))
 // @ requires low(size)
-// @ requires size <= uint64(len(prefixTrees))
+// @ requires resp.Full_tree_head.RootHash != nil
 // @ requires query.Label != nil
 // @ requires low(len(query.Label)) && forall i int :: 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ ensures acc(resp.Version, p)
@@ -558,6 +557,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ invariant 0 <= fIdx && fIdx <= len(frontiers) - 1
 	//@ invariant len(frontiers) > 0
+	// Important invariant for the postconditions
 	//@ invariant determined ==> !resultRes
 	//@ invariant !determined ==> resultRes && resultErr == nil
 	for fIdx := 0; fIdx < len(frontiers)-1; fIdx++ {

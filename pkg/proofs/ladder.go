@@ -321,13 +321,10 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1) - 1
 }
 
-// tStar computes T* for 1-indexed versions. Finds the log2 floor of t1 to
+// tStar computes tStar for 1-indexed versions. Finds the log2 floor of t1 to
 // determine the initial binary search bounds, then delegates to tStarRec.
 //
-// Preconditions: t1 > 0, t2 > t1.
-// Postconditions: t1 < t_star <= t2, t_star == tStar_pure(t1, t2).
-//
-// Returns: t_star — the 1-indexed T* pivot.
+// Returns: t_star — 1-indexed
 //
 // @ requires t1>0
 // @ requires t2 > t1
@@ -339,14 +336,9 @@ func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
 }
 
-// tStarRec performs the recursive binary search to find T*. It narrows the
+// tStarRec performs the recursive binary search to find tStar. It narrows the
 // interval [x_in, x_out] by halving: if the midpoint <= t1 it recurses right,
 // if x_out <= t2 it returns x_out, otherwise it recurses left.
-//
-// Preconditions: t1 > 0, t2 > t1, x_in <= t1 < x_out.
-// Postconditions: t1 < r <= t2, r == tStarRec_pure(t1, t2, x_in, x_out).
-//
-// Returns: r — the T* value found by binary search.
 //
 // @ requires t1 > 0
 // @ requires t2 > t1
@@ -806,7 +798,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 //
 // @ requires acc(r)
 // @ requires x_in < x_out
-//@ requires x_in >= 0
+// @ requires x_in >= 0
 // @ requires target >= 0
 // @ requires t2 >= 0
 // @ requires k >=1
