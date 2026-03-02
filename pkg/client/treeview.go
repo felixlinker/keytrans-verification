@@ -40,14 +40,6 @@ pred (t *ImplicitBinarySearchTree) LowInv(p perm) {
 
 */
 
-// RootNode computes the largest power-of-two minus one that is less than tree_size.
-// This gives the root position of an implicit binary search tree of the given size.
-//
-// Preconditions: tree_size >= 0 and low (public).
-// Postconditions: root >= 0, root < tree_size (when tree_size > 1), root is low.
-//
-// Returns: root position of the implicit BST.
-//
 // @ requires tree_size >= 0
 // @ requires low(tree_size)
 // @ ensures root >= 0
@@ -70,11 +62,6 @@ func RootNode(tree_size uint64) (root uint64) {
 	return res
 }
 
-// OffSet adds a constant offset to every node's Root value in the tree.
-// Used to shift a subtree's positions after constructing left/right children.
-//
-// Preconditions/Postconditions: preserves tree.Inv() when tree is non-nil.
-//
 // @ preserves tree!= nil ==> tree.Inv()
 func (tree *ImplicitBinarySearchTree) OffSet(offset uint64) {
 	if tree != nil {
@@ -87,16 +74,6 @@ func (tree *ImplicitBinarySearchTree) OffSet(offset uint64) {
 	return
 }
 
-// PathTo returns the path from the root of the tree down to the given node.
-// It performs a standard BST search, collecting each visited node's Root value.
-//
-// Preconditions: tree.Inv() must hold with at least permission p.
-// Postconditions: on success, returns an owned path slice; tree.Inv() is preserved.
-//
-// Returns:
-//   - path: ordered slice of node positions from root to target
-//   - err: non-nil ("not found") if the node is not in the tree
-//
 // @ requires  noPerm < p
 // @ preserves acc(tree.Inv(), p)
 // @ ensures   err == nil ==> acc(path)
@@ -166,16 +143,6 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 //		return
 //	}
 //
-// FrontierNodes returns the rightmost spine of the implicit BST — the root
-// followed by all right children. These are the "frontier" log entries used
-// by VerifyLatestKey and VerifyUpdateKey to check the greatest version.
-//
-// Preconditions: if tree is non-nil, tree.Inv() must hold and tree.Root must be low.
-// Postconditions: preserves tree.Inv(), returns a non-empty path (when tree != nil)
-// with all elements low and within [0, bound).
-//
-// Returns: path — the frontier node positions from root down the right spine.
-//
 // TODO: analyse if we need to have full permissions if we incooperate with low or can we use partial permission.
 // @ requires  noPerm < p
 // @ requires tree != nil ==> tree.Inv()
@@ -211,16 +178,6 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bou
 	return
 }
 
-// MkImplicitBinarySearchTree constructs an implicit binary search tree for a
-// transparency log of the given size. The root is the largest power-of-two minus
-// one less than tree_size. Left and right subtrees are constructed recursively,
-// with the right subtree offset by (root + 1).
-//
-// Preconditions: tree_size >= 0 and low (public).
-// Postconditions: nil if tree_size==0; otherwise tree.Inv() holds with low root.
-//
-// Returns: the constructed tree (nil for empty).
-//
 // @ requires tree_size >= 0
 // @ requires low(tree_size)
 // @ ensures tree_size == 0 ==> tree == nil
@@ -249,16 +206,6 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 	return
 }
 
-// IsDistinguished checks if a log entry is distinguished per Section 7.2.
-// An entry is distinguished iff the time span (right_ts - left_ts) is at least
-// the reasonable monitoring window (rmw). Distinguished entries serve as public
-// checkpoints for contact monitoring.
-//
-// Preconditions: all inputs must be low (public).
-// Postconditions: result is low (public).
-//
-// Returns: true if the entry is distinguished.
-//
 // @ requires low(left_ts) && low(right_ts) && low(rmw)
 // @ ensures low(res)
 func IsDistinguished(left_ts, right_ts, rmw uint64) (res bool) {
@@ -270,16 +217,6 @@ func IsDistinguished(left_ts, right_ts, rmw uint64) (res bool) {
 	return
 }
 
-// ComputeDistinguishedSet recursively walks the implicit BST and marks which
-// positions are distinguished (time span >= rmw). Returns a bool slice indexed
-// by tree position where true means the position is a distinguished checkpoint.
-//
-// Preconditions: tree.Inv() and timestamps must be readable, rmw must be low.
-// Postconditions: preserves tree.Inv() and timestamps, result length and all
-// elements are low (public).
-//
-// Returns: result — bool slice where result[pos] == true means pos is distinguished.
-//
 // @ requires noPerm < p
 // @ requires acc(tree.Inv(), p) && acc(timestamps, p)
 // @ requires low(rmw)
@@ -323,26 +260,12 @@ func computeDistinguishedRec(tree *ImplicitBinarySearchTree, timestamps []uint64
 			if int(root) < len(result) {
 				result[root] = true
 			}
-			// Recurse into subtrees
 			computeDistinguishedRec(tree.Left, timestamps, rmw, left_ts_idx, root, result)
 			computeDistinguishedRec(tree.Right, timestamps, rmw, root, right_ts_idx, result)
 		}
-		// If not distinguished, nothing in the subtree is either
 	}
 }
 
-// DirectPathRight returns positions on the direct path from root to `pos` that
-// are >= pos, stopping after the first distinguished entry (Section 8.2, Step 2).
-// Used by VerifyMonitor to determine which log entries to check for a given
-// monitoring map entry.
-//
-// Preconditions: tree.Inv() and distinguished must be readable, pos and
-// distinguished length/elements must be low (public).
-// Postconditions: preserves tree.Inv() and distinguished, result length and
-// elements are all low.
-//
-// Returns: result — positions on the right direct path to check during monitoring.
-//
 // @ requires noPerm < p
 // @ requires acc(tree.Inv(), p) && acc(distinguished, p)
 // @ requires low(pos) && low(len(distinguished))
@@ -362,11 +285,9 @@ func DirectPathRight(tree *ImplicitBinarySearchTree, pos uint64,
 	if err != nil {
 		return
 	}
-	// Filter: keep only positions >= pos
 	for i := 0; i < len(path); i++ {
 		if path[i] >= pos {
 			result = append( /*@ perm(1/2), @*/ result, path[i])
-			// Terminate after first distinguished entry
 			if int(path[i]) < len(distinguished) && distinguished[path[i]] {
 				break
 			}
@@ -391,14 +312,6 @@ pred (s *UserState) Inv() {
 }
 @*/
 
-// checkIncreasing verifies that a slice of timestamps is monotonically
-// non-decreasing. Used by UpdateView to validate proof timestamps.
-//
-// Preconditions: timestamps must be readable with permission p.
-// Postconditions: if true, all pairs satisfy timestamps[i] <= timestamps[j] for i < j.
-//
-// Returns: true if timestamps are non-decreasing, false otherwise.
-//
 // @ requires noPerm < p
 // @ preserves acc(timestamps, p)
 // @ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
@@ -422,18 +335,6 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	return res
 }
 
-// UpdateView advances the user's local view of the transparency tree to match
-// new_head (Section 4). It validates that timestamps are increasing, verifies
-// consistency between old and new frontiers, and updates the stored subtree
-// hashes and frontier timestamps.
-//
-// Preconditions: st.Inv(), new_head.Inv(), and prf.Inv() must hold.
-// Postconditions: on success, st.Size == new_head.Size(); if new_head.Size() is
-// low then st.Size is also low. Preserves all invariants.
-//
-// Returns: err — non-nil if timestamps are invalid, tree is empty, or
-// consistency check between old and new frontiers fails.
-//
 // @ requires  noPerm < p
 // @ preserves st.Inv()
 // @ preserves acc(new_head.Inv(), p)
@@ -457,7 +358,6 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	// TODO: Verify proof of consistency
 
 	//@ unfold st.Inv()
-	// Save original state for rollback on error (spec: MUST NOT modify state on failed verification)
 	origSize := st.Size
 	origSubtrees := st.Full_subtrees
 	origTimestamps := st.Frontier_timestamps
@@ -472,7 +372,6 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		timestamps := make([]uint64, len(prf.Timestamps))
 		copy(timestamps, prf.Timestamps /*@, p/2 @*/)
 		st.Frontier_timestamps = timestamps
-		// Initialize Full_subtrees from proof's Inclusion.Elements
 		subtrees := make([]proofs.NodeValue, len(prf.Inclusion.Elements))
 		copy(subtrees, prf.Inclusion.Elements)
 		st.Full_subtrees = subtrees
@@ -490,7 +389,6 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 		for ; i < len(pathToOldHead) && i < len(oldFrontier) && pathToOldHead[i] == oldFrontier[i]; i++ {
 		}
 
-		// Verify consistency: old frontier hashes must match Full_subtrees
 		if i > len(st.Full_subtrees) || i > len(prf.Inclusion.Elements) {
 			//@ fold st.Inv()
 			//@ fold acc(prf.Inv(), p)
@@ -513,7 +411,6 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	}
 
 	if len(newFrontier) != len(st.Frontier_timestamps) {
-		// Rollback state (spec: MUST NOT modify state on failed verification)
 		st.Size = origSize
 		st.Full_subtrees = origSubtrees
 		st.Frontier_timestamps = origTimestamps

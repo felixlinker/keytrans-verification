@@ -138,6 +138,7 @@ pred (s SearchResponse) Inv() {
 // version for the queried label. It updates the user's view of the tree, validates
 // the response fields, builds prefix trees, and delegates to VerifyLatestKey.
 //
+// Some functions may be incomplete, e.g. buildPrefixTrees or UpdateViews
 // Preconditions: resp must have a non-nil Version, a non-empty tree, the tree size
 // must be low (public), and the query label must be low (public).
 //

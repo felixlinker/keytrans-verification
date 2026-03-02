@@ -305,7 +305,6 @@ pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash
 //   - (nil, nil)         if no matching leaf exists (non-inclusion)
 //   - (nil, error)       if the tree is in an invalid state
 //
-// TODO: Verify this
 // @ requires Label != nil && len(Label) >= 0
 // @ requires Version >= 0
 // @ requires acc(Label)
@@ -319,6 +318,17 @@ func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []b
 	if tree == nil {
 		// Nil tree: non-inclusion (no commitments exist in an empty tree)
 		return nil, nil
+	}
+
+	// Verify the tree's root hash matches the provided root hash.
+	if tree.Value != nil {
+		if !bytes.Equal(tree.Value[:], RootHash) {
+			return nil, errors.New("root hash mismatch")
+		}
+	} else if value, hashErr := tree.ComputeHash(); hashErr != nil {
+		return nil, hashErr
+	} else if !bytes.Equal(value[:], RootHash) {
+		return nil, errors.New("root hash mismatch")
 	}
 
 	// Compute the VRF output for the (Label, Version) pair.
