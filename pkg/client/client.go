@@ -11,8 +11,10 @@ import (
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 /*@
-// Ghost helper functions for hyper-property verification
+//Helper functions
 
+
+//Compare the bytes of the arrays
 ghost
 decreases
 requires p > noPerm
@@ -37,17 +39,22 @@ pred ByteLowInv(s []byte){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
 
+
 pred UIntLowInv(s []uint64){
 	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
 }
 
+
+// TStarBetween captures: steps[tStarIdx] == TStar(min(t1,t2), max(t1,t2))
+// AND min(t1,t2) < steps[tStarIdx] <= max(t1,t2)
 ghost
 decreases
-pure func TStar(t1, t2 uint64) uint64 {
-	return (t1 < 0 || t2 < 0 || t1 == t2) ? 0:
-		t1 < t2 ?
-      (proofs.TStar_pure(t1, t2)) :
-      (proofs.TStar_pure(t2, t1))
+pure func TStarBetween(tStarVal, t1, t2 uint64) bool {
+  return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
+    t1 == t2 ? true :
+    t1 < t2 ?
+      (tStarVal == proofs.TStar_pure(t1, t2) && t1 < tStarVal && tStarVal <= t2) :
+      (tStarVal == proofs.TStar_pure(t2, t1) && t2 < tStarVal && tStarVal <= t1)
 }
 
 ghost
@@ -68,6 +75,15 @@ func GetByteContent(arr []byte, idx int) (res seq[byte]) {
 }
 
 @*/
+
+type PT interface {
+	// Returns non-nil if we can prove that the prefix tree contains a key for the
+	// label and version pair provided. Returns nil if we can prove that the
+	// prefix tree does not contain a key for the label and version pair provided.
+	// Returns error in any other case.
+	//@ pred Mem()
+	GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error)
+}
 
 type TreeHead struct {
 	Tree_size uint64
@@ -103,7 +119,7 @@ pure func (f FullTreeHead) Size() uint64 {
 @*/
 
 type SearchRequest struct {
-	Last  *uint64
+	Last  *uint32
 	Label []byte
 	// TODO: optional<uint32> version
 }
@@ -119,6 +135,7 @@ type SearchResponse struct {
 	Version        *uint32 // version; only present for latest-key queries
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
+	Inclusion      proofs.InclusionProof
 	Opening        []byte
 	Value          proofs.UpdateValue // value associated with queried label
 }
@@ -127,44 +144,28 @@ type SearchResponse struct {
 pred (s SearchResponse) Inv() {
 	s.Full_tree_head.Inv() &&
 	(s.Version != nil ==> acc(s.Version)) &&
-	acc(s.Binary_ladder) &&
+	acc(s.Binary_ladder) && // `proofs.BinaryLadderStep` does not have an invariant as it's just a value
 	s.Search.Inv() &&
+	s.Inclusion.Inv() &&
 	acc(s.Opening) &&
 	s.Value.Inv()
 }
 @*/
-
-// VerifyLatest verifies that the version claimed in resp is indeed the latest
-// version for the queried label. It updates the user's view of the tree, validates
-// the response fields, builds prefix trees, and delegates to VerifyLatestKey.
-//
-// Some functions may be incomplete, e.g. buildPrefixTrees or UpdateViews
-// Preconditions: resp must have a non-nil Version, a non-empty tree, the tree size
-// must be low (public), and the query label must be low (public).
-//
-// Postconditions (hyper-property): if err==nil, resp.Version is low — meaning
-// two executions with the same root hash agree on the latest version.
-//
-// Returns:
-//   - res: the update value associated with the label (non-nil on success)
-//   - err: non-nil if any verification step fails
-//
 
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ preserves acc(query.Inv(), p)
 // @ requires acc(resp.Inv(), p)
 // @ requires resp.Version != nil
-// @ requires acc(resp.Version, p)
-// @ requires acc(config, p)
+// @ requires acc(resp.Version, _)
 // @ requires *resp.Version >= 0
+// @ requires low(query.Label)
 // @ requires query.Label != nil
-// @ requires acc(query.Label, p)
-// @ requires low(len(query.Label)) && forall i int :: 0<=i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
 // @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ requires resp.Full_tree_head.RootHash != nil
+// @ requires acc(config, p)
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
 // @ ensures err == nil ==> low(resp.Version)
@@ -174,10 +175,25 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	determined := false
 	var resultErr error = nil
 
-	// Phase 1: Validation checks (resp.Inv() still unfolded)
-	if resp.Version == nil {
-		resultErr = errors.New("no version provided")
+	// Phase 1: UpdateView
+	updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
+	if updateErr != nil {
+		resultErr = updateErr
 		determined = true
+	}
+
+	// Phase 2: Validation checks (resp.Inv() still unfolded)
+	if !determined {
+		if resp.Version == nil {
+			resultErr = errors.New("no version provided")
+			determined = true
+		}
+	}
+	if !determined {
+		if len(resp.Search.Prefix_roots) != 0 {
+			resultErr = errors.New("prefix roots provided")
+			determined = true
+		}
 	}
 	if !determined {
 		ladderIndices := proofs.FullBinaryLadderSteps_wrapper(uint64(*resp.Version))
@@ -187,7 +203,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 
-	// Phase 2: Build prefix trees
+	// Phase 3: Build prefix trees
 	n := len(resp.Search.Prefix_proofs)
 	//@ fold acc(resp.Inv(), p)
 
@@ -202,7 +218,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 
-	// Phase 3: VerifyLatestKey
+	// Phase 4: VerifyLatestKey
 	decision := false
 	if !determined {
 		//@ unfold acc(resp.Inv(), p)
@@ -225,22 +241,13 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 
-	// Phase 4: UpdateView + return (only update state after full verification)
+	// Phase 5: Single return
 	if !determined && decision {
 		// VerifyLatestKey ensures: err == nil && res ==> low(resp.Version)
-		// Fold permissions needed for UpdateView (Tree_head.Inv() was never unfolded)
-		//@ fold acc(resp.Full_tree_head.Inv(), p)
-		updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
-		if updateErr != nil {
-			//@ fold acc(resp.Inv(), p)
-			res = nil
-			err = updateErr
-		} else {
-			//@ unfold acc(resp.Value.Inv(), p)
-			res = &proofs.UpdateValue{Value: resp.Value.Value}
-			//@ fold acc(res.Inv(), p)
-			err = nil
-		}
+		//@ unfold acc(resp.Value.Inv(), p)
+		res = &proofs.UpdateValue{Value: resp.Value.Value}
+		//@ fold acc(res.Inv(), p)
+		err = nil
 	} else {
 		res = nil
 		err = resultErr
@@ -248,30 +255,43 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	return res, err
 }
 
+//Lemma : Merkle Binding
+// This Merkle binding theorem is needed for showing that the commitment is in the tree state
+// It is also one of the important lemmas we need to show that the commitment we get is consistent
+// We use the following paper to derive the following lemma
+// Paper: https://arxiv.org/pdf/2501.10802
+
 //Why >0 instead of >=0? Because the version 0 is always included and we assume that the version we are selecting is >=0
 // If this constraint is violated, it's very easy to be captured
+
 /*@
 ghost
 decreases
 ensures res > 0
 func GetInt() (res int)
 
+
+// Ghost seq params avoid needing to unfold IsLow (which loses low facts in hyper mode)
+
+
 @*/
 
 /*@
 ghost
 decreases
-requires acc(steps, 1/2)
+requires acc(steps)
 requires t >= 0
+requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
-ensures acc(steps, 1/2)
+ensures acc(steps)
 ensures rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 ensures rel(t,0) < rel(t,1) ==> rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
 ensures rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
 ensures rel(t,0) > rel(t,1) ==> rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
 ensures idx1 > 0
 ensures idx2 > 0
+ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	// Replace it using rel(t,0), rel(t,1) and rel(steps,0), rel(steps,1)
 	assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
@@ -305,26 +325,25 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 
 }
 
-
 ghost
 decreases
-requires acc(steps, 1/2)
+requires acc(steps)
 requires t >= 0
 requires len(steps) > 0 && steps[0] == 0
+requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
-ensures acc(steps, 1/2)
+ensures acc(steps)
+ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 ensures 0 <= idx && idx < len(steps)
+ensures low(idx < len(steps))
 ensures low(steps[idx])
-ensures steps[idx] == TStar(rel(t, 0), rel(t, 1))
-func FindTStarIdx(steps []uint64, t uint64) (idx int) {
+ensures TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
+func findTStarIdx(steps []uint64, t uint64) (idx int) {
 	if low(t) {
 		idx = 0
-		assert steps[idx] == TStar(rel(t, 0), rel(t, 1))
+		assert TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
 		// steps[0] == 0 (precondition), 0 is low in both executions
-		// 0 will occur in every FBLS unless t == 0
-		// But t == 0 can never occur because this literally means that the version 0 is not inserted.
-		// So there will be an error returned instead
 		assert low(steps[idx])
 	} else {
 		idx1, idx2 := EstablishTStarWitnesses(steps, t)
@@ -333,7 +352,6 @@ func FindTStarIdx(steps []uint64, t uint64) (idx int) {
 			assert low(idx < len(steps))
 			// EstablishTStarWitnesses: rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
 			// Both equal TStar_pure(rel(t,0), rel(t,1)), so low(steps[idx])
-			// Necessary for the precondition
 			assert rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
 			assert low(steps[idx])
 		} else {
@@ -352,48 +370,47 @@ func FindTStarIdx(steps []uint64, t uint64) (idx int) {
 }
 @*/
 
-// CheckCommitment walks the binary ladder steps for a label and checks whether
-// version t is the greatest committed version in the prefix tree.
-//
-// For each step, it queries the prefix tree for a commitment at that version.
-// A non-inclusion proof at step <= t means t is not yet the greatest (hole found).
-// An inclusion proof at step > t means a greater version exists (violation).
-//
-// Preconditions: label and RootHash must be non-nil and low (public), t >= 0,
-// prefixTree (if non-nil) must satisfy its invariant, tStarIdx must index a low
-// step equal to TStar(t_exec0, t_exec1).
-//
-// Postconditions (hyper-property): if err==nil and res==0, then t is low —
-// two executions with the same tree agree on the greatest version.
-//
-// Returns:
-//   - res: -1 (greatest < t), 0 (t is greatest), 1 (greatest > t), 404 (tree error)
-//   - err: non-nil on tree lookup errors
-//
+// @ requires target >= 0
+// @ ensures acc(r1)
+// @ ensures forall j int :: j >= 0 && j < len(r1) ==> r1[j] >= 0
+// @ ensures 0 <= tStarIdx && tStarIdx < len(r1)
+// @ ensures low(r1[tStarIdx])
+// @ ensures TStarBetween(r1[tStarIdx], rel(target, 0), rel(target, 1))
+func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tStarIdx int @*/) {
+	r1 = proofs.FullBinaryLadderSteps_wrapper(target)
+	//@ tStarIdx = findTStarIdx(r1, target)
+	return r1 /*@, tStarIdx @*/
+}
+
+/*
+CheckGreatest verifies if t is the greatest version
+ Returns:
+
+	-1: Greatest version < t (found hole at or below t), the greatest version does not exist so far
+	 0: t is the greatest version
+	 1: Greatest version > t (found commitment above t), violates t being the greatest version
+*/
 
 // @ requires label != nil
 // @ requires acc(label)
 // @ requires acc(RootHash)
 // @ requires acc(steps)
-// @ requires low(getContent(label))
-// @ requires low(getContent(RootHash))
+// @ requires low(labelSeq)
+// @ requires low(RootHashSeq)
 // @ requires t >= 0
 // @ requires prefixTree != nil ==> prefixTree.Inv()
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 // @ requires 0 <= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
-// @ requires steps[tStarIdx] == TStar(rel(t, 0), rel(t, 1))
+// @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Correct postcondition
 // @ ensures err == nil && res == 0 ==> low(t)
-func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int@*/) (res int, err error) {
+func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
 	//@ ghost var tStarVisited bool = false
 	//@ ghost var tStar uint64 = steps[tStarIdx]
-
-	//@ ghost var labelSeq seq[byte] = getContent(label)
-	//@ ghost var RootHashSeq seq[byte] = getContent(RootHash)
 
 	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
 	//@ incl_lemma := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
@@ -404,7 +421,7 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0 <= idx && idx <= len(steps)
 	//@ invariant tStar == steps[tStarIdx]
-	//@ invariant steps[tStarIdx] == TStar(rel(t, 0), rel(t, 1))
+	//@ invariant TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 	//@ invariant determined ==> resultRes != 0
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
 	//@ invariant tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
@@ -451,55 +468,11 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 
 }
 
-// CheckGreatest computes the full binary ladder steps for version t and then
-// delegates to CheckCommitment to verify whether t is the greatest version.
-//
-// Preconditions: label and RootHash must be non-nil and low (public), t >= 0,
-// prefixTree (if non-nil) must satisfy its invariant.
-//
-// Postconditions (hyper-property): if err==nil and res==0, then t is low.
-//
-// Returns:
-//   - res: -1 (greatest < t), 0 (t is greatest), 1 (greatest > t), 404 (tree error)
-//   - err: non-nil on tree lookup errors
-//
-
-// @ requires label != nil
-// @ requires acc(label)
-// @ requires acc(RootHash)
-// @ requires low(getContent(label))
-// @ requires low(getContent(RootHash))
-// @ requires t >= 0
-// @ requires prefixTree != nil ==> prefixTree.Inv()
-// @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64) (res int, err error) {
-	steps := proofs.FullBinaryLadderSteps_wrapper(t)
-	//@ tStarIdx := FindTStarIdx(steps, t)
-	return CheckCommitment(prefixTree, steps, label, t, RootHash, size /*@, tStarIdx @*/)
-}
-
 type MonitoringMapEntry struct {
 	Position uint64
 	Version  uint32
 }
 
-// VerifyLatestKey iterates over all frontier nodes of the implicit binary search
-// tree and calls CheckGreatest on each to verify that the claimed version is
-// the greatest. For non-last frontiers, a result of 1 (greater version exists)
-// is a failure. For the last frontier, the result must be exactly 0 (t is greatest).
-// Optionally appends to monitor_map if the entry needs future monitoring.
-//
-// Preconditions: prefixTrees and rootHashes must have length >= size, all trees
-// non-nil with valid invariants, resp.Version non-nil, size > 0, label and size
-// must be low (public).
-//
-// Postconditions (hyper-property): if err==nil and res==true, then resp.Version
-// is low — two executions with the same tree agree on the latest version.
-//
-// Returns:
-//   - res: true if the claimed version is verified as the greatest
-//   - err: non-nil describing the failure reason
-//
 // @ requires noPerm < p
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version,p)
@@ -510,14 +483,15 @@ type MonitoringMapEntry struct {
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
 // @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
 // @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
-// @ requires acc(resp.Full_tree_head.RootHash, p)
 // @ requires resp.Version != nil
+// @ requires size > 0
 // @ requires *resp.Version >=0
-// @ requires size > 0 && size <= uint64(len(prefixTrees))
-// @ requires low(size)
 // @ requires resp.Full_tree_head.RootHash != nil
+// @ requires resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
+// @ requires low(size)
+// @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil
-// @ requires low(len(query.Label)) && forall i int :: 0 <= i && i < len(query.Label) ==> low(query.Label[i])
+// @ requires low(query.Label)
 // @ ensures acc(resp.Version, p)
 // @ ensures acc(query.Label, p)
 // @ ensures acc(prefixTrees, p)
@@ -532,6 +506,11 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	resultRes := true
 	var resultErr error = nil
 	frontiers := search_tree.FrontierNodes( /*@p, size@*/ )
+	//@ assert len(frontiers) > 0
+	//@ assert low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
+	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < size
+	//@ assert size <= uint64(len(prefixTrees))
+	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	terminalLogEntry := -1
 	determined := false
 
@@ -542,7 +521,6 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	}
 
 	// Loop: process all frontiers except the last
-	// Easier than having a if{if {...}}
 
 	//@ invariant acc(prefixTrees)
 	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
@@ -558,12 +536,13 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ invariant 0 <= fIdx && fIdx <= len(frontiers) - 1
 	//@ invariant len(frontiers) > 0
-	// Important invariant for the postconditions
 	//@ invariant determined ==> !resultRes
 	//@ invariant !determined ==> resultRes && resultErr == nil
 	for fIdx := 0; fIdx < len(frontiers)-1; fIdx++ {
 		frontier := frontiers[fIdx]
 		if !determined {
+			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
+			//@ assert acc(prefixTrees[frontier])
 			Prefix_tree := prefixTrees[frontier]
 			if prefixTrees[frontier] == nil {
 				resultRes = false
@@ -571,13 +550,20 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			} else {
 				rootHash := prefixRootHash[frontier]
+				//@ assert acc(query.Label)
 				if frontier >= size {
 					resultRes = false
 					resultErr = errors.New("version out of bounds")
 					determined = true
 				}
 
-				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size)
+				steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
+
+				//@ assert acc(steps)
+				//@ ghost var labelSeq seq[byte] = getContent(query.Label)
+				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+
+				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -609,7 +595,13 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 
-			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size)
+			steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
+
+			//@ assert acc(steps)
+			//@ ghost var labelSeq seq[byte] = getContent(query.Label)
+			//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
+
+			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr
@@ -639,21 +631,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	return resultRes, resultErr
 }
 
-// buildPrefixTrees constructs prefix trees from the SearchResponse's prefix proofs.
-// Each prefix proof is converted into a PrefixTree and its root hash is extracted.
-// The root hashes are assumed to be low (public) per the protocol specification.
-//
-// Preconditions: resp must satisfy its invariant with permission p.
-//
-// Postconditions: on success, returns n trees with valid invariants and n root
-// hashes whose bytes are all low. On error, resp.Inv() permission is returned.
-//
-// Returns:
-//   - trees: slice of n non-nil PrefixTree pointers
-//   - rootHashes: slice of n sha256 root hashes (all bytes low)
-//   - err: non-nil if any prefix proof cannot be converted
-//
-
+// buildPrefixTrees constructs prefix trees from the response's prefix proofs.
 // @ requires noPerm < p
 // @ requires acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(resp.Inv(), p)

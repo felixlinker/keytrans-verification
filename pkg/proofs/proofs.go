@@ -136,7 +136,7 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
 				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
-				Commitment: step.Commitment,
+				Commitment: *step.Commitment,
 			},
 			Result: results[i],
 		})
