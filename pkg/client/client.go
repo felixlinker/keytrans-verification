@@ -152,6 +152,37 @@ pred (s SearchResponse) Inv() {
 }
 @*/
 
+// I personally think the current implementation on the VerifyLatest is incomplete
+// The function is incomplete, and the updateview is a bit messy.
+// Additionally, I think one can handle the function better if we only track the FBLS from the response
+// So let's do a new implementation!
+// @ requires noPerm < p
+// @ preserves st.Inv()
+// @ preserves acc(query.Inv(), p)
+// @ requires acc(resp.Inv(), p)
+// @ requires resp.Version != nil
+// @ requires acc(resp.Version, _)
+// @ requires *resp.Version >= 0
+// @ requires low(query.Label)
+// @ requires query.Label != nil
+// @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
+// @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
+// @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
+// @ requires resp.Full_tree_head.RootHash != nil
+// @ requires acc(config, p)
+// @ ensures err != nil ==> acc(resp.Inv(), p)
+// @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
+// @ ensures err == nil ==> low(resp.Version)
+// @ trusted
+func (st *UserState) VerifyLatestMap(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
+	return nil, nil
+}
+
+//One of the very confusing point is that given label version, you still need to have the VRF output of the (label,version ) from the tree
+//And this is somehow not trivially present in the SearchResponse
+//I don't think the order of the BinaryLadder in the SearchResponse can represent the ladder order in the target version
+//The server is malicious in our case
+
 // @ requires noPerm < p
 // @ preserves st.Inv()
 // @ preserves acc(query.Inv(), p)
@@ -255,23 +286,12 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	return res, err
 }
 
-//Lemma : Merkle Binding
-// This Merkle binding theorem is needed for showing that the commitment is in the tree state
-// It is also one of the important lemmas we need to show that the commitment we get is consistent
-// We use the following paper to derive the following lemma
-// Paper: https://arxiv.org/pdf/2501.10802
-
-//Why >0 instead of >=0? Because the version 0 is always included and we assume that the version we are selecting is >=0
-// If this constraint is violated, it's very easy to be captured
-
 /*@
 ghost
 decreases
 ensures res > 0
 func GetInt() (res int)
 
-
-// Ghost seq params avoid needing to unfold IsLow (which loses low facts in hyper mode)
 
 
 @*/
@@ -398,14 +418,14 @@ CheckGreatest verifies if t is the greatest version
 // @ requires low(labelSeq)
 // @ requires low(RootHashSeq)
 // @ requires t >= 0
-// @ requires prefixTree != nil ==> prefixTree.Inv()
+// @ requires acc(commitmentMap)
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 // @ requires 0 <= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
 // @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Correct postcondition
 // @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
+func CheckGreatest(commitmentMap map[proofs.VRFInputKey]*[sha256.Size]byte, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte]@*/) (res int, err error) {
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
@@ -423,12 +443,13 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	//@ invariant tStar == steps[tStarIdx]
 	//@ invariant TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
 	//@ invariant determined ==> resultRes != 0
+	//@ invariant acc(commitmentMap)
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
 	//@ invariant tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
-			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
+			commitment, err := prefixtree.LookUpCommitment(commitmentMap, label, step, RootHash /*@, labelSeq, RootHashSeq @*/)
 			if err != nil {
 				if !determined {
 					resultRes = 404
@@ -473,6 +494,9 @@ type MonitoringMapEntry struct {
 	Version  uint32
 }
 
+//TODO: I think the BinaryLadder already tells us if the version is included or not included.
+//We can use this as an advantage to create the map.
+
 // @ requires noPerm < p
 // @ requires acc(monitor_map)
 // @ requires acc(resp.Version,p)
@@ -480,37 +504,31 @@ type MonitoringMapEntry struct {
 // @ requires acc(prefixTrees,p)
 // @ requires acc(prefixRootHash, p)
 // @ requires acc(config,p)
-// @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
-// @ requires forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i].Inv(), p)
-// @ requires forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
 // @ requires resp.Version != nil
 // @ requires size > 0
 // @ requires *resp.Version >=0
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
 // @ requires low(size)
-// @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil
 // @ requires low(query.Label)
+// @ requires acc(commitmentMaps)
+// @ requires forall i int :: i >= 0 && i < len(commitmentMaps) ==> acc(commitmentMaps[i])
+// @ requires size <= uint64(len(commitmentMaps))
 // @ ensures acc(resp.Version, p)
 // @ ensures acc(query.Label, p)
-// @ ensures acc(prefixTrees, p)
+// @ ensures acc(commitmentMaps)
 // @ ensures acc(prefixRootHash, p)
 // @ ensures acc(config, p)
 // @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
 // @ ensures err == nil && res ==> low(resp.Version)
-func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
+func VerifyLatestKey(commitmentMaps []map[proofs.VRFInputKey]*[sha256.Size]byte, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
 	search_tree := MkImplicitBinarySearchTree(size)
 	resultRes := true
 	var resultErr error = nil
 	frontiers := search_tree.FrontierNodes( /*@p, size@*/ )
-	//@ assert len(frontiers) > 0
-	//@ assert low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
-	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < size
-	//@ assert size <= uint64(len(prefixTrees))
-	//@ assert forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	terminalLogEntry := -1
 	determined := false
 
@@ -522,17 +540,15 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 
 	// Loop: process all frontiers except the last
 
-	//@ invariant acc(prefixTrees)
-	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> acc(&prefixTrees[i])
-	//@ invariant forall i int :: {&prefixTrees[i]} i >= 0 && i < len(prefixTrees) ==> acc(prefixTrees[i])
 	//@ invariant acc(prefixRootHash, p)
 	//@ invariant acc(frontiers)
 	//@ invariant acc(resp.Full_tree_head.RootHash, p)
 	//@ invariant acc(query.Label, p)
 	//@ invariant acc(resp.Version, p)
 	//@ invariant acc(config, p)
-	//@ invariant forall i int :: i >= 0 && i < len(prefixTrees) ==> prefixTrees[i] != nil
-	//@ invariant forall i int :: i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
+	//@ invariant acc(commitmentMaps)
+	//@ invariant forall i int :: i>=0 && i < len(commitmentMaps) ==> acc(commitmentMaps[i])
+	//@ invariant forall i int :: i>=0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(commitmentMaps))
 	//@ invariant low(size) ==> low(len(frontiers)) && forall j int :: j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	//@ invariant 0 <= fIdx && fIdx <= len(frontiers) - 1
 	//@ invariant len(frontiers) > 0
@@ -541,10 +557,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	for fIdx := 0; fIdx < len(frontiers)-1; fIdx++ {
 		frontier := frontiers[fIdx]
 		if !determined {
-			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
-			//@ assert acc(prefixTrees[frontier])
-			Prefix_tree := prefixTrees[frontier]
-			if prefixTrees[frontier] == nil {
+			if commitmentMaps[frontier] == nil {
 				resultRes = false
 				resultErr = errors.New("prefix tree is nil")
 				determined = true
@@ -563,7 +576,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				//@ ghost var labelSeq seq[byte] = getContent(query.Label)
 				//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
 
-				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+				LtGtOrEq, cgErr := CheckGreatest(commitmentMaps[frontier], steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -582,8 +595,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	// Process last frontier separately
 	if !determined {
 		frontier := frontiers[len(frontiers)-1]
-		Prefix_tree := prefixTrees[frontier]
-		if prefixTrees[frontier] == nil {
+		if commitmentMaps[frontier] == nil {
 			resultRes = false
 			resultErr = errors.New("prefix tree is nil")
 			determined = true
@@ -601,7 +613,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 			//@ ghost var labelSeq seq[byte] = getContent(query.Label)
 			//@ ghost var rootHashSeq seq[byte] = getContent(rootHash[:])
 
-			LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
+			LtGtOrEq, cgErr := CheckGreatest(commitmentMaps[frontier], steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq @*/)
 			if cgErr != nil {
 				resultRes = false
 				resultErr = cgErr

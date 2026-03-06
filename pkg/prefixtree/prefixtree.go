@@ -5,7 +5,6 @@ import (
 	"errors"
 )
 
-// ##(--hyperMode extended)
 type Node struct {
 	hasData bool
 	key     uint64
@@ -182,7 +181,6 @@ pure func (n *Node) prefixSubtreeContains(prefix seq[bool], key uint64, value in
 // @ requires  noPerm < p
 // @ requires low(key)
 // @ requires low(rootHash)
-// @ requires low(copath)
 // @ preserves acc(copath, p)
 // @ preserves acc(n.PrefixTree(), p) && rootHash == n.prefixTreeHash()
 // @ ensures   res ==> n.prefixTreeContains(key, value)

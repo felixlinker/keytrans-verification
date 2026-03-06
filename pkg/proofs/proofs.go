@@ -121,14 +121,18 @@ type CompleteBinaryLadderStep struct {
 	Result PrefixSearchResult
 }
 
+//There are two bugs here:
+//1. I believe that the make([]BinaryLadderStep,0, len(results)) is wrong if we're using copy afterwards as the length is 0 in the array and you're copying nothing
+//2. If we only sort the steps and not the results, how can results[i] preserve ordering with the correct step?
+
 // @ trusted
 func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
 	completeSteps = make([]CompleteBinaryLadderStep, 0, len(results))
 	if len(steps) < len(results) {
 		return completeSteps, errors.New("not enough steps")
 	}
-
-	sortedSteps := make([]BinaryLadderStep, 0, len(results))
+	//I'm pretty sure the 0 should not exist as it will copy nothing.
+	sortedSteps := make([]BinaryLadderStep, len(results))
 	copy(sortedSteps, steps[:len(results)])
 	sortBinaryLadderSteps(sortedSteps)
 
