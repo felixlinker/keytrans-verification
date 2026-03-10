@@ -31,24 +31,6 @@ type BinaryLadderStep struct {
 	Proof      []byte             // opaque proof[VRF.Np] — variable length per VRF scheme
 	Commitment *[sha256.Size]byte // optional<HashValue> — nil for non-existing/target versions
 }
-type VRFInput struct {
-	Label   []byte
-	Version int
-}
-
-type Ladder struct {
-	Inclusions    []VRFInput
-	NonInclusions []VRFInput
-}
-
-type VRFInputKey struct {
-	Label   string //From Label converted to String, used for VRFProof mapping.
-	Version int
-}
-
-type VRFProof struct {
-	Mapping map[VRFInputKey]bool
-}
 
 type InclusionProof struct {
 	Elements []NodeValue // HashValue elements — log-tree inclusion/consistency batch proof

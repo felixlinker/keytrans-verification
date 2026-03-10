@@ -299,6 +299,7 @@ pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash
 // which corresponds to the verifier's unauth checks at each level (Figure 3c).
 // GetCommitment computes the VRF output for (Label, Version) and searches
 // the prefix tree for a matching leaf.
+// WARNING: Be aware this is a stub implementation and will need to be revised!
 //
 // Returns:
 //   - (commitment, nil) if a leaf with matching VRF output is found (inclusion)
@@ -338,6 +339,8 @@ func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []b
 		Version: uint32(Version),
 	}
 	//@ fold VRFInput.Inv()
+	//TODO: The current VRF_hash is not using sk to compute VRF hash, it's a stub implementation
+	// Real implementation needs to be aware of this issue.
 	vrfOutput := crypto.VRF_hash(nil, VRFInput)
 	vrfOutputSlice := make([]byte, sha256.Size)
 	for i := 0; i < sha256.Size; i++ {
