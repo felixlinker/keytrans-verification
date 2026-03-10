@@ -154,18 +154,19 @@ pred (s SearchResponse) Inv() {
 
 // @ requires noPerm < p
 // @ preserves st.Inv()
-// @ preserves acc(query.Inv(), p)
+// @ requires acc(query.Label, p) && acc(query.Last, p)
 // @ requires acc(resp.Inv(), p)
 // @ requires resp.Version != nil
-// @ requires acc(resp.Version, _)
+// @ requires acc(resp.Version, p)
 // @ requires *resp.Version >= 0
-// @ requires low(query.Label)
+// @ requires low(len(query.Label)) && forall i int :: 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires query.Label != nil
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
 // @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires acc(config, p)
+// @ ensures acc(query.Label, p) && acc(query.Last, p)
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
 // @ ensures err == nil ==> low(resp.Version)
@@ -222,14 +223,11 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	decision := false
 	if !determined {
 		//@ unfold acc(resp.Inv(), p)
-		//@ unfold acc(query.Inv(), p)
 		//@ unfold acc(resp.Full_tree_head.Inv(), p)
 
 		size := resp.Full_tree_head.Tree_head.Tree_size
 		monitoringMap := make([]MonitoringMapEntry, 0)
 		decision, resultErr = VerifyLatestKey(trees, rootHashes, size, query, resp, monitoringMap, config /*@, p/4 @*/)
-
-		//@ fold acc(query.Inv(), p)
 
 		if !decision || resultErr != nil {
 			//@ fold acc(resp.Full_tree_head.Inv(), p)
@@ -491,7 +489,7 @@ type MonitoringMapEntry struct {
 // @ requires low(size)
 // @ requires size <= uint64(len(prefixTrees))
 // @ requires query.Label != nil
-// @ requires low(query.Label)
+// @ requires low(len(query.Label)) && forall i int :: 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ ensures acc(resp.Version, p)
 // @ ensures acc(query.Label, p)
 // @ ensures acc(prefixTrees, p)
