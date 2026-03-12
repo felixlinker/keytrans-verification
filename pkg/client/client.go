@@ -407,7 +407,6 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	resultRes := 0
 	var resultErr error = nil
 	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
-	//@ ghost var tStarVisited bool = false
 	//@ ghost var tStar uint64 = steps[tStarIdx]
 
 	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
@@ -453,7 +452,6 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 				/*@
 				ghost if idx == tStarIdx{
 					assert !determined ==> (non_incl_lemma || incl_lemma)
-					tStarVisited = true
 				}
 				@*/
 			}
