@@ -28,18 +28,6 @@ decreases
 pure func (tree *ImplicitBinarySearchTree) IsLow() bool
 @*/
 
-/*
-
-
-pred (t *ImplicitBinarySearchTree) LowInv(p perm) {
-	noPerm < p && p < writePerm && acc(t, p) && low(t.Root) &&
-	(t.Left != nil ==> t.Left.LowInv(p)) &&
-	(t.Right != nil ==> t.Right.LowInv(p))
-}
-
-
-*/
-
 // @ requires tree_size >= 0
 // @ requires low(tree_size)
 // @ ensures root >= 0
@@ -152,12 +140,9 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 // @ ensures tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
 // @ ensures   acc(path)
 // @ ensures   tree != nil ==> len(path) > 0
-// @ ensures low(len(path))
-// @ ensures forall j int :: j>= 0 && j < len(path) ==> low(path[j])
 // @ ensures forall j int :: j >= 0 && j < len(path) ==> path[j] >= 0 && path[j] < bound
-// @ ensures tree.IsLow() ==> low(len(path)) && forall i int :: 0<= i && i< len(path) &&  low(path[i])
+// @ ensures (low(len(path)) && forall i int :: 0<= i && i< len(path) ==>  low(path[i]))
 // @ trusted
-// TODO: There is no way to fix this issue now due to the hyperpredicate...
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bound uint64 @*/ ) (path []uint64) {
 	if tree != nil {
 		//@ unfold tree.Inv()
@@ -202,36 +187,6 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 		}
 		tree = &ImplicitBinarySearchTree{root, left, right}
 		//@ fold tree.Inv()
-	}
-	return
-}
-
-// @ requires noPerm < p
-// @ requires acc(tree.Inv(), p) && acc(distinguished, p)
-// @ requires low(pos) && low(len(distinguished))
-// @ requires forall j int :: 0 <= j && j < len(distinguished) ==> low(distinguished[j])
-// @ ensures  acc(tree.Inv(), p) && acc(distinguished, p) && acc(result)
-// @ ensures  low(len(result)) && low(len(distinguished))
-// @ ensures  forall j int :: 0 <= j && j < len(distinguished) ==> low(distinguished[j])
-// @ ensures  forall j int :: 0 <= j && j < len(result) ==> low(result[j])
-// @ trusted
-func DirectPathRight(tree *ImplicitBinarySearchTree, pos uint64,
-	distinguished []bool /*@, ghost p perm @*/) (result []uint64) {
-	result = make([]uint64, 0)
-	if tree == nil {
-		return
-	}
-	path, err := tree.PathTo(pos /*@, p/2 @*/)
-	if err != nil {
-		return
-	}
-	for i := 0; i < len(path); i++ {
-		if path[i] >= pos {
-			result = append( /*@ perm(1/2), @*/ result, path[i])
-			if int(path[i]) < len(distinguished) && distinguished[path[i]] {
-				break
-			}
-		}
 	}
 	return
 }

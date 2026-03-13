@@ -810,11 +810,8 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // The elements are on path of the binary search as soon as t2 and target are in the same bucket!
 // ============= Case 1: t2 > target =============
 // Either we have found TStar and the index shows that the element is TStar
-
 // @ requires t2 > target && Log2Floor_pure(t2+1) > Log2Floor_pure(target+1) ==> (foundTStar && r[currIdx] == TStar_pure(target, t2))
-
 // Or we are on path if they are still in the same bucket
-
 // @ requires t2 > target && !(Log2Floor_pure(t2+1) > Log2Floor_pure(target+1)) ==> (foundTStar ==> r[currIdx] == TStar_pure(target, t2)) &&  (!foundTStar ==> isOnPath(TStar_pure(target, t2), target, x_in, x_out))
 // ============= Case 1: t2 < target =============
 // @ requires t2 < target && Log2Floor_pure(target+1) > Log2Floor_pure(t2+1) ==> (foundTStar && r[currIdx] == TStar_pure(t2, target))
