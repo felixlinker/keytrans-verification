@@ -146,20 +146,18 @@ pred (s SearchResponse) Inv() {
 
 // @ requires noPerm < p
 // @ preserves st.Inv()
+// @ requires acc(query.Label, p) && acc(query.Last, p)
 // @ requires acc(resp.Inv(), p)
 // @ requires resp.Version != nil
 // @ requires unfolding acc(resp.Inv(), p) in *resp.Version >= 0
-// @ requires unfolding acc(query.Inv(),p) in low(len(query.Label)) && forall i int :: { query.Label[i] } 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires query.Label != nil
+// @ requires low(len(query.Label)) && forall i int :: { query.Label[i] } 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
 // @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires acc(config, p)
-// @ ensures err != nil ==> acc(resp.Version, p)
-// @ ensures err == nil ==> acc(resp.Version, p)
-// @ ensures err == nil ==> acc(res.Inv(), p)
-// @ ensures err == nil ==> low(resp.Version)
+// @ ensures err == nil ==> acc(resp.Version, p) && low(*resp.Version)
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	determined := false
@@ -191,6 +189,10 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 			resultErr = errors.New("length of binary ladder does not match greatest version")
 			determined = true
 		}
+		if *resp.Version < 0 {
+			resultErr = errors.New("Version is negative")
+			determined = true
+		}
 	}
 
 	// Phase 3: Build prefix trees
@@ -214,17 +216,26 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		//@ unfold acc(resp.Inv(), p)
 		//@ unfold acc(resp.Full_tree_head.Inv(), p)
 
-		size := resp.Full_tree_head.Tree_head.Tree_size
-		monitoringMap := make([]MonitoringMapEntry, 0)
-		decision, resultErr = VerifyLatestKey(trees, rootHashes, size, query, resp, monitoringMap, config /*@, p/4 @*/)
-
-		if !decision || resultErr != nil {
+		if *resp.Version < 0 {
 			//@ fold acc(resp.Full_tree_head.Inv(), p)
 			//@ fold acc(resp.Inv(), p)
-			if resultErr == nil {
-				resultErr = errors.New("Key not the greatest version")
-			}
+			resultErr = errors.New("Version is negative")
 			determined = true
+		}
+
+		if !determined {
+			size := resp.Full_tree_head.Tree_head.Tree_size
+			monitoringMap := make([]MonitoringMapEntry, 0)
+			decision, resultErr = VerifyLatestKey(trees, rootHashes, size, query, resp, monitoringMap, config /*@, p/4 @*/)
+
+			if !decision || resultErr != nil {
+				//@ fold acc(resp.Full_tree_head.Inv(), p)
+				//@ fold acc(resp.Inv(), p)
+				if resultErr == nil {
+					resultErr = errors.New("Key not the greatest version")
+				}
+				determined = true
+			}
 		}
 	}
 
