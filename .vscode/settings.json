@@ -1,14 +1,9 @@
 {
-    "gobraSettings.buildVersion": "Local",
+    "gobraSettings.buildVersion": "Nightly",
     "gobraSettings.moduleName": "github.com/felixlinker/keytrans-verification",
     "gobraSettings.includeDirs": [
         ".",
         ".verification"
     ],
-    "gobraSettings.autoVerify": false,
-    "gobraDependencies.gobraToolsPaths": {
-        "serverJar": {
-            "mac": "/Users/kwokwailui/Documents/MasterThesis/Gobruh/gobra-ide-server/server.jar"
-        }
-    }
+    "gobraSettings.autoVerify": false
 }

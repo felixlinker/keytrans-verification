@@ -6,14 +6,19 @@ package proofs
 //
 // Goal:
 //   Prove that FullBinaryLadderSteps(target) produces a ladder containing
-//   TStar_pure(target, t2) for ANY other version t2. This guarantees that
-//   two hyper-mode executions with different claimed versions t and t' will
-//   both have TStar(t, t') in their ladders — so they query the same prefix
-//   tree entry and must agree, establishing low(t).
+//   a special element `TStar_pure(target, t2) for ANY other version t2. This
+//   special element is the largest element that the binary ladders for `target`
+//   and `t2` share. If we consider two executions (think of hyper-mode) in
+//   which the server claims that `target` and `t2` are both the latest version
+//   for a particular user, we expect a proof of inclusion for this special
+//   element in one execution and a proof of non-inclusion in the other one if
+//   `target` and `t2` are different. This however contradicts our assumption
+//   that both executions operate on the same authenticated data structure
+//   and, thus, `target` and `t2` must be equal.
 //
 // Key definitions:
-//   - TStar_pure(t1, t2): the deterministic pivot between t1 < t2, computed
-//     by binary search within the exponential interval containing t1.
+//   - TStar_pure(t1, t2): returns the "special" element as described above
+//     for `t1` and `t2`
 //   - expJumpElement(k) = 2^k - 1: the k-th exponential jump step.
 //   - findExpLevel(t) = floor(log2(t+1)) + 1: the exponential level for t.
 //   - isOnPath(v, target, x_in, x_out): v appears on the binary search path

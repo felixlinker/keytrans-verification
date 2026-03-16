@@ -12,14 +12,10 @@ import (
 
 /*@
 //Helper functions
-
-
 //Compare the bytes of the arrays
 ghost
+requires acc(r1, _) && acc(r2,_)
 decreases
-requires p > noPerm
-requires acc(r1, p)
-requires acc(r2,p)
 pure
 func BytesEqual(r1 []byte, r2 []byte, p perm) bool {
 	return len(r1) == len(r2) && forall i int :: {r1[i], r2[i]} 0<=i && i < len(r1) ==> r1[i] ==r2[i]
@@ -36,17 +32,17 @@ func BytesNotEqual(r1 []byte, r2 []byte, p perm) bool {
 }
 
 pred ByteLowInv(s []byte){
-	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
+	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0 <= i && i < len(s) ==> low(s[i]))
 }
 
 
 pred UIntLowInv(s []uint64){
-	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0<= i && i < len(s) && low(s[i]))
+	acc(s) && low(len(s)) && (forall i int :: {s[i]} 0 <= i && i < len(s) ==> low(s[i]))
 }
 
 
-// TStarBetween captures: steps[tStarIdx] == TStar(min(t1,t2), max(t1,t2))
-// AND min(t1,t2) < steps[tStarIdx] <= max(t1,t2)
+// TStarBetween captures: tStarVal == TStar(min(t1,t2), max(t1,t2))
+// AND min(t1,t2) < tStarVal <= max(t1,t2)
 ghost
 decreases
 pure func TStarBetween(tStarVal, t1, t2 uint64) bool {
@@ -62,7 +58,7 @@ requires acc(arr, _)
 decreases
 pure
 func getContent(arr []byte) (res seq[byte]) {
-  return GetByteContent(arr, 0)
+  return getByteContent(arr, 0)
 }
 
 ghost
@@ -70,8 +66,8 @@ requires acc(arr, _)
 requires 0 <= idx && idx <= len(arr)
 decreases len(arr) - idx
 pure
-func GetByteContent(arr []byte, idx int) (res seq[byte]) {
-  return idx == len(arr) ? seq[byte]{} : seq[byte]{arr[idx]} ++ GetByteContent(arr, idx + 1)
+func getByteContent(arr []byte, idx int) (res seq[byte]) {
+  return idx == len(arr) ? seq[byte]{} : seq[byte]{arr[idx]} ++ getByteContent(arr, idx + 1)
 }
 
 @*/
@@ -81,7 +77,6 @@ type PT interface {
 	// label and version pair provided. Returns nil if we can prove that the
 	// prefix tree does not contain a key for the label and version pair provided.
 	// Returns error in any other case.
-	//@ pred Mem()
 	GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error)
 }
 
@@ -113,9 +108,6 @@ requires acc(f.Inv(), _)
 pure func (f FullTreeHead) Size() uint64 {
 	return unfolding acc(f.Inv(), _) in f.Tree_head.Tree_size
 }
-
-
-
 @*/
 
 type SearchRequest struct {
@@ -154,25 +146,22 @@ pred (s SearchResponse) Inv() {
 
 // @ requires noPerm < p
 // @ preserves st.Inv()
-// @ requires acc(query.Label, p) && acc(query.Last, p)
 // @ requires acc(resp.Inv(), p)
 // @ requires resp.Version != nil
-// @ requires acc(resp.Version, p)
-// @ requires *resp.Version >= 0
-// @ requires low(len(query.Label)) && forall i int :: 0 <= i && i < len(query.Label) ==> low(query.Label[i])
+// @ requires unfolding acc(resp.Inv(), p) in *resp.Version >= 0
+// @ requires unfolding acc(query.Inv(),p) in low(len(query.Label)) && forall i int :: { query.Label[i] } 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires query.Label != nil
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
 // @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
 // @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires acc(config, p)
-// @ ensures acc(query.Label, p) && acc(query.Last, p)
-// @ ensures err != nil ==> acc(resp.Inv(), p)
-// @ ensures err == nil ==> acc(res) && acc(res.Inv(), p)
+// @ ensures err != nil ==> acc(resp.Version, p)
+// @ ensures err == nil ==> acc(resp.Version, p)
+// @ ensures err == nil ==> acc(res.Inv(), p)
 // @ ensures err == nil ==> low(resp.Version)
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
-
 	determined := false
 	var resultErr error = nil
 
@@ -241,7 +230,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 
 	// Phase 5: Single return
 	if !determined && decision {
-		// VerifyLatestKey ensures: err == nil && res ==> low(resp.Version)
+		// VerifyLatestKey ensures: err == nil && res ==> low(*resp.Version)
 		//@ unfold acc(resp.Value.Inv(), p)
 		res = &proofs.UpdateValue{Value: resp.Value.Value}
 		//@ fold acc(res.Inv(), p)
@@ -494,7 +483,7 @@ type MonitoringMapEntry struct {
 // @ ensures acc(prefixRootHash, p)
 // @ ensures acc(config, p)
 // @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
-// @ ensures err == nil && res ==> low(resp.Version)
+// @ ensures err == nil && res ==> low(*resp.Version)
 func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm@*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)

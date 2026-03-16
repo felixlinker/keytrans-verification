@@ -156,7 +156,6 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bou
 		//@ assert forall j int :: j>= 0 && j < len(subtreePath) ==> low(subtreePath[j])
 		path = append( /*@ p, @*/ path, subtreePath...)
 		//@ assert low(len(path))
-		// assert 1 == 2
 		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
 		//@ fold tree.Inv()
 	}
