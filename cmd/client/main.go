@@ -4,6 +4,11 @@ import (
 	"fmt"
 )
 
+// @ trusted
+func printMsg(msg string) {
+	fmt.Printf("%s", msg)
+}
+
 func main() {
-	fmt.Printf("Hello world")
+	printMsg("Hello world")
 }
