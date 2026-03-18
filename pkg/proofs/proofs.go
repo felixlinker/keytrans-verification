@@ -135,6 +135,5 @@ func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
 		hashB := crypto.VRF_proof_to_hash(b.Proof)
 		return bytes.Compare(hashA[:], hashB[:])
 	})
-
 	return
 }

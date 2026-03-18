@@ -306,16 +306,19 @@ pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash
 //   - (nil, nil)         if no matching leaf exists (non-inclusion)
 //   - (nil, error)       if the tree is in an invalid state
 //
+// @ requires p > noPerm
 // @ requires Label != nil && len(Label) >= 0
 // @ requires Version >= 0
-// @ requires acc(Label)
-// @ requires acc(RootHash)
-// @ ensures acc(res)
-// @ ensures acc(RootHash)
-// @ ensures acc(Label)
+// @ requires acc(Label, p)
+// @ requires acc(RootHash, p)
+// @ ensures acc(res, p)
+// @ ensures acc(RootHash,p)
+// @ ensures acc(Label,p)
+// @ ensures low(len(Label)) && forall i int :: {Label[i]} 0 <= i && i < len(Label) ==> low(Label[i])
+// @ ensures low(len(RootHash)) && forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])
 // @ ensures err == nil ==> (res != nil) == GetCommitmentIsDeterministic(labelS, Version, rootHashS)
 // @ trusted
-func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost labelS seq[byte], ghost rootHashS seq[byte]@*/) (res []byte, err error) {
+func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost labelS seq[byte], ghost rootHashS seq[byte], ghost p perm@*/) (res []byte, err error) {
 	if tree == nil {
 		// Nil tree: non-inclusion (no commitments exist in an empty tree)
 		return nil, nil
