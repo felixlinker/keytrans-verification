@@ -310,7 +310,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 			//@ unfold acc(query.Inv(), p)
 			size := resp.Full_tree_head.Tree_head.Tree_size
 			monitoringMap := make([]MonitoringMapEntry, 0)
-			decision, resultErr = VerifyLatestKey(trees, rootHashes, size, query, resp, monitoringMap, config /*@, p @*/)
+			decision, resultErr = VerifyLatestKey(trees, rootHashes, size, query, resp, monitoringMap, config /*@, rhContents, p @*/)
 
 			if !decision || resultErr != nil {
 				//@ fold acc(resp.Full_tree_head.Inv(), p)
@@ -573,13 +573,15 @@ type MonitoringMapEntry struct {
 // @ requires query.Label != nil
 // @ requires low(size)
 // @ requires low(len(query.Label)) && forall i int :: {query.Label[i]} 0 <= i && i < len(query.Label) ==> low(query.Label[i])
+// @ requires low(rootHashContents)
+// @ requires len(rootHashContents) == len(prefixRootHash)
 // @ ensures acc(query.Label, p)
 // @ ensures acc(prefixTrees, p)
 // @ ensures acc(prefixRootHash, p)
 // @ ensures acc(config, p)
 // @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
 // @ ensures err == nil && res ==> low(resp.Version)
-func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost p perm @*/) (res bool, err error) {
+func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := t         //TODO: Fix this line
 	search_tree := MkImplicitBinarySearchTree(size)
