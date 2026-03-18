@@ -220,7 +220,7 @@ pred (s SearchRequest) Inv() {
 
 type SearchResponse struct {
 	Full_tree_head FullTreeHead
-	Version        uint64
+	Version        *uint32
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
 	Inclusion      proofs.InclusionProof
@@ -243,7 +243,8 @@ pred (s SearchResponse) Inv() {
 // @ preserves st.Inv()
 // @ requires acc(query.Inv(),p)
 // @ requires acc(resp.Inv(),p)
-// @ requires resp.Version >= 0
+// @ requires resp.Version != nil && acc(resp.Version, p)
+// @ requires *resp.Version >= 0
 // @ requires unfolding acc(query.Inv(),p) in query.Label != nil
 // @ requires unfolding acc(query.Inv(),p) in low(len(query.Label)) && forall i int :: { query.Label[i] } 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
@@ -252,8 +253,9 @@ pred (s SearchResponse) Inv() {
 // @ requires low(len(resp.Search.Prefix_proofs))
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires acc(config, p)
+// @ ensures acc(resp.Version, p)
 // @ ensures acc(resp.Inv(), p)
-// @ ensures err == nil ==> low(resp.Version)
+// @ ensures err == nil ==> low(*resp.Version)
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	determined := false
@@ -274,7 +276,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 	if !determined {
-		ladderIndices := proofs.FullBinaryLadderSteps_wrapper(resp.Version)
+		ladderIndices := proofs.FullBinaryLadderSteps_wrapper(uint64(*resp.Version))
 		if len(resp.Binary_ladder) != len(ladderIndices) {
 			resultErr = errors.New("length of binary ladder does not match greatest version")
 			determined = true
@@ -568,7 +570,8 @@ type MonitoringMapEntry struct {
 // @ requires PrefixTreesInv(prefixTrees, p)
 // @ requires RootHashesInv(prefixRootHash, p)
 // @ requires size > 0 && size <= uint64(len(prefixTrees)) && size <= uint64(len(prefixRootHash))
-// @ requires resp.Version >= 0
+// @ requires resp.Version != nil && acc(resp.Version, p)
+// @ requires *resp.Version >= 0
 // @ requires resp.Full_tree_head.RootHash != nil
 // @ requires query.Label != nil
 // @ requires low(size)
@@ -576,14 +579,15 @@ type MonitoringMapEntry struct {
 // @ requires low(rootHashContents)
 // @ requires len(rootHashContents) == len(prefixRootHash)
 // @ ensures acc(query.Label, p)
+// @ ensures acc(resp.Version, p)
 // @ ensures acc(prefixTrees, p)
 // @ ensures acc(prefixRootHash, p)
 // @ ensures acc(config, p)
 // @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
-// @ ensures err == nil && res ==> low(resp.Version)
+// @ ensures err == nil && res ==> low(*resp.Version)
 func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
-	tVal := t         //TODO: Fix this line
+	tVal := uint64(*t)
 	search_tree := MkImplicitBinarySearchTree(size)
 	resultRes := true
 	var resultErr error = nil
@@ -611,6 +615,9 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	//@ invariant PrefixTreesInv(prefixTrees, p)
 	//@ invariant RootHashesInv(prefixRootHash, p)
 	//@ invariant acc(frontiers)
+	//@ invariant acc(resp.Version, p)
+	//@ invariant tVal == uint64(*t)
+	//@ invariant tVal >= 0
 	//@ invariant acc(resp.Full_tree_head.RootHash, p)
 	//@ invariant acc(query.Label, p)
 	//@ invariant 0 <= fIdx && fIdx <= len(frontiers) - 1
@@ -718,7 +725,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	if frontiers[0] < uint64(terminalLogEntry) && config.Mode == 1 {
 		entry := MonitoringMapEntry{
 			Position: uint64(len(frontiers) - 1),
-			Version:  uint32(t),
+			Version:  *t,
 		}
 		monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
 	}
