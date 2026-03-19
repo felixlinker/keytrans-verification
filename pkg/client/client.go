@@ -14,12 +14,18 @@ import (
 //Helper functions
 //Compare the bytes of the arrays
 ghost
-requires acc(r1, _) && acc(r2,_)
+requires acc(r1, _) && acc(r2, _)
 decreases
-pure
-func BytesEqual(r1 []byte, r2 []byte, p perm) bool {
-	return len(r1) == len(r2) && forall i int :: {r1[i], r2[i]} 0<=i && i < len(r1) ==> r1[i] ==r2[i]
+pure func BytesEqual(r1, r2 []byte) bool {
+	return len(r1) == len(r2) &&
+		forall i int :: {r1[i], r2[i]} 0 <= i && i < len(r1) ==> r1[i] == r2[i]
 }
+
+
+
+
+
+
 
 // PrefixTreesInv encapsulates per-element permissions for prefix tree slices.
 // Reduces quantifier count in the SIF product program.
@@ -34,17 +40,39 @@ pred RootHashesInv(hashes []*[sha256.Size]byte, p perm) {
 	forall i int :: {&hashes[i]} i >= 0 && i < len(hashes) ==> acc(&hashes[i], p) && acc(hashes[i], p)
 }
 
-// TStarBetween captures: tStarVal == TStar(min(t1,t2), max(t1,t2))
+ghost
+decreases
+pure func min(a, b uint64) uint64 {
+  return a < b ? a : b
+}
+
+ghost
+decreases
+pure func max(a, b uint64) uint64 {
+  return a > b ? a : b
+}
+
+// IsTStar captures: tStarVal == TStar(min(t1,t2), max(t1,t2))
 // AND min(t1,t2) < tStarVal <= max(t1,t2)
 ghost
 decreases
-pure func TStarBetween(tStarVal, t1, t2 uint64) bool {
+pure func IsTStar(tStarVal, t1, t2 uint64) bool {
   return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
     t1 == t2 ? true :
     t1 < t2 ?
       (tStarVal == proofs.TStar_pure(t1, t2) && t1 < tStarVal && tStarVal <= t2) :
       (tStarVal == proofs.TStar_pure(t2, t1) && t2 < tStarVal && tStarVal <= t1)
 }
+
+ghost
+requires min(t1,t2) >= 0 && max(t1,t2) > 0
+ensures t1 != t2 ==> min(t1, t2) < res && res <= max(t1, t2)
+decreases
+pure func TStarBetween(t1, t2 uint64) (res uint64) {
+  return t1 == t2 ? 0 :
+    t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
+}
+
 
 ghost
 requires acc(arr, _)
@@ -309,7 +337,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 				//@ fold acc(resp.Full_tree_head.Inv(), p)
 				//@ fold acc(resp.Inv(), p)
 				if resultErr == nil {
-					resultErr = errors.New("Key not the greatest version")
+					resultErr = errors.New("Query response does not contain latest version")
 				}
 				determined = true
 			}
@@ -345,10 +373,6 @@ ghost
 decreases
 ensures res > 0
 func GetInt() (res int)
-
-
-// Ghost seq params avoid needing to unfold IsLow (which loses low facts in hyper mode)
-
 
 @*/
 
@@ -414,11 +438,11 @@ ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 ensures 0 <= idx && idx < len(steps)
 ensures low(idx < len(steps))
 ensures low(steps[idx])
-ensures TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
+ensures IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 func findTStarIdx(steps []uint64, t uint64) (idx int) {
 	if low(t) {
 		idx = 0
-		assert TStarBetween(steps[idx], rel(t, 0), rel(t, 1))
+		assert IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 		// steps[0] == 0 (precondition), 0 is low in both executions
 		assert low(steps[idx])
 	} else {
@@ -426,23 +450,19 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 		if rel(t, 0) < rel(t, 1) {
 			idx = idx1
 			assert low(idx < len(steps))
-			// EstablishTStarWitnesses: rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
+			// EstablishTStarWitnesses: rel(steps[idx1],1) == rel(steps[idx1],0)
 			// Both equal TStar_pure(rel(t,0), rel(t,1)), so low(steps[idx])
-			assert rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)
+			assert rel(steps[idx],1) == rel(steps[idx],0)
 			assert low(steps[idx])
 		} else {
 			idx = idx2
 			assert low(idx < len(steps))
-			// EstablishTStarWitnesses: rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)
+			// EstablishTStarWitnesses: rel(steps[idx2],0) == rel(steps[idx2],1)
 			// Both equal TStar_pure(rel(t,1), rel(t,0)), so low(steps[idx])
-			assert rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)
+			assert rel(steps[idx2],0) == rel(steps[idx2],1)
 			assert low(steps[idx])
 		}
 	}
-	assert rel(idx,0) < rel(len(steps),0)
-	assert rel(idx,1) < rel(len(steps),1)
-	assert low(idx < len(steps))
-	assert idx < len(steps)
 }
 @*/
 
@@ -451,11 +471,11 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 // @ ensures forall j int :: {r1[j]} j >= 0 && j < len(r1) ==> r1[j] >= 0
 // @ ensures 0 <= tStarIdx && tStarIdx < len(r1)
 // @ ensures low(r1[tStarIdx])
-// @ ensures TStarBetween(r1[tStarIdx], rel(target, 0), rel(target, 1))
+// @ ensures IsTStar(r1[tStarIdx], rel(target, 0), rel(target, 1))
 func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tStarIdx int @*/) {
 	r1 = proofs.FullBinaryLadderSteps_wrapper(target)
 	//@ tStarIdx = findTStarIdx(r1, target)
-	return r1 /*@, tStarIdx @*/
+	return
 }
 
 /*
@@ -479,7 +499,7 @@ CheckGreatest verifies if t is the greatest version
 // @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 // @ requires 0 <= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
-// @ requires TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
+// @ requires IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
 // Correct postcondition
 // @ ensures prefixTree != nil ==> acc(prefixTree.Inv(), p)
 // @ ensures acc(label, p)
@@ -501,7 +521,7 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 	//@ invariant 0 <= idx && idx <= len(steps)
 	//@ invariant tStar == steps[tStarIdx]
-	//@ invariant TStarBetween(steps[tStarIdx], rel(t, 0), rel(t, 1))
+	//@ invariant IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
 	//@ invariant determined ==> resultRes != 0
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
 	//@ invariant tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma

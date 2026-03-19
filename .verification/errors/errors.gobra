@@ -1,5 +1,0 @@
-package errors
-
-ensures err != nil
-decreases
-func New(msg string) (err error)

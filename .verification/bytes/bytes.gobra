@@ -2,6 +2,6 @@ package bytes
 
 requires noPerm < p1 && noPerm < p2
 preserves acc(a, p1) && acc(b, p2)
-decreases
 ensures res == (len(a) == len(b) && forall i int :: { a[i], b[i] } 0 <= i && i < len(a) ==> a[i] == b[i])
+decreases
 func Equal(a []byte, b []byte, ghost p1 perm, ghost p2 perm) (res bool)
