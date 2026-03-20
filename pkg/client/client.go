@@ -21,23 +21,15 @@ pure func BytesEqual(r1, r2 []byte) bool {
 		forall i int :: {r1[i], r2[i]} 0 <= i && i < len(r1) ==> r1[i] == r2[i]
 }
 
-
-
-
-
-
-
 // PrefixTreesInv encapsulates per-element permissions for prefix tree slices.
 // Reduces quantifier count in the SIF product program.
-pred PrefixTreesInv(trees []*prefixtree.PrefixTree, p perm) {
-	p > noPerm &&
-	forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(&trees[i]) && acc(trees[i].Inv(), p) && trees[i] != nil
+pred PrefixTreesInv(trees []*prefixtree.PrefixTree) {
+	forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(&trees[i]) && acc(trees[i].Inv()) && trees[i] != nil
 }
 
 // RootHashesInv encapsulates per-element permissions for root hash slices.
-pred RootHashesInv(hashes []*[sha256.Size]byte, p perm) {
-	p > noPerm &&
-	forall i int :: {&hashes[i]} i >= 0 && i < len(hashes) ==> acc(&hashes[i], p) && acc(hashes[i], p)
+pred RootHashesInv(hashes []*[sha256.Size]byte) {
+	forall i int :: {&hashes[i]} i >= 0 && i < len(hashes) ==> acc(&hashes[i]) && acc(hashes[i])
 }
 
 ghost
@@ -53,7 +45,7 @@ pure func max(a, b uint64) uint64 {
 }
 
 // IsTStar captures: tStarVal == TStar(min(t1,t2), max(t1,t2))
-// AND min(t1,t2) < tStarVal <= max(t1,t2)
+// AND min(t1,t2) < tStarVal <= max(t1,t2) if t1 != t2
 ghost
 decreases
 pure func IsTStar(tStarVal, t1, t2 uint64) bool {
@@ -91,47 +83,44 @@ func getByteContent(arr []byte, idx int) (res seq[byte]) {
   return idx == len(arr) ? seq[byte]{} : seq[byte]{arr[idx]} ++ getByteContent(arr, idx + 1)
 }
 
-// Workaround for Gobra issue #974: low() does not propagate through
-// recursive pure functions in hyper mode. Build a sequence imperatively instead.
+// Lemma: returns a low sequence equal to getByteContent(data, idx).
+// Recurses matching getByteContent's structure. Workaround for Gobra issue #974:
+// low() cannot directly wrap a recursive pure function, so we build the result
+// imperatively (making low() provable) while ensuring equality with getByteContent.
 ghost
 requires p > noPerm
 requires acc(data, p)
 requires low(len(data))
+requires 0 <= idx && idx <= len(data)
+requires low(idx)
 requires forall i int :: {data[i]} 0 <= i && i < len(data) ==> low(data[i])
 ensures acc(data, p)
+ensures low(len(data))
+ensures forall i int :: {data[i]} 0 <= i && i < len(data) ==> low(data[i])
 ensures low(result)
-decreases
-func buildLowSeq(data []byte, ghost p perm) (result seq[byte]) {
-  result = seq[byte]{}
-  ghost var i int = 0
-
-  invariant acc(data, p)
-  invariant 0 <= i && i <= len(data)
-  invariant low(i)
-  invariant low(result)
-  invariant low(len(data))
-  invariant forall j int :: {data[j]} 0 <= j && j < len(data) ==> low(data[j])
-  decreases len(data) - i
-  for i < len(data) {
-    result = result ++ seq[byte]{data[i]}
-    i = i + 1
+ensures result == getByteContent(data, idx)
+decreases len(data) - idx
+func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) {
+  if idx == len(data) {
+    result = seq[byte]{}
+  } else {
+    tail := getByteContentIsLow(data, idx + 1, p)
+    result = seq[byte]{data[idx]} ++ tail
   }
 }
 
 // Build low ghost seq from a *[sha256.Size]byte array
 ghost
-requires p > noPerm
-requires acc(arr, p)
+requires acc(arr)
 requires forall k int :: {arr[k]} 0 <= k && k < sha256.Size ==> low(arr[k])
-ensures acc(arr, p)
+ensures acc(arr)
 ensures low(result)
 ensures forall k int :: {arr[k]} 0 <= k && k < sha256.Size ==> low(arr[k])
 decreases
-func buildLowSeqFromHash(arr *[sha256.Size]byte, ghost p perm) (result seq[byte]) {
-  result = seq[byte]{}
-  ghost var i int = 0
+func buildLowSeqFromHash(arr *[sha256.Size]byte) (result seq[byte]) {
+  i := 0
 
-  invariant acc(arr, p)
+  invariant acc(arr)
   invariant 0 <= i && i <= sha256.Size
   invariant low(i)
   invariant low(result)
@@ -146,29 +135,27 @@ func buildLowSeqFromHash(arr *[sha256.Size]byte, ghost p perm) (result seq[byte]
 
 // Build ghost seq[seq[byte]] from root hash pointers, preserving low()
 ghost
-requires p > noPerm
 requires n >= 0 && n == len(hashes)
 requires low(n)
-requires forall i int :: {&hashes[i]} 0 <= i && i < n ==> acc(&hashes[i], p) && acc(hashes[i], p)
+requires forall i int :: {&hashes[i]} 0 <= i && i < n ==> acc(&hashes[i]) && acc(hashes[i])
 requires forall i int :: {&hashes[i]} 0 <= i && i < n ==> forall k int :: {hashes[i][k]} 0 <= k && k < sha256.Size ==> low(hashes[i][k])
 ensures low(result)
 ensures len(result) == n
-ensures forall i int :: {&hashes[i]} 0 <= i && i < n ==> acc(&hashes[i], p) && acc(hashes[i], p)
+ensures forall i int :: {&hashes[i]} 0 <= i && i < n ==> acc(&hashes[i]) && acc(hashes[i])
 decreases
-func buildRootHashContents(hashes []*[sha256.Size]byte, n int, ghost p perm) (result seq[seq[byte]]) {
-  result = seq[seq[byte]]{}
-  ghost var i int = 0
+func buildRootHashContents(hashes []*[sha256.Size]byte, n int) (result seq[seq[byte]]) {
+  i := 0
 
   invariant 0 <= i && i <= n
   invariant low(i)
   invariant low(n)
   invariant low(result)
   invariant len(result) == i
-  invariant forall j int :: {&hashes[j]} 0 <= j && j < n ==> acc(&hashes[j], p) && acc(hashes[j], p)
+  invariant forall j int :: {&hashes[j]} 0 <= j && j < n ==> acc(&hashes[j]) && acc(hashes[j])
   invariant forall j int :: {&hashes[j]} 0 <= j && j < n ==> forall k int :: {hashes[j][k]} 0 <= k && k < sha256.Size ==> low(hashes[j][k])
   decreases n - i
   for i < n {
-    ghost var s seq[byte] = buildLowSeqFromHash(hashes[i], p)
+    ghost var s seq[byte] = buildLowSeqFromHash(hashes[i])
     result = result ++ seq[seq[byte]]{s}
     i = i + 1
   }
@@ -316,8 +303,8 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 			resultErr = buildErr
 			determined = true
 		} else {
-			//@ rhContents = buildRootHashContents(rootHashes, n, p)
-			//@ fold RootHashesInv(rootHashes, p)
+			//@ rhContents = buildRootHashContents(rootHashes, n)
+			//@ fold acc(RootHashesInv(rootHashes), p)
 		}
 	}
 
@@ -441,7 +428,7 @@ ensures low(steps[idx])
 ensures IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 func findTStarIdx(steps []uint64, t uint64) (idx int) {
 	if low(t) {
-		idx = 0
+		idx = 0 // concrete value doesn't really matter except that this value occurs in `steps`. `0` is, thus, an easy choice
 		assert IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 		// steps[0] == 0 (precondition), 0 is low in both executions
 		assert low(steps[idx])
@@ -583,8 +570,8 @@ type MonitoringMapEntry struct {
 // @ requires resp.Version != nil
 // @ requires *resp.Version >= 0
 // @ requires resp.Full_tree_head.RootHash != nil
-// @ requires PrefixTreesInv(prefixTrees, p)
-// @ requires RootHashesInv(prefixRootHash, p)
+// @ requires acc(PrefixTreesInv(prefixTrees), p)
+// @ requires acc(RootHashesInv(prefixRootHash), p)
 // @ requires size > 0 && size <= uint64(len(prefixTrees)) && size <= uint64(len(prefixRootHash))
 // @ requires len(rootHashContents) == len(prefixRootHash)
 // @ requires low(size)
@@ -618,10 +605,10 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	}
 
 	// Loop: process all frontiers except the last
-	//@ ghost var labelSeq seq[byte] = buildLowSeq(query.Label, p)
+	//@ ghost var labelSeq seq[byte] = getByteContentIsLow(query.Label, 0, p)
 
-	//@ invariant PrefixTreesInv(prefixTrees, p)
-	//@ invariant RootHashesInv(prefixRootHash, p)
+	//@ invariant acc(PrefixTreesInv(prefixTrees), p)
+	//@ invariant acc(RootHashesInv(prefixRootHash), p)
 	//@ invariant acc(frontiers)
 	//@ invariant acc(resp.Version, p)
 	//@ invariant acc(resp.Full_tree_head.RootHash, p)
@@ -645,20 +632,20 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 		frontier := frontiers[fIdx]
 		if !determined {
 			//@ assert frontier >= 0 && int(frontier) < len(prefixTrees)
-			//@ unfold PrefixTreesInv(prefixTrees, p)
-			//@ unfold RootHashesInv(prefixRootHash, p)
+			//@ unfold acc(PrefixTreesInv(prefixTrees), p)
+			//@ unfold acc(RootHashesInv(prefixRootHash), p)
 			Prefix_tree := prefixTrees[frontier]
 			if prefixTrees[frontier] == nil {
-				//@ fold PrefixTreesInv(prefixTrees, p)
-				//@ fold RootHashesInv(prefixRootHash, p)
+				//@ fold acc(PrefixTreesInv(prefixTrees), p)
+				//@ fold acc(RootHashesInv(prefixRootHash), p)
 				resultRes = false
 				resultErr = errors.New("prefix tree is nil")
 				determined = true
 			} else {
 				rootHash := prefixRootHash[frontier]
 				if frontier >= size {
-					//@ fold PrefixTreesInv(prefixTrees, p)
-					//@ fold RootHashesInv(prefixRootHash, p)
+					//@ fold acc(PrefixTreesInv(prefixTrees), p)
+					//@ fold acc(RootHashesInv(prefixRootHash), p)
 					resultRes = false
 					resultErr = errors.New("version out of bounds")
 					determined = true
@@ -668,8 +655,8 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 					steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
 
 					LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq, p@*/)
-					//@ fold PrefixTreesInv(prefixTrees, p)
-					//@ fold RootHashesInv(prefixRootHash, p)
+					//@ fold acc(PrefixTreesInv(prefixTrees), p)
+					//@ fold acc(RootHashesInv(prefixRootHash), p)
 					if cgErr != nil {
 						resultRes = false
 						resultErr = cgErr
@@ -688,21 +675,21 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 
 	// Process last frontier separately
 	if !determined {
-		//@ unfold PrefixTreesInv(prefixTrees, p)
-		//@ unfold RootHashesInv(prefixRootHash, p)
+		//@ unfold acc(PrefixTreesInv(prefixTrees), p)
+		//@ unfold acc(RootHashesInv(prefixRootHash), p)
 		frontier := frontiers[len(frontiers)-1]
 		Prefix_tree := prefixTrees[frontier]
 		if prefixTrees[frontier] == nil {
-			//@ fold PrefixTreesInv(prefixTrees, p)
-			//@ fold RootHashesInv(prefixRootHash, p)
+			//@ fold acc(PrefixTreesInv(prefixTrees), p)
+			//@ fold acc(RootHashesInv(prefixRootHash), p)
 			resultRes = false
 			resultErr = errors.New("prefix tree is nil")
 			determined = true
 		} else {
 			rootHash := prefixRootHash[frontier]
 			if frontier >= size {
-				//@ fold PrefixTreesInv(prefixTrees, p)
-				//@ fold RootHashesInv(prefixRootHash, p)
+				//@ fold acc(PrefixTreesInv(prefixTrees), p)
+				//@ fold acc(RootHashesInv(prefixRootHash), p)
 				resultRes = false
 				resultErr = errors.New("version out of bounds")
 				determined = true
@@ -712,8 +699,8 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
 
 				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq, p@*/)
-				//@ fold PrefixTreesInv(prefixTrees, p)
-				//@ fold RootHashesInv(prefixRootHash, p)
+				//@ fold acc(PrefixTreesInv(prefixTrees), p)
+				//@ fold acc(RootHashesInv(prefixRootHash), p)
 				if cgErr != nil {
 					resultRes = false
 					resultErr = cgErr
@@ -741,8 +728,8 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 		monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
 	}
 
-	//@ unfold PrefixTreesInv(prefixTrees, p)
-	//@ unfold RootHashesInv(prefixRootHash, p)
+	//@ unfold acc(PrefixTreesInv(prefixTrees), p)
+	//@ unfold acc(RootHashesInv(prefixRootHash), p)
 	return resultRes, resultErr
 }
 
@@ -752,9 +739,9 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 // @ ensures acc(resp.Inv(), p)
 // @ ensures resp.Version != nil ==> (unfolding acc(resp.Inv(), p) in *resp.Version >= 0)
 // @ ensures err == nil ==> len(trees) == n
-// @ ensures err == nil ==> PrefixTreesInv(trees, p)
+// @ ensures err == nil ==> acc(PrefixTreesInv(trees), p)
 // @ ensures err == nil ==> len(rootHashes) == n
-// @ ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> acc(&rootHashes[j], p) && acc(rootHashes[j], p)
+// @ ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> acc(&rootHashes[j]) && acc(rootHashes[j])
 // @ ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> forall k int :: {rootHashes[j][k]} 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ trusted
 func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []*prefixtree.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
