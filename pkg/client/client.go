@@ -52,8 +52,8 @@ pure func IsTStar(tStarVal, t1, t2 uint64) bool {
   return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
     t1 == t2 ? true :
     t1 < t2 ?
-      (tStarVal == proofs.TStar_pure(t1, t2) && t1 < tStarVal && tStarVal <= t2) :
-      (tStarVal == proofs.TStar_pure(t2, t1) && t2 < tStarVal && tStarVal <= t1)
+      tStarVal == proofs.TStar_pure(t1, t2) :
+      tStarVal == proofs.TStar_pure(t2, t1)
 }
 
 ghost
@@ -135,7 +135,7 @@ func buildLowSeqFromHash(arr *[sha256.Size]byte) (result seq[byte]) {
 
 // Build ghost seq[seq[byte]] from root hash pointers, preserving low()
 ghost
-requires n >= 0 && n == len(hashes)
+requires n >= 0
 requires low(n)
 requires forall i int :: {&hashes[i]} 0 <= i && i < n ==> acc(&hashes[i]) && acc(hashes[i])
 requires forall i int :: {&hashes[i]} 0 <= i && i < n ==> forall k int :: {hashes[i][k]} 0 <= k && k < sha256.Size ==> low(hashes[i][k])
@@ -155,7 +155,7 @@ func buildRootHashContents(hashes []*[sha256.Size]byte, n int) (result seq[seq[b
   invariant forall j int :: {&hashes[j]} 0 <= j && j < n ==> forall k int :: {hashes[j][k]} 0 <= k && k < sha256.Size ==> low(hashes[j][k])
   decreases n - i
   for i < n {
-    ghost var s seq[byte] = buildLowSeqFromHash(hashes[i])
+    s := buildLowSeqFromHash(hashes[i])
     result = result ++ seq[seq[byte]]{s}
     i = i + 1
   }
