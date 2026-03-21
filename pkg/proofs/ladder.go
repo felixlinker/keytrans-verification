@@ -811,7 +811,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires len(r) >= int(k) + 1
 // @ requires forall i uint64 :: forall j int :: 0 <= i && i < k && j == int(i) ==> r[j] == expJumpElement(i)
 // @ requires r[k] == expJumpElement(k)
-//@ requires forall l int :: 0<= l && l < len(r) ==> r[l] >= 0
+// @ requires forall l int :: 0<= l && l < len(r) ==> r[l] >= 0
 // The elements are on path of the binary search as soon as t2 and target are in the same bucket!
 // ============= Case 1: t2 > target =============
 // Either we have found TStar and the index shows that the element is TStar
@@ -902,7 +902,7 @@ func GetUInt64() (res uint64)
 // to extract the witness index.
 ghost
 decreases
-requires acc(r1)
+requires acc(r1, _)
 pure
 func TStar_wrapper(r1 []uint64, t1 uint64, t2 uint64) bool{
 	return exists idx int :: {r1[idx]} t1 < t2 && t1 >= 0 ==> 0 <= idx && idx < len(r1) && TStar_pure(t1, t2) == r1[idx] && t1 <  TStar_pure(t1,t2)  && TStar_pure(t1,t2) <= t2

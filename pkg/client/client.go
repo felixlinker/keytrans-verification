@@ -253,38 +253,37 @@ pred (s SearchResponse) Inv() {
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	determined := false
-	var resultErr error = nil
 
 	// Phase 1: UpdateView
 	updateErr := st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
 	if updateErr != nil {
-		resultErr = updateErr
+		err = updateErr
 		determined = true
 	}
 
 	// Phase 2: Validation checks (resp.Inv() still unfolded)
 	if !determined {
 		if resp.Version == nil {
-			resultErr = errors.New("no version provided")
+			err = errors.New("no version provided")
 			determined = true
 		}
 	}
 	if !determined {
 		if *resp.Version < 0 {
-			resultErr = errors.New("Version is negative")
+			err = errors.New("Version is negative")
 			determined = true
 		}
 	}
 	if !determined {
 		if len(resp.Search.Prefix_roots) != 0 {
-			resultErr = errors.New("prefix roots provided")
+			err = errors.New("prefix roots provided")
 			determined = true
 		}
 	}
 	if !determined {
 		ladderIndices := proofs.FullBinaryLadderSteps_wrapper(uint64(*resp.Version))
 		if len(resp.Binary_ladder) != len(ladderIndices) {
-			resultErr = errors.New("length of binary ladder does not match greatest version")
+			err = errors.New("length of binary ladder does not match greatest version")
 			determined = true
 		}
 	}
@@ -300,7 +299,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		var buildErr error
 		trees, rootHashes, buildErr = buildPrefixTrees(resp, n /*@, p @*/)
 		if buildErr != nil {
-			resultErr = buildErr
+			err = buildErr
 			determined = true
 		} else {
 			//@ rhContents = buildRootHashContents(rootHashes, n)
@@ -313,21 +312,18 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	if !determined {
 		//@ unfold acc(resp.Inv(), p)
 		//@ unfold acc(resp.Full_tree_head.Inv(), p)
+		//@ unfold acc(query.Inv(), p)
+		size := resp.Full_tree_head.Tree_head.Tree_size
+		monitoringMap := make([]MonitoringMapEntry, 0)
+		decision, err = VerifyLatestKey(trees, rootHashes, size, query, resp, monitoringMap, config /*@, rhContents, p @*/)
 
-		if !determined {
-			//@ unfold acc(query.Inv(), p)
-			size := resp.Full_tree_head.Tree_head.Tree_size
-			monitoringMap := make([]MonitoringMapEntry, 0)
-			decision, resultErr = VerifyLatestKey(trees, rootHashes, size, query, resp, monitoringMap, config /*@, rhContents, p @*/)
-
-			if !decision || resultErr != nil {
-				//@ fold acc(resp.Full_tree_head.Inv(), p)
-				//@ fold acc(resp.Inv(), p)
-				if resultErr == nil {
-					resultErr = errors.New("Query response does not contain latest version")
-				}
-				determined = true
+		if !decision || err != nil {
+			//@ fold acc(resp.Full_tree_head.Inv(), p)
+			//@ fold acc(resp.Inv(), p)
+			if err == nil {
+				err = errors.New("Query response does not contain latest version")
 			}
+			determined = true
 		}
 	}
 
@@ -341,7 +337,6 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		err = nil
 	} else {
 		res = nil
-		err = resultErr
 	}
 	return res, err
 }
@@ -372,10 +367,10 @@ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
 requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
 ensures acc(steps)
-ensures rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-ensures rel(t,0) < rel(t,1) ==> rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
-ensures rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-ensures rel(t,0) > rel(t,1) ==> rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
+ensures rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[idx1],1) == rel(steps[idx1],0) && rel(t,0) < rel(steps[idx1],1) && rel(steps[idx1],1) <= rel(t,1) && rel(t,0) < rel(steps[idx1],0) && rel(steps[idx1],0) <= rel(t,1)
+ensures rel(t,0) < rel(t,1) ==> rel(steps[idx1],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
+ensures rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[idx2],1) == rel(steps[idx2],0) && rel(t,1) < rel(steps[idx2],1) && rel(steps[idx2],1) <= rel(t,0) && rel(t,1) < rel(steps[idx2],0) && rel(steps[idx2],0) <= rel(t,0)
+ensures rel(t,0) > rel(t,1) ==> rel(steps[idx2],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
 ensures idx1 > 0
 ensures idx2 > 0
 ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
@@ -423,7 +418,6 @@ requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_w
 ensures acc(steps)
 ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
 ensures 0 <= idx && idx < len(steps)
-ensures low(idx < len(steps))
 ensures low(steps[idx])
 ensures IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 func findTStarIdx(steps []uint64, t uint64) (idx int) {
