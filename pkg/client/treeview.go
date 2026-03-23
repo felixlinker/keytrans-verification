@@ -21,36 +21,17 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 	(t.Right != nil ==> t.Right.Inv())
 }
 
-pred (t *ImplicitBinarySearchTree) InvLowBounded(bound uint64) {
-	acc(t) &&
-	t.Root < bound &&
-	low(t.Root) &&
-	low(t.Left != nil) &&
-	low(t.Right != nil) &&
-	(t.Left != nil ==> t.Left.InvLowBounded(bound)) &&
-	(t.Right != nil ==> t.Right.InvLowBounded(bound))
-}
-@*/
 
-// Lemma: widen the bound — if InvLowBounded(t, b1) and b1 <= b2, then InvLowBounded(t, b2)
-// Cannot be ghost: Gobra SIF plugin does not support ghost functions on predicates with low()
-// @ requires low(tree != nil)
-// @ requires b1 <= b2
-// @ requires low(tree != nil) && tree != nil ==> tree.InvLowBounded(b1)
-// @ ensures low(tree != nil) && tree != nil ==> tree.InvLowBounded(b2)
-func WidenBound(tree *ImplicitBinarySearchTree /*@, ghost b1 uint64, ghost b2 uint64 @*/) {
-	if tree != nil {
-		//@ unfold tree.InvLowBounded(b1)
-		WidenBound(tree.Left /*@, b1, b2 @*/)
-		WidenBound(tree.Right /*@, b1, b2 @*/)
-		//@ fold tree.InvLowBounded(b2)
-	}
-}
+//TODO
+decreases
+//requires acc(tree.Inv(), _)
+pure func (tree *ImplicitBinarySearchTree) IsLow() bool
+@*/
 
 // @ requires tree_size >= 0
 // @ requires low(tree_size)
 // @ ensures root >= 0
-// @ ensures tree_size >= 1 ==> root < tree_size
+// @ ensures tree_size >1 ==> root < tree_size
 // @ ensures low(root)
 func RootNode(tree_size uint64) (root uint64) {
 	var res uint64 = 0
@@ -69,19 +50,14 @@ func RootNode(tree_size uint64) (root uint64) {
 	return res
 }
 
-// @ requires low(tree != nil)
-// @ requires low(offset)
-// @ requires low(tree != nil) && tree != nil ==> tree.InvLowBounded(old_bound)
-// @ requires offset + old_bound <= new_bound
-// @ ensures low(tree != nil)
-// @ ensures low(tree != nil) && tree != nil ==> tree.InvLowBounded(new_bound)
-func (tree *ImplicitBinarySearchTree) OffSet(offset uint64 /*@, ghost old_bound uint64, ghost new_bound uint64 @*/) {
+// @ preserves tree!= nil ==> tree.Inv()
+func (tree *ImplicitBinarySearchTree) OffSet(offset uint64) {
 	if tree != nil {
-		//@ unfold tree.InvLowBounded(old_bound)
+		//@ unfold tree.Inv()
 		tree.Root += offset
-		tree.Left.OffSet(offset /*@, old_bound, new_bound @*/)
-		tree.Right.OffSet(offset /*@, old_bound, new_bound @*/)
-		//@ fold tree.InvLowBounded(new_bound)
+		tree.Left.OffSet(offset)
+		tree.Right.OffSet(offset)
+		//@ fold tree.Inv()
 	}
 	return
 }
@@ -155,30 +131,33 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 //		return
 //	}
 //
+// TODO: analyse if we need to have full permissions if we incooperate with low or can we use partial permission.
 // @ requires  noPerm < p
-// @ requires low(tree != nil)
-// @ requires low(tree != nil) && tree != nil ==> tree.InvLowBounded(bound)
-// @ ensures low(tree != nil)
-// @ ensures low(tree != nil) && tree != nil ==> tree.InvLowBounded(bound)
-// @ ensures  acc(path)
-// @ ensures  tree != nil ==> len(path) > 0
+// @ requires tree != nil ==> tree.Inv()
+// @ requires tree == nil ==> low(tree)
+// @ requires tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
+// @ ensures tree != nil ==> tree.Inv()
+// @ ensures tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
+// @ ensures   acc(path)
+// @ ensures   tree != nil ==> len(path) > 0
 // @ ensures forall j int :: j >= 0 && j < len(path) ==> path[j] >= 0 && path[j] < bound
 // @ ensures (low(len(path)) && forall i int :: 0<= i && i< len(path) ==>  low(path[i]))
+// @ trusted
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bound uint64 @*/ ) (path []uint64) {
 	if tree != nil {
-		//@ unfold tree.InvLowBounded(bound)
-		//@ ghost firstVal := tree.Root
+		//@ unfold tree.Inv()
 		path = []uint64{tree.Root}
+		//@ assert low(len(path))
+		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
+		//@ assert tree.Right == nil ==> low(tree.Right)
+		//@ assert tree.Right != nil ==> unfolding tree.Right.Inv() in low(tree.Right.Root)
 		subtreePath := tree.Right.FrontierNodes( /*@ p, bound @*/ )
-		path = append( /*@ perm(1/2), @*/ path, subtreePath...)
-		// Bridge assertions: reconnect element identity through append
-		//@ assert path[0] == firstVal
-		//@ assert firstVal < bound
-		//@ assert forall j int :: 0 <= j && j < len(subtreePath) ==> path[j+1] == subtreePath[j]
-		// Derive bounded property for all path elements
-		//@ assert forall j int :: 0 <= j && j < len(subtreePath) ==> path[j+1] < bound
-		//@ assert forall j int :: 0 <= j && j < len(path) ==> path[j] < bound
-		//@ fold tree.InvLowBounded(bound)
+		//@ assert low(len(subtreePath))
+		//@ assert forall j int :: j>= 0 && j < len(subtreePath) ==> low(subtreePath[j])
+		path = append( /*@ p, @*/ path, subtreePath...)
+		//@ assert low(len(path))
+		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
+		//@ fold tree.Inv()
 	}
 	return
 }
@@ -187,27 +166,26 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bou
 // @ requires low(tree_size)
 // @ ensures tree_size == 0 ==> tree == nil
 // @ ensures tree_size != 0 ==> tree != nil
-// @ ensures low(tree != nil)
-// @ ensures low(tree != nil) && tree != nil ==> tree.InvLowBounded(tree_size)
+// @ ensures tree != nil ==> tree.Inv()
+// @ ensures tree == nil ==> low(tree)
+// @ ensures tree != nil ==> unfolding tree.Inv() in low(tree.Root)
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	if tree_size == 0 {
 		tree = nil
 	} else if tree_size == 1 {
 		root := RootNode(tree_size)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
-		//@ fold tree.InvLowBounded(tree_size)
+		//@ fold tree.Inv()
 	} else if tree_size > 1 {
 		root := RootNode(tree_size)
 		left := MkImplicitBinarySearchTree(root)
 		right := MkImplicitBinarySearchTree(tree_size - root - 1)
 
-		// Widen left's bound from root to tree_size
-		WidenBound(left /*@, root, tree_size @*/)
 		if right != nil {
-			right.OffSet(root + 1 /*@, tree_size - root - 1, tree_size @*/)
+			right.OffSet(root + 1)
 		}
 		tree = &ImplicitBinarySearchTree{root, left, right}
-		//@ fold tree.InvLowBounded(tree_size)
+		//@ fold tree.Inv()
 	}
 	return
 }
