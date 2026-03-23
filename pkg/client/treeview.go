@@ -175,6 +175,10 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bou
 		//@ assert path[0] == firstVal
 		//@ assert firstVal < bound
 		//@ assert forall j int :: 0 <= j && j < len(subtreePath) ==> path[j+1] == subtreePath[j]
+		// Derive bounded property for all path elements
+		//@ assert firstVal >= 0
+		//@ assert forall j int :: 0 <= j && j < len(subtreePath) ==> path[j+1] >= 0 && path[j+1] < bound
+		//@ assert forall j int :: 0 <= j && j < len(path) ==> path[j] >= 0 && path[j] < bound
 		//@ fold tree.InvLowBounded(bound)
 	}
 	return
