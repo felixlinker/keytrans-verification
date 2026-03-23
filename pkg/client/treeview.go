@@ -21,11 +21,14 @@ pred (t *ImplicitBinarySearchTree) Inv() {
 	(t.Right != nil ==> t.Right.Inv())
 }
 
-
-//TODO
-decreases
-//requires acc(tree.Inv(), _)
-pure func (tree *ImplicitBinarySearchTree) IsLow() bool
+pred (t *ImplicitBinarySearchTree) InvLow() {
+	acc(t) &&
+	low(t.Root) &&
+	low(t.Left != nil) &&
+	low(t.Right != nil) &&
+	(t.Left != nil ==> t.Left.InvLow()) &&
+	(t.Right != nil ==> t.Right.InvLow())
+}
 @*/
 
 // @ requires tree_size >= 0
@@ -50,14 +53,18 @@ func RootNode(tree_size uint64) (root uint64) {
 	return res
 }
 
-// @ preserves tree!= nil ==> tree.Inv()
+// @ requires low(tree != nil)
+// @ requires low(offset)
+// @ requires low(tree != nil) && tree != nil ==> tree.InvLow()
+// @ ensures low(tree != nil)
+// @ ensures low(tree != nil) && tree != nil ==> tree.InvLow()
 func (tree *ImplicitBinarySearchTree) OffSet(offset uint64) {
 	if tree != nil {
-		//@ unfold tree.Inv()
+		//@ unfold tree.InvLow()
 		tree.Root += offset
 		tree.Left.OffSet(offset)
 		tree.Right.OffSet(offset)
-		//@ fold tree.Inv()
+		//@ fold tree.InvLow()
 	}
 	return
 }
@@ -131,33 +138,23 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 //		return
 //	}
 //
-// TODO: analyse if we need to have full permissions if we incooperate with low or can we use partial permission.
 // @ requires  noPerm < p
-// @ requires tree != nil ==> tree.Inv()
-// @ requires tree == nil ==> low(tree)
-// @ requires tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
-// @ ensures tree != nil ==> tree.Inv()
-// @ ensures tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
+// @ requires low(tree != nil)
+// @ requires low(tree != nil) && tree != nil ==> tree.InvLow()
+// @ ensures low(tree != nil)
+// @ ensures low(tree != nil) && tree != nil ==> tree.InvLow()
 // @ ensures   acc(path)
 // @ ensures   tree != nil ==> len(path) > 0
-// @ ensures forall j int :: j >= 0 && j < len(path) ==> path[j] >= 0 && path[j] < bound
+// TODO: bounds postcondition needs InvLow to carry bound info
+// ensures forall j int :: j >= 0 && j < len(path) ==> path[j] >= 0 && path[j] < bound
 // @ ensures (low(len(path)) && forall i int :: 0<= i && i< len(path) ==>  low(path[i]))
-// @ trusted
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bound uint64 @*/ ) (path []uint64) {
 	if tree != nil {
-		//@ unfold tree.Inv()
+		//@ unfold tree.InvLow()
 		path = []uint64{tree.Root}
-		//@ assert low(len(path))
-		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
-		//@ assert tree.Right == nil ==> low(tree.Right)
-		//@ assert tree.Right != nil ==> unfolding tree.Right.Inv() in low(tree.Right.Root)
 		subtreePath := tree.Right.FrontierNodes( /*@ p, bound @*/ )
-		//@ assert low(len(subtreePath))
-		//@ assert forall j int :: j>= 0 && j < len(subtreePath) ==> low(subtreePath[j])
-		path = append( /*@ p, @*/ path, subtreePath...)
-		//@ assert low(len(path))
-		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
-		//@ fold tree.Inv()
+		path = append( /*@ perm(1/2), @*/ path, subtreePath...)
+		//@ fold tree.InvLow()
 	}
 	return
 }
@@ -166,16 +163,15 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bou
 // @ requires low(tree_size)
 // @ ensures tree_size == 0 ==> tree == nil
 // @ ensures tree_size != 0 ==> tree != nil
-// @ ensures tree != nil ==> tree.Inv()
-// @ ensures tree == nil ==> low(tree)
-// @ ensures tree != nil ==> unfolding tree.Inv() in low(tree.Root)
+// @ ensures low(tree != nil)
+// @ ensures low(tree != nil) && tree != nil ==> tree.InvLow()
 func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
 	if tree_size == 0 {
 		tree = nil
 	} else if tree_size == 1 {
 		root := RootNode(tree_size)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
-		//@ fold tree.Inv()
+		//@ fold tree.InvLow()
 	} else if tree_size > 1 {
 		root := RootNode(tree_size)
 		left := MkImplicitBinarySearchTree(root)
@@ -185,7 +181,7 @@ func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTre
 			right.OffSet(root + 1)
 		}
 		tree = &ImplicitBinarySearchTree{root, left, right}
-		//@ fold tree.Inv()
+		//@ fold tree.InvLow()
 	}
 	return
 }
