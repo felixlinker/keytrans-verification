@@ -411,6 +411,7 @@ func findExpLevel(target uint64) (r uint64){
 ghost
 requires x_out > x_in
 decreases x_out - x_in
+opaque
 pure
 func isOnPath (v uint64, target uint64, x_in uint64, x_out uint64) bool{
 	return x_in +1 >= x_out ? false :
@@ -467,12 +468,14 @@ ensures isOnPath(v-1,target-1, x_in-1, x_out-1)
 decreases x_out - x_in
 pure
 func isOnPath_shift(v uint64, target uint64, x_in uint64, x_out uint64) uint64{
-	return x_in +1 >= x_out ? 0 :
-		let next := x_in + (x_out - x_in)/2 in
-			v == next ? 0 :
-			(next <= target ?
-				isOnPath_shift(v,target, next, x_out):
-				isOnPath_shift(v,target, x_in, next))
+	return let _ := reveal isOnPath(v,target, x_in, x_out) in
+		let _ := reveal isOnPath(v-1,target-1, x_in-1, x_out-1) in
+		x_in +1 >= x_out ? 0 :
+			let next := x_in + (x_out - x_in)/2 in
+				v == next ? 0 :
+				(next <= target ?
+					isOnPath_shift(v,target, next, x_out):
+					isOnPath_shift(v,target, x_in, next))
 }
 
 @*/
@@ -588,7 +591,7 @@ ensures isOnPath(v,target,x_in,next)
 decreases
 pure
 func isOnPath_subpath_left(v uint64, target uint64, x_in uint64,x_out uint64, next uint64) uint64{
-	return 0
+	return let _ := reveal isOnPath(v,target,x_in,x_out) in 0
 }
 
 // isOnPath_subpath_right: symmetric to _left. If next <= target (binary
@@ -605,7 +608,7 @@ ensures isOnPath(v,target,next,x_out)
 decreases
 pure
 func isOnPath_subpath_right(v uint64, target uint64, x_in uint64,x_out uint64, next uint64) uint64{
-	return 0
+	return let _ := reveal isOnPath(v,target,x_in,x_out) in 0
 }
 
 // midOnPath: the midpoint of any interval is trivially on its own path.
@@ -618,7 +621,8 @@ ensures let next := x_in + (x_out-x_in)/2 in isOnPath(next, target, x_in, x_out)
 decreases x_out - x_in
 pure
 func midOnPath(target uint64, x_in uint64, x_out uint64) uint64{
-	return 0
+	return let next := x_in + (x_out-x_in)/2 in
+		let _ := reveal isOnPath(next, target, x_in, x_out) in 0
 }
 
 // tStarRec_returns_mid: when the midpoint satisfies t1 < mid <= t2 (i.e.,
@@ -659,6 +663,7 @@ pure
 func tStarRec_isOnPath_target(t1 uint64, t2 uint64, target uint64, x_in uint64, x_out uint64) uint64{
 	return x_in + 1 >= x_out ? 0 :
 		let next := x_in + (x_out-x_in)/2 in
+		let _ := reveal isOnPath(tStarRec_pure(t1,t2,x_in,x_out), target, x_in, x_out) in
 		(next <= t1 ?
 			tStarRec_isOnPath_target(t1,t2,target,next, x_out):
 			(t2 < next ?
@@ -832,6 +837,14 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost k uint64, ghost currIdx int, ghost foundTStar bool@*/) (res []uint64 /*@, ghost resIdx int@*/) {
 	if x_in+1 >= x_out {
+		/*@
+		ghost if t2 > target {
+			revealTmp1 := reveal isOnPath(TStar_pure(target, t2), target, x_in, x_out)
+		}
+		ghost if t2 < target {
+			revealTmp2 := reveal isOnPath(TStar_pure(t2, target), target, x_in, x_out)
+		}
+		@*/
 		//@ assert r[0] == expJumpElement(0)
 		return r /*@, currIdx@*/
 	} else {

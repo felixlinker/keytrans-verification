@@ -24,7 +24,7 @@ pure func BytesEqual(r1, r2 []byte) bool {
 // PrefixTreesInv encapsulates per-element permissions for prefix tree slices.
 // Reduces quantifier count in the SIF product program.
 pred PrefixTreesInv(trees []*prefixtree.PrefixTree) {
-	forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(&trees[i]) && acc(trees[i].Inv()) && trees[i] != nil
+		forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(&trees[i]) && trees[i].Inv() && trees[i] != nil
 }
 
 // RootHashesInv encapsulates per-element permissions for root hash slices.
@@ -51,9 +51,7 @@ decreases
 pure func IsTStar(tStarVal, t1, t2 uint64) bool {
   return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
     t1 == t2 ? true :
-    t1 < t2 ?
-      tStarVal == proofs.TStar_pure(t1, t2) :
-      tStarVal == proofs.TStar_pure(t2, t1)
+        tStarVal == TStarBetween(t1, t2)
 }
 
 ghost
@@ -78,6 +76,7 @@ ghost
 requires acc(arr, _)
 requires 0 <= idx && idx <= len(arr)
 decreases len(arr) - idx
+opaque
 pure
 func getByteContent(arr []byte, idx int) (res seq[byte]) {
   return idx == len(arr) ? seq[byte]{} : seq[byte]{arr[idx]} ++ getByteContent(arr, idx + 1)
@@ -107,6 +106,8 @@ func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) 
     tail := getByteContentIsLow(data, idx + 1, p)
     result = seq[byte]{data[idx]} ++ tail
   }
+  // reveal after permissions are restored so the body is visible on the correct heap
+  revealedContent := reveal getByteContent(data, idx)
 }
 
 // Build low ghost seq from a *[sha256.Size]byte array
@@ -488,12 +489,15 @@ CheckGreatest verifies if t is the greatest version
 // @ ensures err == nil && res == 0 ==> low(t)
 func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte], ghost p perm@*/) (res int, err error) {
 	resultRes := 0
-	var resultErr error = nil
-	var determined bool = false //The flag is used due to hyperproperty feature of gobra.
-	//@ ghost var tStar uint64 = steps[tStarIdx]
+	var resultErr error
+	determined := false // this flag encodes early returns, which are not yet supported by Gobra's hypermode
+	//@ ghost tStar := steps[tStarIdx]
 
 	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
 	//@ incl_lemma := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
+
+	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
+	// as desired, this contradicts `IsTStar(tStar, rel(t, 0), rel(t, 1))` unless `low(t)` holds, which establishes the postcondition.
 
 	//@ invariant prefixTree != nil ==> acc(prefixTree.Inv(), p)
 	//@ invariant acc(RootHash, p)
@@ -521,29 +525,22 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 				if !incl {
 					if step <= t {
 						resultRes = -1
-						resultErr = nil
 						determined = true
 					}
-
 				} else {
-
 					if t < step {
 						resultRes = 1
-						resultErr = nil
 						determined = true
 					}
 				}
 				/*@
-				ghost if idx == tStarIdx{
+				ghost if idx == tStarIdx {
 					assert !determined ==> (non_incl_lemma || incl_lemma)
 				}
 				@*/
 			}
-
 		}
-
 	}
-
 	return resultRes, resultErr
 
 }
