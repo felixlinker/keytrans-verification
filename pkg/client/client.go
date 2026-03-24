@@ -48,6 +48,7 @@ pure func max(a, b uint64) uint64 {
 // AND min(t1,t2) < tStarVal <= max(t1,t2) if t1 != t2
 ghost
 decreases
+opaque
 pure func IsTStar(tStarVal, t1, t2 uint64) bool {
   return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
     t1 == t2 ? true :
@@ -112,16 +113,15 @@ func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) 
 
 // Build low ghost seq from a *[sha256.Size]byte array
 ghost
-requires acc(arr)
+requires acc(arr, 1/2)
 requires forall k int :: {arr[k]} 0 <= k && k < sha256.Size ==> low(arr[k])
-ensures acc(arr)
+ensures acc(arr, 1/2)
 ensures low(result)
-ensures forall k int :: {arr[k]} 0 <= k && k < sha256.Size ==> low(arr[k])
 decreases
 func buildLowSeqFromHash(arr *[sha256.Size]byte) (result seq[byte]) {
   i := 0
 
-  invariant acc(arr)
+  invariant acc(arr, 1/2)
   invariant 0 <= i && i <= sha256.Size
   invariant low(i)
   invariant low(result)
@@ -383,9 +383,15 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	assert proofs.TStar_wrapper(rel(steps,0), rel(t,1), rel(t,0))
 	assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,1),rel(t,0)), 1)
 
+	assert rel(t,0) < rel(t,1) ==> (exists idx int :: {rel(steps,0)[idx]} rel(t,0) >= 0 ==> 0 <= idx && idx < len(rel(steps,0)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps,0)[idx] && rel(t,0) < proofs.TStar_pure(rel(t,0), rel(t,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) <= rel(t,1))
+	assert rel(t,0) < rel(t,1) ==> (exists idx int :: {rel(steps[idx],1)} rel(t,0) >= 0 ==> 0 <= idx && idx < len(rel(steps,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps[idx],1) && rel(t,0) < proofs.TStar_pure(rel(t,0), rel(t,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) <= rel(t,1))
+	assert rel(t,0) > rel(t,1) ==> (exists idx int :: {rel(steps,0)[idx]} rel(t,1) >= 0 ==> 0 <= idx && idx < len(rel(steps,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,0)[idx] && rel(t,1) < proofs.TStar_pure(rel(t,1), rel(t,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) <= rel(t,0))
+	assert rel(t,0) > rel(t,1) ==> (exists idx int :: {rel(steps[idx],1)} rel(t,1) >= 0 ==> 0 <= idx && idx < len(rel(steps,1)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps[idx],1) && rel(t,1) < proofs.TStar_pure(rel(t,1), rel(t,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) <= rel(t,0))
+
 	//Remove existential quantifier to replace the statement, adding an assume with it
 	idx1 = GetInt()
 	idx2 = GetInt()
+
 
 	assume rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
 	assume rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
@@ -424,6 +430,8 @@ ensures IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 func findTStarIdx(steps []uint64, t uint64) (idx int) {
 	if low(t) {
 		idx = 0 // concrete value doesn't really matter except that this value occurs in `steps`. `0` is, thus, an easy choice
+		// reveal IsTStar to see that t1 == t2 (since low(t)) gives true
+		revealedLow := reveal IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 		assert IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 		// steps[0] == 0 (precondition), 0 is low in both executions
 		assert low(steps[idx])
@@ -436,6 +444,8 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 			// Both equal TStar_pure(rel(t,0), rel(t,1)), so low(steps[idx])
 			assert rel(steps[idx],1) == rel(steps[idx],0)
 			assert low(steps[idx])
+			// reveal IsTStar to establish steps[idx] == TStarBetween(rel(t,0), rel(t,1))
+			revealedUpper := reveal IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 		} else {
 			idx = idx2
 			assert low(idx < len(steps))
@@ -443,6 +453,8 @@ func findTStarIdx(steps []uint64, t uint64) (idx int) {
 			// Both equal TStar_pure(rel(t,1), rel(t,0)), so low(steps[idx])
 			assert rel(steps[idx2],0) == rel(steps[idx2],1)
 			assert low(steps[idx])
+			// reveal IsTStar to establish steps[idx] == TStarBetween(rel(t,0), rel(t,1))
+			revealedLower := reveal IsTStar(steps[idx], rel(t, 0), rel(t, 1))
 		}
 	}
 }
@@ -492,6 +504,7 @@ func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []by
 	var resultErr error
 	determined := false // this flag encodes early returns, which are not yet supported by Gobra's hypermode
 	//@ ghost tStar := steps[tStarIdx]
+	//@ ghost revealedIsTStar := reveal IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
 
 	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
 	//@ incl_lemma := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
