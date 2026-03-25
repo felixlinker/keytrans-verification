@@ -23,6 +23,12 @@ package proofs
 //   - findExpLevel(t) = floor(log2(t+1)) + 1: the exponential level for t.
 //   - isOnPath(v, target, x_in, x_out): v appears on the binary search path
 //     from x_in to x_out when searching toward target.
+//   - IsTStar(tStarVal, t1, t2): (defined in client.go) returns true if t1 == t2,
+//     or tStarVal == TStarBetween(t1, t2) otherwise. Used in hyper-mode to carry
+//     the TStar witness through the verification chain.
+//   - TStarBetween(t1, t2): (defined in client.go) requires min(t1,t2) >= 0 and
+//     max(t1,t2) > 0. Returns TStar_pure(min, max) and ensures
+//     min(t1,t2) < res <= max(t1,t2) when t1 != t2.
 //
 // Proof structure (two cases for t2 > target; symmetric for t2 < target):
 //

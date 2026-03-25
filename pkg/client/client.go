@@ -134,7 +134,6 @@ func buildLowSeqFromHash(arr *[sha256.Size]byte) (result seq[byte]) {
 }
 
 
-// Build ghost seq[seq[byte]] from root hash pointers, preserving low()
 ghost
 requires n >= 0
 requires low(n)
@@ -342,21 +341,10 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	return res, err
 }
 
-//Lemma : Merkle Binding
-// This Merkle binding theorem is needed for showing that the commitment is in the tree state
-// It is also one of the important lemmas we need to show that the commitment we get is consistent
-// We use the following paper to derive the following lemma
-// Paper: https://arxiv.org/pdf/2501.10802
-
-//Why >0 instead of >=0? Because the version 0 is always included and we assume that the version we are selecting is >=0
-// If this constraint is violated, it's very easy to be captured
-
 /*@
 ghost
 decreases
-ensures res > 0
 func GetInt() (res int)
-
 @*/
 
 /*@
@@ -391,11 +379,10 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 	//Remove existential quantifier to replace the statement, adding an assume with it
 	idx1 = GetInt()
 	idx2 = GetInt()
-
+	assume idx1 > 0 && idx2 > 0
 
 	assume rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
 	assume rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
-
 
 	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1)
 	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0)
@@ -410,8 +397,6 @@ func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
 
 	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
 	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-
-
 }
 
 ghost
