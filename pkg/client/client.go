@@ -457,14 +457,34 @@ func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tSt
 	return
 }
 
-/*
-CheckGreatest verifies if t is the greatest version
- Returns:
+// CheckGreatest wraps FullBinaryLadderSteps_with_tstar and CheckCommitment
+// into a single function to create a verification boundary. The SMT solver verifies
+// this function once; at the call site in VerifyLatestKey, it only reasons about the
+// postcondition, reducing the proof obligation in the main loop.
+// @ requires p > noPerm
+// @ requires label != nil
+// @ requires acc(label, p)
+// @ requires acc(RootHash, p)
+// @ requires prefixTree != nil ==> acc(prefixTree.Inv(), p)
+// @ requires low(labelSeq)
+// @ requires low(RootHashSeq)
+// @ requires t >= 0
+// @ ensures prefixTree != nil ==> acc(prefixTree.Inv(), p)
+// @ ensures acc(label, p)
+// @ ensures acc(RootHash, p)
+// @ ensures err == nil && res == 0 ==> low(t)
+func CheckGreatest(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte], ghost p perm@*/) (res int, err error) {
+	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(t)
+	return CheckCommitment(prefixTree, steps, label, t, RootHash, size /*@, tStarIdx, labelSeq, RootHashSeq, p@*/)
+}
 
-	-1: Greatest version < t (found hole at or below t), the greatest version does not exist so far
-	 0: t is the greatest version
-	 1: Greatest version > t (found commitment above t), violates t being the greatest version
-*/
+// CheckCommitment iterates over the binary ladder steps and queries the prefix
+// tree at each step to check consistency with t being the greatest version.
+// Returns:
+//   -1: a version at or below t is absent (gap detected)
+//    0: all steps are consistent (t is the greatest version)
+//   +1: a version above t is present (greater version exists)
+//
 
 // @ requires p > noPerm
 // @ requires label != nil
@@ -479,12 +499,11 @@ CheckGreatest verifies if t is the greatest version
 // @ requires 0 <= tStarIdx && tStarIdx < len(steps)
 // @ requires low(steps[tStarIdx])
 // @ requires IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
-// Correct postcondition
 // @ ensures prefixTree != nil ==> acc(prefixTree.Inv(), p)
 // @ ensures acc(label, p)
 // @ ensures acc(RootHash, p)
 // @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte], ghost p perm@*/) (res int, err error) {
+func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte], ghost p perm@*/) (res int, err error) {
 	resultRes := 0
 	var resultErr error
 	determined := false // this flag encodes early returns, which are not yet supported by Gobra's hypermode
@@ -579,11 +598,6 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	resultRes := true
 	var resultErr error = nil
 	frontiers := search_tree.FrontierNodes( /*@p, size@*/ )
-	//@ assert len(frontiers) > 0
-	//@ assert low(len(frontiers)) && forall j int :: {frontiers[j]} j>= 0 && j < len(frontiers) ==> low(frontiers[j])
-	//@ assert forall i int :: {frontiers[i]} i >= 0 && i < len(frontiers) ==> frontiers[i] >= 0 && frontiers[i] < size
-	//@ assert size <= uint64(len(prefixTrees))
-	//@ assert forall i int :: {frontiers[i]} i >= 0 && i < len(frontiers) ==> frontiers[i]>=0 && frontiers[i] < uint64(len(prefixTrees))
 	terminalLogEntry := -1
 	determined := false
 
@@ -641,9 +655,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				}
 				if !determined {
 					//@ ghost var rootHashSeq seq[byte] = rootHashContents[int(frontier)]
-					steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
-
-					LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq, p@*/)
+					LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size /*@, labelSeq, rootHashSeq, p@*/)
 					//@ fold acc(PrefixTreesInv(prefixTrees), p)
 					//@ fold acc(RootHashesInv(prefixRootHash), p)
 					if cgErr != nil {
@@ -685,9 +697,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 			}
 			if !determined {
 				//@ ghost var rootHashSeq seq[byte] = rootHashContents[int(frontier)]
-				steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(tVal)
-
-				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, steps, query.Label, tVal, rootHash[:], size /*@, tStarIdx, labelSeq, rootHashSeq, p@*/)
+				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size /*@, labelSeq, rootHashSeq, p@*/)
 				//@ fold acc(PrefixTreesInv(prefixTrees), p)
 				//@ fold acc(RootHashesInv(prefixRootHash), p)
 				if cgErr != nil {
