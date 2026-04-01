@@ -8,6 +8,24 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
 
+// Package client implements the client-side verification logic for key
+// transparency. It provides functions to verify that a transparency log
+// correctly reports the latest version of a user's key, using binary ladder
+// proofs and prefix tree lookups.
+//
+// The core verification functions are:
+//   - VerifyLatest: verifies a search response and checks that the returned
+//     version is the latest, combining update verification with a greatest
+//     version check.
+//   - VerifyLatestKey: verifies a claimed greatest version against all frontier
+//     nodes of the implicit binary search tree, ensuring no greater version
+//     exists in the log.
+//   - CheckGreatest: checks a single prefix tree against the binary ladder
+//     steps to confirm consistency with the claimed greatest version.
+//
+// All exported verification functions carry Gobra specifications for formal
+// verification of hyperproperties (information flow) in extended hyper mode.
+
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 /*@
