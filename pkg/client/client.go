@@ -510,8 +510,8 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 	//@ ghost tStar := steps[tStarIdx]
 	//@ ghost revealedIsTStar := reveal IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
 
-	//@ non_incl_lemma := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
-	//@ incl_lemma := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
+	//@ non_incl_expected := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
+	//@ incl_expected := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
 
 	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
 	// as desired, this contradicts `IsTStar(tStar, rel(t, 0), rel(t, 1))` unless `low(t)` holds, which establishes the postcondition.
@@ -526,7 +526,7 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 	//@ invariant IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
 	//@ invariant determined ==> resultRes != 0
 	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
-	//@ invariant tStarIdx < idx && !determined ==> non_incl_lemma || incl_lemma
+	//@ invariant tStarIdx < idx && !determined ==> non_incl_expected || incl_expected
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
@@ -552,7 +552,7 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 				}
 				/*@
 				ghost if idx == tStarIdx {
-					assert !determined ==> (non_incl_lemma || incl_lemma)
+					assert !determined ==> (non_incl_expected || incl_expected)
 				}
 				@*/
 			}
@@ -588,9 +588,9 @@ type MonitoringMapEntry struct {
 // @ ensures acc(query.Label, p)
 // @ ensures acc(resp.Version, p)
 // @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
-// @ ensures err == nil && res ==> low(*resp.Version)
 // @ ensures acc(prefixTrees, p)
 // @ ensures acc(prefixRootHash, p)
+// @ ensures err == nil && res ==> low(*resp.Version)
 func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
