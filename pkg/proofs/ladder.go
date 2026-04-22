@@ -257,6 +257,7 @@ func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 // @ ensures acc(r)
 // @ ensures 0 < len(r) && 0 <= idx && idx < len(r)
 // @ ensures target < t2 ==> r[idx] == tStar_pure(target, t2)
+// @ ensures t2 < target ==> r[idx] == tStar_pure(t2, target)
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -305,12 +306,23 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	x_out := i
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 
-	// @ assert let apply_mon := Log2FloorMonotonic(target, i) in Log2Floor_pure(target) < k + 1
+	// @ assert let _ := Log2FloorMonotonic(target, i) in Log2Floor_pure(target) < k + 1
 	// @ assert k + 1 <= x_out
-	// @ assert let apply_mon := Log2FloorMonotonic(k + 1, x_out) in k <= Log2Floor_pure(x_out)
-	// @ ghost target_idx := len(r) - 1
+	// @ assert let _ := Log2FloorMonotonic(k + 1, x_out) in k <= Log2Floor_pure(x_out)
 
-	res /*@, search_idx @*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2, target_idx, x_out @*/)
+	// Initialize the variables so that the recursive invariant on
+	// BinarySearchStep is established right-away when we already found t*.
+
+	// @ ghost target_idx := jump_idx != 0 ? jump_idx        : len(r) - 1
+	// @ ghost acc_x_in   := jump_idx != 0 ? r[jump_idx] / 2 : x_in
+	// @ ghost acc_x_out  := jump_idx != 0 ? r[jump_idx]     : x_out
+	// @ found            := jump_idx != 0 || x_out <= t2
+
+	res /*@, search_idx @*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2, target_idx, acc_x_in, acc_x_out, found @*/)
+	// In the case t2 < target && jump_idx == 0, we must hint to gobra with
+	// assertion below that acc_x_in is indeed the argument it expects for the
+	// tStar_pure(t2, target) call in the function's post-condition.
+	// @ assert t2 < target && jump_idx == 0 ==> let _ := Log2FloorMonotonic(x_in, t2) in x_in == IntPow2(Log2Floor_pure(t2))
 
 	return res /*@, search_idx @*/
 }
@@ -333,15 +345,24 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /
 // @ requires 0 < target && 0 < t2 && target != t2
 // @ requires 0 < x_in && x_in <= target && target < x_out
 // @ requires 0 < acc_idx && acc_idx < len(r)
-// @ requires x_out <= t2 ? x_out <= acc_x_out && acc_x_out <= t2 : acc_x_out == x_out
-// @ requires acc_x_out <= t2 ==> r[acc_idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
 // @ ensures acc(res) && 0 <= idx && idx < len(res)
-// @ ensures target < t2 ==> res[idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
+
+// @ requires !found ==> x_in == acc_x_in && x_out == acc_x_out
+// @ requires !found && target < t2 ==> t2 < x_out
+// @ requires !found && t2 < target ==> x_in <= t2
+
+// @ requires target < t2 ==> acc_x_in <= target && target < acc_x_out
+// @ requires found && target < t2 ==> r[acc_idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
+// @ ensures  target < t2 ==> res[idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
+
+// @ requires t2 < target ==> acc_x_in <= t2 && t2 < acc_x_out
+// @ requires found && t2 < target ==> r[acc_idx] == tStarRec_pure(t2, target, acc_x_in, acc_x_out)
+// @ ensures  t2 < target ==> res[idx] == tStarRec_pure(t2, target, acc_x_in, acc_x_out)
+
 // @ decreases x_out - x_in
-func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost acc_idx int, ghost acc_x_out uint64 @*/) (res []uint64 /*@, ghost idx int @*/) {
-	// @ rec_idx := acc_idx
+func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost acc_idx int, ghost acc_x_in uint64, ghost acc_x_out uint64, ghost found bool @*/) (res []uint64 /*@, ghost idx int @*/) {
 	if x_in+1 >= x_out {
-		return r /*@, rec_idx @*/
+		return r /*@, acc_idx @*/
 	}
 
 	next := x_in + (x_out-x_in)/2
@@ -350,17 +371,33 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 	rec_x_out := x_out
 	if next <= target {
 		rec_x_in = next
+		/*@
+		ghost if t2 < rec_x_in && !found {
+			acc_idx = len(r) - 1
+			found = true
+			// The recursive call in this case will mirror the binary ladder
+			// construction for t2, therefore, "recurse" on rec_x_in as the next
+			// x_out.
+			assert r[acc_idx] == tStarRec_pure(t2, target, x_in, rec_x_in)
+			acc_x_out = rec_x_in
+		}
+		@*/
 	} else {
 		rec_x_out = next
 		/*@
-		ghost if rec_x_out <= t2 && acc_x_out > t2 {
-			rec_idx = len(r) - 1
+		ghost if rec_x_out <= t2 && !found {
+			acc_idx = len(r) - 1
+			found = true
+			assert r[acc_idx] == tStarRec_pure(target, t2, acc_x_in, rec_x_out)
+			assert r[acc_idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
+			acc_x_out = rec_x_out
 		}
 		@*/
 	}
 
-	// @ rec_acc_x_out := acc_x_out <= t2 ? acc_x_out : rec_x_out
-	return BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, rec_idx, rec_acc_x_out @*/)
+	// @ rec_acc_x_in :=  found ? acc_x_in  : rec_x_in
+	// @ rec_acc_x_out := found ? acc_x_out : rec_x_out
+	return BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, acc_idx, rec_acc_x_in, rec_acc_x_out, found @*/)
 }
 
 /*@
