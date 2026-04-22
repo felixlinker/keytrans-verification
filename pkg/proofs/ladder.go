@@ -287,17 +287,25 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	return res /*@, search_idx @*/
 }
 
-// @ requires 0 <= target && target < t2
+// @ requires 0 <= target && 0 <= t2 && target != t2
 // @ ensures acc(r) && 0 < len(r)
 // @ ensures 0 <= idx && idx < len(r)
-// ensures r[idx] == TStar_pure(target, t2)
+// @ ensures target < t2 ==> r[idx] == TStar_pure(target, t2)
+// @ ensures t2 < target ==> r[idx] == TStar_pure(t2, target)
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
 	steps /*@, r_idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
+	// @ ghost tStarPlusOne := steps[r_idx]
+	// @ assert target < t2 ==> steps[r_idx] == tStar_pure(target + 1, t2 + 1)
+	// @ assert t2 < target ==> steps[r_idx] == tStar_pure(t2 + 1, target + 1)
+
 	// @ invariant acc(steps)
-	// @ invariant 0 <= i && i < len(steps)
-	for i := range steps {
+	// @ invariant 0 <= i && i <= len(steps)
+	// @ invariant i <= r_idx ==> steps[r_idx] == tStarPlusOne
+	// @ invariant r_idx < i ==> steps[r_idx] == tStarPlusOne - 1
+	for i := 0; i < len(steps); i++ {
 		steps[i] = steps[i] - 1
 	}
+
 	return steps /*@, r_idx @*/
 }
 
