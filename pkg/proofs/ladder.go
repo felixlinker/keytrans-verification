@@ -261,16 +261,37 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	r = make([]uint64, 0)
 	var i uint64 = 1
 
+	/*@
+	ghost if t2 < target {
+		assert let _ := Log2FloorMonotonic(t2, target) in Log2Floor_pure(t2) <= Log2Floor_pure(target)
+	}
+	@*/
+
 	// Denotes the length of the array r.
 	// @ ghost var k uint64 = 0
+	// @ ghost var jump_idx int = 0
 	// @ invariant acc(r)
 	// @ invariant len(r) == int(k)
 	// @ invariant 0 <= k && k <= target
 	// @ invariant i == IntPow2(k) && k == Log2Floor_pure(i)
-	// @ invariant k > 1 ==> let apply_mon := Log2FloorMonotonic(k - 1, target) in k - 1 <= Log2Floor_pure(target)
-	//@ invariant len(r) > 0 ==> r[k-1] == i / 2
+	// @ invariant k > 1 ==> k - 1 <= Log2Floor_pure(target)
+	// @ invariant len(r) > 0 ==> r[k-1] == i / 2
+	// @ invariant 0 <= jump_idx
+	// @ invariant 0 == jump_idx ==> i / 2 <= t2
+	// @ invariant jump_idx != 0 ==> t2 < target && jump_idx < len(r) && r[jump_idx] == tStar_pure(t2, target)
 	for i-1 < target {
 		r = append( /*@ perm(1/2), @*/ r, i)
+
+		/*@
+		assert i == IntPow2(k)
+		ghost if jump_idx == 0 && t2 < i {
+			assert let _ := Log2FloorMonotonic(i / 2, t2) in Log2Floor_pure(i / 2) <= Log2Floor_pure(t2)
+			assert let _ := Log2FloorMonotonic(t2, i) in Log2Floor_pure(t2) <= Log2Floor_pure(i)
+			assert i == tStar_pure(t2, target)
+			jump_idx = len(r) - 1
+		}
+		@*/
+
 		i = i * 2
 		// @ k = k+1
 	}
