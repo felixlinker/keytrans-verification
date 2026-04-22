@@ -253,10 +253,10 @@ func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	}
 }
 
-// @ requires 0 < target && target < t2
+// @ requires 0 < target && 0 < t2 && target != t2
 // @ ensures acc(r)
 // @ ensures 0 < len(r) && 0 <= idx && idx < len(r)
-// @ ensures r[idx] == tStar_pure(target, t2)
+// @ ensures target < t2 ==> r[idx] == tStar_pure(target, t2)
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -330,13 +330,13 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /
 }
 
 // @ requires 0 < len(r) && acc(r)
-// @ requires 0 < target && target < t2
+// @ requires 0 < target && 0 < t2 && target != t2
 // @ requires 0 < x_in && x_in <= target && target < x_out
 // @ requires 0 < acc_idx && acc_idx < len(r)
 // @ requires x_out <= t2 ? x_out <= acc_x_out && acc_x_out <= t2 : acc_x_out == x_out
 // @ requires acc_x_out <= t2 ==> r[acc_idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
 // @ ensures acc(res) && 0 <= idx && idx < len(res)
-// @ ensures res[idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
+// @ ensures target < t2 ==> res[idx] == tStarRec_pure(target, t2, x_in, acc_x_out)
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost acc_idx int, ghost acc_x_out uint64 @*/) (res []uint64 /*@, ghost idx int @*/) {
 	// @ rec_idx := acc_idx
