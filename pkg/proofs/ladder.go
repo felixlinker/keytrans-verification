@@ -160,7 +160,7 @@ ghost
 requires t1 > 0
 requires t2 > t1
 ensures r >= 1
-ensures t1 < r && r<=t2
+ensures t1 < r && r <= t2
 decreases
 pure
 func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
@@ -227,9 +227,9 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1) - 1
 }
 
-// @ requires t1>0
+// @ requires t1 > 0
 // @ requires t2 > t1
-// @ ensures t_star == tStar_pure(t1,t2)
+// @ ensures t_star == tStar_pure(t1, t2)
 func tStar(t1 uint64, t2 uint64) (t_star uint64) {
 	i_low := Log2Floor(t1)
 	return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
