@@ -56,34 +56,6 @@ func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 		Log2FloorMonotonic(a/2,b/2)))
 }
 
-//Lemma: When there is no gap, i.e. the log2Floor are equal, establish equality (triangle inequality)
-
-ghost
-requires target >= 0
-requires t2 > target
-requires Log2Floor_pure(t2 + 1) <=  Log2Floor_pure(target + 1)
-ensures Log2Floor_pure(t2 + 1) == Log2Floor_pure(target + 1)
-decreases
-pure
-func Log2FloorEqWhenNotGap_Upper(target uint64, t2 uint64) uint64{
-	return Log2FloorMonotonic(target + 1, t2 + 1)
-}
-
-//Lemma: When there is no gap, i.e. the log2Floor are equal, establish equality (triangle inequality)
-ghost
-requires target > 0
-requires t2 >= 0
-requires t2 < target
-requires Log2Floor_pure(t2 + 1) >=  Log2Floor_pure(target + 1)
-ensures Log2Floor_pure(t2 + 1) == Log2Floor_pure(target + 1)
-decreases
-pure
-func Log2FloorEqWhenNotGap_Lower(target uint64, t2 uint64) uint64{
-	return Log2FloorMonotonic(t2 + 1, target + 1)
-}
-
-
-
 @*/
 // ==================================================================================
 // =============================IntPow2 Lemmas ======================================
@@ -122,18 +94,6 @@ decreases b - a
 pure
 func IntPow2Monotonic(a uint64, b uint64) uint64 {
 	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2Positive(b - 1)
-}
-
-// Lemma: Used to convince Gobra that the i_low < i_high ==> IntPow2(i_low +1) <= IntPow2(i_high)
-ghost
-requires i_low >= 0
-requires i_high >= 0
-requires i_high > i_low
-ensures IntPow2(i_low +1) <= IntPow2(i_high)
-decreases
-pure
-func IntPow2GapLemma(i_low uint64, i_high uint64) uint64{
-	return IntPow2Monotonic(i_low+1, i_high)
 }
 
 @*/
