@@ -28,16 +28,17 @@ type CommitmentValue struct {
 }
 
 type BinaryLadderStep struct {
-	Proof      [sha256.Size]byte
-	Commitment [sha256.Size]byte
+	Proof      []byte             // opaque proof[VRF.Np] — variable length per VRF scheme
+	Commitment *[sha256.Size]byte // optional<HashValue> — nil for non-existing/target versions
 }
 
 type InclusionProof struct {
+	Elements []NodeValue // HashValue elements — log-tree inclusion/consistency batch proof
 }
 
 /*@
 pred (i InclusionProof) Inv() {
-	true
+	acc(i.Elements)
 }
 @*/
 
@@ -85,13 +86,15 @@ type CombinedTreeProof struct {
 	Timestamps    []uint64
 	Prefix_proofs []PrefixProof
 	Prefix_roots  []NodeValue
+	Inclusion     InclusionProof
 }
 
 /*@
 pred (c CombinedTreeProof) Inv() {
 	acc(c.Timestamps) &&
 	acc(c.Prefix_proofs) &&
-	acc(c.Prefix_roots)
+	acc(c.Prefix_roots) &&
+	c.Inclusion.Inv()
 }
 @*/
 
@@ -100,7 +103,7 @@ type CompleteBinaryLadderStep struct {
 	Result PrefixSearchResult
 }
 
-//@ trusted
+// @ trusted
 func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
 	completeSteps = make([]CompleteBinaryLadderStep, 0, len(results))
 	if len(steps) < len(results) {
@@ -113,9 +116,9 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 
 	for i, step := range sortedSteps {
 		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
-			Step:   PrefixLeaf{
+			Step: PrefixLeaf{
 				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
-				Commitment: step.Commitment,
+				Commitment: *step.Commitment,
 			},
 			Result: results[i],
 		})
@@ -124,8 +127,8 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 	return completeSteps, nil
 }
 
-//@ trusted
-//@ preserves acc(sortedSteps)
+// @ trusted
+// @ preserves acc(sortedSteps)
 func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
 	slices.SortFunc(sortedSteps, func(a, b BinaryLadderStep) int {
 		hashA := crypto.VRF_proof_to_hash(a.Proof)
