@@ -213,6 +213,8 @@ func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	}
 }
 
+// Construct a binary ladder, but on the interval [1, ...] so that reasoning
+// about logarithms and powers of two becomes simpler.
 // @ requires 0 < target && 0 < t2 && target != t2
 // @ ensures acc(r)
 // @ ensures 0 < len(r) && 0 < idx && idx < len(r)
@@ -287,6 +289,11 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	return res /*@, search_idx @*/
 }
 
+// Construct the binary ladder for a target value `target`. `t2` is a ghost
+// variable which a different value that the server might try prove to be the
+// greatest. The returned array `r` is the binary ladder, and `r[idx]` stores
+// the first element of the binary ladder for which clients verifying a ladder
+// for target or t2 would expect different results.
 // @ requires 0 <= target && 0 <= t2 && target != t2
 // @ ensures acc(r) && 0 < len(r)
 // @ ensures 0 <= idx && idx < len(r)
@@ -314,19 +321,25 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /
 // @ requires 0 < x_in && x_in <= target && target < x_out
 // @ requires 0 < acc_idx && acc_idx < len(r)
 // @ ensures acc(res) && 0 < idx && idx < len(res)
-
+//
+// Invariants on acc_x_in/out. Both arguments will have the same value as when
+// calling tStarRec_pure such that it returns immediately. These arguments allow
+// us to continue recursively constructing the binary ladder while memorizing
+// that the value stored at acc_idx is tStar.
 // @ requires !found ==> x_in == acc_x_in && x_out == acc_x_out
 // @ requires !found && target < t2 ==> t2 < x_out
 // @ requires !found && t2 < target ==> x_in <= t2
-
+//
+// Case 1: target < t2
 // @ requires target < t2 ==> acc_x_in <= target && target < acc_x_out
 // @ requires found && target < t2 ==> r[acc_idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
 // @ ensures  target < t2 ==> res[idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
-
+//
+// Case 2: t2 < target
 // @ requires t2 < target ==> acc_x_in <= t2 && t2 < acc_x_out
 // @ requires found && t2 < target ==> r[acc_idx] == tStarRec_pure(t2, target, acc_x_in, acc_x_out)
 // @ ensures  t2 < target ==> res[idx] == tStarRec_pure(t2, target, acc_x_in, acc_x_out)
-
+//
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost acc_idx int, ghost acc_x_in uint64, ghost acc_x_out uint64, ghost found bool @*/) (res []uint64 /*@, ghost idx int @*/) {
 	if x_in+1 >= x_out {
