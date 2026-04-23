@@ -2,36 +2,36 @@ package trees
 
 import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
 // @ requires 0 < size
-// @ requires acc(accum)
-// @ requires forall i int :: 0 <= i && i < len(accum) ==> 0 < accum[i]
 // @ ensures acc(r)
-// @ ensures len(accum) < len(r)
 // @ ensures forall i int :: 0 <= i && i < len(r) ==> 0 < r[i]
 // @ ensures 0 < len(r) && r[len(r) - 1] == size
-func frontier(size uint64, accum []uint64) (r []uint64) {
-	i_root := proofs.PowOf2(proofs.Log2Floor(size))
-	// @ assert 0 < i_root
-	accum = append( /*@ perm(1/2), @*/ accum, i_root)
+// @ ensures forall i int :: 0 <= i && i < len(r) ==> r[i] <= size
+func frontier(size uint64) (r []uint64) {
+	i_root := utils.PowOf2(utils.Log2Floor(size))
+	// @ assert 0 < i_root && i_root <= size
+	res := []uint64{i_root}
 
 	if i_root == size {
-		return accum
+		return res
 	}
 
-	i := len(accum)
-	accum = frontier(size-i_root, accum)
-	// @ invariant acc(accum)
-	// @ invariant 0 <= i && i <= len(accum)
-	// @ invariant i < len(accum)  ==> accum[len(accum) - 1] == size - i_root
-	// @ invariant i == len(accum) ==> accum[len(accum) - 1] == size
-	// @ invariant forall j int :: 0 <= j && j < len(accum) ==> 0 < accum[j]
-	for ; i < len(accum); i++ {
-		accum[i] = accum[i] + i_root
+	rec := frontier(size - i_root)
+	// @ invariant acc(rec)
+	// @ invariant 0 <= i && i <= len(rec)
+	// @ invariant i < len(rec)  ==> rec[len(rec) - 1] == size - i_root
+	// @ invariant i == len(rec) ==> rec[len(rec) - 1] == size
+	// @ invariant forall j int :: 0 <= j && j < len(rec) ==> 0 < rec[j]
+	// @ invariant forall j int :: i <= j && j < len(rec) ==> rec[j] <= size - i_root
+	// @ invariant forall j int :: 0 <= j && j < i ==> rec[j] <= size
+	for i := 0; i < len(rec); i++ {
+		rec[i] = rec[i] + i_root
 	}
 
-	return accum
+	return append( /*@ perm(1/2), @*/ res, rec...)
 }
 
 // @ requires 0 < size
@@ -39,16 +39,7 @@ func frontier(size uint64, accum []uint64) (r []uint64) {
 // @ ensures 0 < len(r)
 // @ ensures forall i int :: 0 <= i && i < len(r) ==> 0 <= r[i]
 // @ ensures r[len(r) - 1] == size - 1
+// @ ensures forall i int :: 0 <= i && i < len(r) ==> r[i] < size
 func Frontier(size uint64) (r []uint64) {
-	res := frontier(size, []uint64{})
-	// @ invariant acc(res)
-	// @ invariant 0 <= i && i <= len(res)
-	// @ invariant forall j int :: i <= j && j < len(res) ==> 0 <  res[j]
-	// @ invariant forall j int :: 0 <= j && j < i        ==> 0 <= res[j]
-	// @ invariant i < len(res)  ==> res[len(res) - 1] == size
-	// @ invariant i == len(res) ==> res[len(res) - 1] == size - 1
-	for i := 0; i < len(res); i++ {
-		res[i] = res[i] - 1
-	}
-	return res
+	return utils.Decrement(frontier(size))
 }
