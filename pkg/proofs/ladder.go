@@ -176,17 +176,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /
 	// @ assert target < t2 ==> steps[r_idx] == tStar_pure(target + 1, t2 + 1)
 	// @ assert t2 < target ==> steps[r_idx] == tStar_pure(t2 + 1, target + 1)
 
-	// @ invariant acc(steps)
-	// @ invariant 0 <= i && i <= len(steps)
-	// @ invariant forall j int :: i <= j && j < len(steps) ==> 0 < steps[j]
-	// @ invariant forall j int :: 0 <= j && j < i ==> 0 <= steps[j]
-	// @ invariant i <= r_idx ==> steps[r_idx] == tStarPlusOne
-	// @ invariant r_idx < i ==> steps[r_idx] == tStarPlusOne - 1
-	for i := 0; i < len(steps); i++ {
-		steps[i] = steps[i] - 1
-	}
-
-	return steps /*@, r_idx @*/
+	return utils.Decrement(steps) /*@, r_idx @*/
 }
 
 // @ requires 0 < len(r) && acc(r)
