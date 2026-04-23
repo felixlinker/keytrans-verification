@@ -14,33 +14,6 @@ func Log2Floor_pure(n uint64) (r uint64) {
     return n < 2 ? 0 : 1 + Log2Floor_pure(n / 2)
 }
 
-
-// Lemma: Log2Floor is upper bounded
-ghost
-requires n>0
-ensures IntPow2(Log2Floor_pure(n)+1) > n
-ensures IntPow2(Log2Floor_pure(n)) <=n
-decreases n
-pure
-func Log2FloorUpperBound(n uint64) uint64{
-	return n < 2 ? 0:  Log2FloorUpperBound(n/2) + IntPow2Positive(Log2Floor_pure(n/2)+1)
-}
-
-
-//Lemma: The element in the Log2Floor_pure is bounded
-
-ghost
-requires n > 0
-ensures IntPow2(Log2Floor_pure(n)) <= n
-ensures n < IntPow2(Log2Floor_pure(n) + 1)
-decreases
-pure func Log2FloorBounds(n uint64) uint64 {
-    return Log2FloorUpperBound(n)
-}
-
-
-//Lemma: Monotonicity of the Log2Floor_pure function
-
 ghost
 requires a > 0
 requires b > 0
@@ -51,9 +24,9 @@ decreases b
 pure
 func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 	return a == b ? 0 :
-		(b < 2 ? 0 :
-		(a < 2 ? Log2FloorBounds(b):
-		Log2FloorMonotonic(a/2,b/2)))
+		(b == 1 ? 0 :
+			(a == 1 ? Log2FloorMonotonic(1, b/2) :
+				Log2FloorMonotonic(a/2,b/2)))
 }
 
 @*/
@@ -71,18 +44,6 @@ func IntPow2(exp uint64) (r uint64) {
   return exp == 0 ? 1 : 2 * IntPow2(exp - 1)
 }
 
-// Lemma: Power of 2 always positive
-
-ghost
-requires n >= 0
-ensures IntPow2(n) > 0
-ensures IntPow2(n) < IntPow2(n+1)
-decreases n
-pure
-func IntPow2Positive(n uint64) uint64 {
-	return n==0 ? 1 : IntPow2Positive(n-1)
-}
-
 // Lemma: Weaker version of IntPow2IncLemma
 ghost
 requires a >= 0
@@ -93,7 +54,7 @@ ensures a < b ==> IntPow2(a) < IntPow2(b)
 decreases b - a
 pure
 func IntPow2Monotonic(a uint64, b uint64) uint64 {
-	return a == b ? 0 : IntPow2Monotonic(a, b - 1) + IntPow2Positive(b - 1)
+	return a == b ? 0 : IntPow2Monotonic(a, b - 1)
 }
 
 @*/
