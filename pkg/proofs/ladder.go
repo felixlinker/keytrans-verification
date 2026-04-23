@@ -400,15 +400,17 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 //
 // Returns: r — the full binary ladder steps for target.
 //
-// @ requires 0 <= target && 0 <= t2 && t2 != target
+// @ requires 0 <= target && 0 <= t2
 // @ ensures acc(r)
 // @ ensures forall j int :: 0 <= j && j < len(r) ==> r[j] >= 0
-// @ ensures target < t2 ==> 0 <= i && i < len(r) && target < r[i] && r[i] <= t2
-// @ ensures t2 < target ==> 0 <= i && i < len(r) && t2 < r[i] && r[i] <= target
+// @ ensures 0 <= i && i < len(r)
+// @ ensures target < t2 ==> target < r[i] && r[i] <= t2
+// @ ensures t2 < target ==> t2 < r[i] && r[i] <= target
 func FullBinaryLadderSteps_wrapper(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost i int@*/) {
-	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
+	// Ensure that we pass a t2 not equal to target to satisfy FullBinaryLadderSteps preconditions. When they're equal, idx is irrelevant.
+	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, target == t2 ? t2 + 1 : t2 @*/)
 	//@ assert target < t2 ==> TStar_pure(target, t2) == res[idx] && target < res[idx] && res[idx] <= t2
 	//@ assert t2 < target ==> TStar_pure(t2, target) == res[idx]
 
-	return res /*@, idx @*/
+	return res /*@, target == t2 ? 0 : idx @*/
 }
