@@ -220,23 +220,10 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ ensures IstStar(r, target, t2, idx)
 // @ decreases
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
-	steps /*@, r_idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
-	// @ tStarPlusOne := steps[r_idx]
-
-	// @ invariant acc(steps)
-	// @ invariant 0 <= i && i <= len(steps) && 0 < len(steps)
-	// @ invariant forall j int :: { steps[j] } i <= j && j < len(steps) ==> 0 < steps[j]
-	// @ invariant forall j int :: { steps[j] } 0 <= j && j < i ==> 0 <= steps[j]
-	// @ invariant steps[0] == (0 < i ? 0 : 1)
-	// @ invariant i <= r_idx ==> steps[r_idx] == tStarPlusOne
-	// @ invariant r_idx < i ==> steps[r_idx] == tStarPlusOne - 1
-	// @ decreases len(steps) - i
-	for i := 0; i < len(steps); i++ {
-		steps[i] = steps[i] - 1
-	}
-
-	//@ fold BinaryLadderInv(steps)
-	return steps /*@, r_idx @*/
+	steps /*@, idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
+	r = utils.Decrement(steps)
+	//@ fold BinaryLadderInv(r)
+	return
 }
 
 // @ requires acc(r)
