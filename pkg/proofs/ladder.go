@@ -61,25 +61,12 @@ func IntPow2Monotonic(a uint64, b uint64) uint64 {
 // ============================================================================
 // ============================================================================
 /*@
-// Main Lemma: t1 < r <= t2, which is what we want to show
-ghost
-requires t1 >= 0
-requires t2 > t1
-ensures t1 < r
-ensures r <= t2
-decreases
-pure
-func TStar_pure(t1 uint64, t2 uint64) (r uint64) {
-	return tStar_pure(t1 +1, t2+1)- 1
-}
-
 ghost
 requires 0 <= t1 && 0 <= t2
 ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
 decreases
-// unused!
-pure func TStar_pure_general(t1 uint64, t2 uint64) (r uint64) {
-	return t1 == t2 ? 0 : t1 < t2 ? TStar_pure(t1, t2) : TStar_pure(t2, t1)
+pure func TStar_pure(t1 uint64, t2 uint64) (r uint64) {
+	return tStar_pure(t1 + 1, t2 + 1) - 1
 }
 
 ghost
@@ -93,29 +80,18 @@ decreases
 pure func max(a uint64, b uint64) (r uint64) {
 	return a >= b ? a : b
 }
-
 @*/
 // =============================Core Lemma======================================
 /*@
-// Core Lemma: Shows that tPure function indicates t1<r <= t2
-ghost
-requires t1 > 0
-requires t2 > t1
-ensures r >= 1
-ensures t1 < r && r <= t2
-decreases
-pure
-func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
-	return let i_low := Log2Floor_pure(t1) in tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low + 1))
-}
-
 ghost
 requires 0 < t1 && 0 < t2
 ensures 1 <= r
 ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
 decreases
-pure func tStar_pure_general(t1 uint64, t2 uint64) (r uint64) {
-	return t1 == t2 ? 1 : t1 < t2 ? tStar_pure(t1, t2) : tStar_pure(t2, t1)
+pure func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
+	return t1 == t2 ? 1 :
+		t1 < t2 ? let i_low := Log2Floor_pure(t1) in tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low + 1)) :
+			let i_low := Log2Floor_pure(t2) in tStarRec_pure(t2, t1, IntPow2(i_low), IntPow2(i_low + 1))
 }
 
 ghost
@@ -178,25 +154,28 @@ func PowOf2(exp uint64) (r uint64) {
 	return r
 }
 
-// TStar returns a value r such that t1 < r <= t2
-// @ requires t1 >= 0
-// @ requires t2 > t1
-// @ ensures t_star >= 1
+// TStar returns a value r such that t1 < t2 ==> t1 < r <= t2
+// @ requires 0 <= t1 && 0 <= t2
 // @ ensures t_star == TStar_pure(t1,t2)
 func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1) - 1
 }
 
-// @ requires t1 > 0
-// @ requires t2 > t1
+// @ requires 0 < t1 && 0 < t2
 // @ ensures t_star == tStar_pure(t1, t2)
 func tStar(t1 uint64, t2 uint64) (t_star uint64) {
-	i_low := Log2Floor(t1)
-	return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
+	if t1 == t2 {
+		return 1
+	} else if t1 < t2 {
+		i_low := Log2Floor(t1)
+		return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
+	} else {
+		i_low := Log2Floor(t2)
+		return tStarRec(t2, t1, PowOf2(i_low), PowOf2(i_low+1))
+	}
 }
 
-// @ requires 0 < t1
-// @ requires t1 < t2
+// @ requires 0 < t1 && t1 < t2
 // @ requires x_in <= t1
 // @ requires t1 < x_out
 // @ ensures r == tStarRec_pure(t1, t2, x_in, x_out)
@@ -227,7 +206,7 @@ decreases
 pure func IstStar(r []uint64, t1, t2 uint64, idx int) bool {
 	return unfolding acc(BinaryLadderInv(r), _) in
 		0 <= idx && idx < len(r) &&
-		r[idx] == TStar_pure_general(t1, t2)
+		r[idx] == TStar_pure(t1, t2)
 }
 @*/
 
@@ -237,7 +216,7 @@ pure func IstStar(r []uint64, t1, t2 uint64, idx int) bool {
 // @ ensures acc(r)
 // @ ensures 0 <= idx && idx < len(r) && 0 < len(r) && r[0] == 1
 // @ ensures forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i]
-// @ ensures r[idx] == tStar_pure_general(target, t2)
+// @ ensures r[idx] == tStar_pure(target, t2)
 // @ decreases
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
@@ -249,30 +228,29 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	}
 	@*/
 
-	// Denotes the length of the array r.
 	// @ ghost var k uint64 = 0
 	// @ ghost var jump_idx int = 0
+
 	// @ invariant acc(r)
 	// @ invariant len(r) == int(k)
 	// @ invariant 0 <= k && k <= target
 	// @ invariant i == IntPow2(k) && k == Log2Floor_pure(i)
-	// @ invariant k > 1 ==> k - 1 <= Log2Floor_pure(target)
+	// @ invariant 1 < k ==> k - 1 <= Log2Floor_pure(target)
 	// @ invariant forall j int :: 0 <= j && j < len(r) ==> 0 < r[j]
 	// @ invariant len(r) > 0 ==> r[k-1] == i / 2
 	// @ invariant 0 <= jump_idx
-	// @ invariant 0 == jump_idx ==> i / 2 <= t2
+	// @ invariant jump_idx == 0 ==> i / 2 <= t2
 	// @ invariant jump_idx != 0 ==> t2 < target && jump_idx < len(r) && r[jump_idx] == tStar_pure(t2, target)
 	// @ invariant 0 < len(r) ==> r[0] == 1
 	// @ decreases target - i
 	for i-1 < target {
+		// i = 2^k
 		r = append( /*@ perm(1/2), @*/ r, i)
 
 		/*@
-		assert i == IntPow2(k)
 		ghost if jump_idx == 0 && t2 < i {
 			assert let _ := Log2FloorMonotonic(i / 2, t2) in Log2Floor_pure(i / 2) <= Log2Floor_pure(t2)
 			assert let _ := Log2FloorMonotonic(t2, i) in Log2Floor_pure(t2) <= Log2Floor_pure(i)
-			assert i == tStar_pure(t2, target)
 			jump_idx = len(r) - 1
 		}
 		@*/
@@ -291,7 +269,6 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 
 	// @ assert let _ := Log2FloorMonotonic(target, i) in Log2Floor_pure(target) < k + 1
-	// @ assert k + 1 <= x_out
 	// @ assert let _ := Log2FloorMonotonic(k + 1, x_out) in k <= Log2Floor_pure(x_out)
 
 	// Initialize the variables so that the recursive invariant on
