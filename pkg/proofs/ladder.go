@@ -388,14 +388,6 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 	return BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, acc_idx, rec_acc_x_in, rec_acc_x_out, found @*/)
 }
 
-/*@
-ghost
-ensures res > 0
-decreases
-pure
-func GetUInt64() (res uint64)
-@*/
-
 // FullBinaryLadderSteps_wrapper is the public entry point for computing the full
 // binary ladder. It wraps FullBinaryLadderSteps and lifts the single-t2 guarantee
 // to a universal quantifier: for ALL possible t2 values, the returned ladder
@@ -408,23 +400,15 @@ func GetUInt64() (res uint64)
 //
 // Returns: r — the full binary ladder steps for target.
 //
-// @ requires 0 <= target
+// @ requires 0 <= target && 0 <= t2 && t2 != target
 // @ ensures acc(r)
 // @ ensures forall j int :: 0 <= j && j < len(r) ==> r[j] >= 0
-// @ ensures forall t2 uint64 :: target < t2            ==> exists i int :: 0 <= i && i < len(r) && target < r[i] && r[i] <= t2
-// @ ensures forall t2 uint64 :: 0 <= t2 && t2 < target ==> exists i int :: 0 <= i && i < len(r) && t2 < r[i] && r[i] <= target
-func FullBinaryLadderSteps_wrapper(target uint64) (r []uint64) {
-	//@ t2 := GetUInt64()
-	//@ assume 0 <= t2 && t2 != target
-
+// @ ensures target < t2 ==> 0 <= i && i < len(r) && target < r[i] && r[i] <= t2
+// @ ensures t2 < target ==> 0 <= i && i < len(r) && t2 < r[i] && r[i] <= target
+func FullBinaryLadderSteps_wrapper(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost i int@*/) {
 	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, t2 @*/)
 	//@ assert target < t2 ==> TStar_pure(target, t2) == res[idx] && target < res[idx] && res[idx] <= t2
 	//@ assert t2 < target ==> TStar_pure(t2, target) == res[idx]
 
-	// @ assert target < t2 ==> exists idx1 int :: 0 <= idx1 && idx1 < len(res) && target < res[idx1] && res[idx1] <= t2
-	// @ assume forall t2 uint64 :: target < t2 ==> exists idx1 int :: 0 <= idx1 && idx1 < len(res) && target < res[idx1] && res[idx1] <= t2
-
-	// @ assert 0 <= t2 && t2 < target ==> exists idx1 int :: 0 <= idx1 && idx1 < len(res) && t2 < res[idx1] && res[idx1] <= target
-	// @ assume forall t2 uint64 :: 0 <= t2 && t2 < target ==> exists idx1 int :: 0 <= idx1 && idx1 < len(res) && t2 < res[idx1] && res[idx1] <= target
-	return res
+	return res /*@, idx @*/
 }
