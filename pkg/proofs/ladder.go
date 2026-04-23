@@ -1,65 +1,7 @@
 package proofs
 
-// ===========================================================================================
-// =====================================Log2Floor Lemmas======================================
-/*@
-// Function: Computes Log2Floor(n)
-ghost
-ensures r >= 0
-ensures n >= 1 ==> IntPow2(r) <= n && IntPow2(r+1) > n && r < n
-ensures n == 1 ==> r == 0
-decreases n
-pure
-func Log2Floor_pure(n uint64) (r uint64) {
-    return n < 2 ? 0 : 1 + Log2Floor_pure(n / 2)
-}
+import "github.com/felixlinker/keytrans-verification/pkg/utils"
 
-ghost
-requires a > 0
-requires b > 0
-requires a <= b
-ensures Log2Floor_pure(a) <= Log2Floor_pure(b)
-ensures a <= b/2 ==> Log2Floor_pure(a) < Log2Floor_pure(b)
-decreases b
-pure
-func Log2FloorMonotonic(a uint64, b uint64) uint64 {
-	return a == b ? 0 :
-		(b == 1 ? 0 :
-			(a == 1 ? Log2FloorMonotonic(1, b/2) :
-				Log2FloorMonotonic(a/2,b/2)))
-}
-
-@*/
-// ==================================================================================
-// =============================IntPow2 Lemmas ======================================
-
-/*@
-// Function: Computes 2^(exp)
-ghost
-requires exp >= 0
-ensures r > 0
-decreases exp
-pure
-func IntPow2(exp uint64) (r uint64) {
-  return exp == 0 ? 1 : 2 * IntPow2(exp - 1)
-}
-
-// Lemma: Weaker version of IntPow2IncLemma
-ghost
-requires a >= 0
-requires b >= 0
-requires a <= b
-ensures IntPow2(a) <= IntPow2(b)
-ensures a < b ==> IntPow2(a) < IntPow2(b)
-decreases b - a
-pure
-func IntPow2Monotonic(a uint64, b uint64) uint64 {
-	return a == b ? 0 : IntPow2Monotonic(a, b - 1)
-}
-
-@*/
-// ============================================================================
-// ============================================================================
 /*@
 // Main Lemma: t1 < r <= t2, which is what we want to show
 ghost
@@ -73,9 +15,6 @@ func TStar_pure(t1 uint64, t2 uint64) (r uint64){
 	return tStar_pure(t1 +1, t2+1)- 1
 }
 
-@*/
-// =============================Core Lemma======================================
-/*@
 // Core Lemma: Shows that tPure function indicates t1<r <= t2
 ghost
 requires t1 > 0
@@ -85,7 +24,7 @@ ensures t1 < r && r <= t2
 decreases
 pure
 func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
-	return let i_low := Log2Floor_pure(t1) in tStarRec_pure(t1, t2, IntPow2(i_low), IntPow2(i_low + 1))
+	return let i_low := utils.Log2Floor_pure(t1) in tStarRec_pure(t1, t2, utils.PowOf2_pure(i_low), utils.PowOf2_pure(i_low + 1))
 }
 
 ghost
@@ -107,38 +46,6 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 }
 @*/
 
-// @ requires base > 0
-// @ ensures r >= 0
-// @ ensures IntPow2(r) <= base
-// @ ensures base < IntPow2(r+1)
-// @ ensures r == Log2Floor_pure(base)
-// @ decreases base
-func Log2Floor(base uint64) (r uint64) {
-	if base <= 1 {
-		//@ assert Log2Floor_pure(base) == 0
-		return 0
-	} else {
-		//@ assert base > 1
-		//@ assert Log2Floor_pure(base) == 1 + Log2Floor_pure(base / 2)
-		return 1 + Log2Floor(base/2)
-	}
-}
-
-// @ requires exp >= 0
-// @ ensures r == IntPow2(exp)
-// @ decreases
-func PowOf2(exp uint64) (r uint64) {
-	var i uint64
-	r = 1
-	//@ invariant i >= 0 && i<= exp
-	//@ invariant r == IntPow2(i)
-	//@ decreases exp - i
-	for i = 0; i < exp; i += 1 {
-		r = r * 2
-	}
-	return r
-}
-
 // TStar returns a value r such that t1 < r <= t2
 // @ requires t1 >= 0
 // @ requires t2 > t1
@@ -152,8 +59,8 @@ func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 // @ requires t2 > t1
 // @ ensures t_star == tStar_pure(t1, t2)
 func tStar(t1 uint64, t2 uint64) (t_star uint64) {
-	i_low := Log2Floor(t1)
-	return tStarRec(t1, t2, PowOf2(i_low), PowOf2(i_low+1))
+	i_low := utils.Log2Floor(t1)
+	return tStarRec(t1, t2, utils.PowOf2(i_low), utils.PowOf2(i_low+1))
 }
 
 // @ requires 0 < t1
@@ -188,7 +95,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 
 	/*@
 	ghost if t2 < target {
-		assert let _ := Log2FloorMonotonic(t2, target) in Log2Floor_pure(t2) <= Log2Floor_pure(target)
+		assert let _ := utils.Log2FloorMonotonic(t2, target) in utils.Log2Floor_pure(t2) <= utils.Log2Floor_pure(target)
 	}
 	@*/
 
@@ -198,8 +105,8 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ invariant acc(r)
 	// @ invariant len(r) == int(k)
 	// @ invariant 0 <= k && k <= target
-	// @ invariant i == IntPow2(k) && k == Log2Floor_pure(i)
-	// @ invariant k > 1 ==> k - 1 <= Log2Floor_pure(target)
+	// @ invariant i == utils.PowOf2_pure(k) && k == utils.Log2Floor_pure(i)
+	// @ invariant k > 1 ==> k - 1 <= utils.Log2Floor_pure(target)
 	// @ invariant forall j int :: 0 <= j && j < len(r) ==> 0 < r[j]
 	// @ invariant len(r) > 0 ==> r[k-1] == i / 2
 	// @ invariant 0 <= jump_idx
@@ -209,10 +116,10 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 		r = append( /*@ perm(1/2), @*/ r, i)
 
 		/*@
-		assert i == IntPow2(k)
+		assert i == utils.PowOf2_pure(k)
 		ghost if jump_idx == 0 && t2 < i {
-			assert let _ := Log2FloorMonotonic(i / 2, t2) in Log2Floor_pure(i / 2) <= Log2Floor_pure(t2)
-			assert let _ := Log2FloorMonotonic(t2, i) in Log2Floor_pure(t2) <= Log2Floor_pure(i)
+			assert let _ := utils.Log2FloorMonotonic(i / 2, t2) in utils.Log2Floor_pure(i / 2) <= utils.Log2Floor_pure(t2)
+			assert let _ := utils.Log2FloorMonotonic(t2, i) in utils.Log2Floor_pure(t2) <= utils.Log2Floor_pure(i)
 			assert i == tStar_pure(t2, target)
 			jump_idx = len(r) - 1
 		}
@@ -231,9 +138,9 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	x_out := i
 	r = append( /*@ perm(1/2), @*/ r, x_out) // this will be the first proof of non-inclusion
 
-	// @ assert let _ := Log2FloorMonotonic(target, i) in Log2Floor_pure(target) < k + 1
+	// @ assert let _ := utils.Log2FloorMonotonic(target, i) in utils.Log2Floor_pure(target) < k + 1
 	// @ assert k + 1 <= x_out
-	// @ assert let _ := Log2FloorMonotonic(k + 1, x_out) in k <= Log2Floor_pure(x_out)
+	// @ assert let _ := utils.Log2FloorMonotonic(k + 1, x_out) in k <= utils.Log2Floor_pure(x_out)
 
 	// Initialize the variables so that the recursive invariant on
 	// BinarySearchStep is established right-away when we already found t*.
@@ -247,7 +154,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// In the case t2 < target && jump_idx == 0, we must hint to gobra with
 	// assertion below that acc_x_in is indeed the argument it expects for the
 	// tStar_pure(t2, target) call in the function's post-condition.
-	// @ assert t2 < target && jump_idx == 0 ==> let _ := Log2FloorMonotonic(x_in, t2) in x_in == IntPow2(Log2Floor_pure(t2))
+	// @ assert t2 < target && jump_idx == 0 ==> let _ := utils.Log2FloorMonotonic(x_in, t2) in x_in == utils.PowOf2_pure(utils.Log2Floor_pure(t2))
 
 	return res /*@, search_idx @*/
 }
