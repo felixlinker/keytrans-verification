@@ -10,11 +10,27 @@ func TestTStar(t *testing.T) {
 		t2   uint64
 		want uint64
 	}{
+		{t1: 7, t2: 8, want: 8},
+		{t1: 7, t2: 9, want: 9},
+		{t1: 7, t2: 10, want: 9},
+		{t1: 7, t2: 11, want: 11},
+		{t1: 7, t2: 12, want: 11},
+		{t1: 7, t2: 13, want: 11},
+		{t1: 7, t2: 14, want: 11},
+		{t1: 7, t2: 15, want: 15},
+
+		{t1: 10, t2: 11, want: 11},
+		{t1: 10, t2: 12, want: 11},
+		{t1: 10, t2: 13, want: 11},
+		{t1: 10, t2: 14, want: 11},
+		{t1: 10, t2: 15, want: 15},
+
 		{t1: 0, t2: 15, want: 1},
 		{t1: 0, t2: 1, want: 1},
 		{t1: 8, t2: 9, want: 9},
 		{t1: 8, t2: 14, want: 11},
 		{t1: 9, t2: 10, want: 10},
+		{t1: 9, t2: 11, want: 11},
 		{t1: 8, t2: 16, want: 15},
 		{t1: 7, t2: 16, want: 15},
 		{t1: 1, t2: 2, want: 2},
