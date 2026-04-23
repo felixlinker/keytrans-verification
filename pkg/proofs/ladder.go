@@ -108,8 +108,29 @@ ensures t1 < r
 ensures r <= t2
 decreases
 pure
-func TStar_pure(t1 uint64, t2 uint64) (r uint64){
+func TStar_pure(t1 uint64, t2 uint64) (r uint64) {
 	return tStar_pure(t1 +1, t2+1)- 1
+}
+
+ghost
+requires 0 <= t1 && 0 <= t2
+ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
+decreases
+// unused!
+pure func TStar_pure_general(t1 uint64, t2 uint64) (r uint64) {
+	return t1 == t2 ? 0 : t1 < t2 ? TStar_pure(t1, t2) : TStar_pure(t2, t1)
+}
+
+ghost
+decreases
+pure func min(a uint64, b uint64) (r uint64) {
+	return a <= b ? a : b
+}
+
+ghost
+decreases
+pure func max(a uint64, b uint64) (r uint64) {
+	return a >= b ? a : b
 }
 
 @*/
@@ -128,6 +149,15 @@ func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
 }
 
 ghost
+requires 0 < t1 && 0 < t2
+ensures 1 <= r
+ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
+decreases
+pure func tStar_pure_general(t1 uint64, t2 uint64) (r uint64) {
+	return t1 == t2 ? 1 : t1 < t2 ? tStar_pure(t1, t2) : tStar_pure(t2, t1)
+}
+
+ghost
 requires x_in <= t1
 requires t1 < x_out
 requires 0 < t1
@@ -143,6 +173,15 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 			next <= t1 ?
 				tStarRec_pure(t1, t2, next, x_out) :
 				tStarRec_pure(t1, t2, x_in, next))
+}
+
+ghost
+requires 0 < min(t1, t2)
+requires x_in <= min(t1, t2) && min(t1, t2) < x_out
+ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
+decreases x_out - x_in
+pure func tStarRec_pure_general(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
+	return t1 == t2 ? 1 : t1 < t2 ? tStarRec_pure(t1, t2, x_in, x_out) : tStarRec_pure(t2, t1, x_in, x_out)
 }
 @*/
 
@@ -213,14 +252,31 @@ func tStarRec(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	}
 }
 
+/*@
+pred BinaryLadderInv(r []uint64) {
+	acc(r) &&
+	0 < len(r) && r[0] == 0 &&
+	(forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i])
+}
+
+ghost
+requires acc(BinaryLadderInv(r), _)
+requires 0 <= t1 && 0 <= t2
+decreases
+pure func IstStar(r []uint64, t1, t2 uint64, idx int) bool {
+	return unfolding acc(BinaryLadderInv(r), _) in
+		0 <= idx && idx < len(r) &&
+		r[idx] == TStar_pure_general(t1, t2)
+}
+@*/
+
 // Construct a binary ladder, but on the interval [1, ...] so that reasoning
 // about logarithms and powers of two becomes simpler.
-// @ requires 0 < target && 0 < t2 && target != t2
+// @ requires 0 < target && 0 < t2
 // @ ensures acc(r)
-// @ ensures 0 < len(r) && 0 < idx && idx < len(r)
-// @ ensures forall i int :: 0 <= i && i < len(r) ==> 0 < r[i]
-// @ ensures target < t2 ==> r[idx] == tStar_pure(target, t2)
-// @ ensures t2 < target ==> r[idx] == tStar_pure(t2, target)
+// @ ensures 0 <= idx && idx < len(r) && 0 < len(r) && r[0] == 1
+// @ ensures forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i]
+// @ ensures r[idx] == tStar_pure_general(target, t2)
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -244,6 +300,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ invariant 0 <= jump_idx
 	// @ invariant 0 == jump_idx ==> i / 2 <= t2
 	// @ invariant jump_idx != 0 ==> t2 < target && jump_idx < len(r) && r[jump_idx] == tStar_pure(t2, target)
+	// @ invariant 0 < len(r) ==> r[0] == 1
 	for i-1 < target {
 		r = append( /*@ perm(1/2), @*/ r, i)
 
@@ -282,6 +339,14 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ ghost acc_x_out  := jump_idx != 0 ? r[jump_idx]     : x_out
 	// @ found            := jump_idx != 0 || x_out <= t2
 
+	/*@
+	// special case for handling target == t2:
+	ghost if target == t2 {
+		target_idx = 0
+		found = true
+	}
+	@*/
+
 	res /*@, search_idx @*/ := BinarySearchStep(target, r, x_in, x_out /*@, t2, target_idx, acc_x_in, acc_x_out, found @*/)
 	// In the case t2 < target && jump_idx == 0, we must hint to gobra with
 	// assertion below that acc_x_in is indeed the argument it expects for the
@@ -296,57 +361,50 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // greatest. The returned array `r` is the binary ladder, and `r[idx]` stores
 // the first element of the binary ladder for which clients verifying a ladder
 // for target or t2 would expect different results.
-// @ requires 0 <= target && 0 <= t2 && target != t2
-// @ ensures acc(r) && 0 < len(r)
-// @ ensures 0 <= idx && idx < len(r)
-// @ ensures forall i int :: 0 <= i && i < len(r) ==> 0 <= r[i]
-// @ ensures target < t2 ==> r[idx] == TStar_pure(target, t2)
-// @ ensures t2 < target ==> r[idx] == TStar_pure(t2, target)
+// FullBinaryLadderSteps is the public entry point for computing the full
+// binary ladder. This is the key interface used by CheckGreatest to obtain the
+// ladder steps.
+// @ requires 0 <= target && 0 <= t2
+// @ ensures BinaryLadderInv(r)
+// @ ensures IstStar(r, target, t2, idx)
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
 	steps /*@, r_idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
-	// @ ghost tStarPlusOne := steps[r_idx]
-	// @ assert target < t2 ==> steps[r_idx] == tStar_pure(target + 1, t2 + 1)
-	// @ assert t2 < target ==> steps[r_idx] == tStar_pure(t2 + 1, target + 1)
+	// @ tStarPlusOne := steps[r_idx]
 
 	// @ invariant acc(steps)
-	// @ invariant 0 <= i && i <= len(steps)
-	// @ invariant forall j int :: i <= j && j < len(steps) ==> 0 < steps[j]
-	// @ invariant forall j int :: 0 <= j && j < i ==> 0 <= steps[j]
+	// @ invariant 0 <= i && i <= len(steps) && 0 < len(steps)
+	// @ invariant forall j int :: { steps[j] } i <= j && j < len(steps) ==> 0 < steps[j]
+	// @ invariant forall j int :: { steps[j] } 0 <= j && j < i ==> 0 <= steps[j]
+	// @ invariant steps[0] == (0 < i ? 0 : 1)
 	// @ invariant i <= r_idx ==> steps[r_idx] == tStarPlusOne
 	// @ invariant r_idx < i ==> steps[r_idx] == tStarPlusOne - 1
 	for i := 0; i < len(steps); i++ {
 		steps[i] = steps[i] - 1
 	}
 
+	//@ fold BinaryLadderInv(steps)
 	return steps /*@, r_idx @*/
 }
 
-// @ requires 0 < len(r) && acc(r)
-// @ requires forall i int :: 0 <= i && i < len(r) ==> 0 < r[i]
-// @ requires 0 < target && 0 < t2 && target != t2
-// @ requires 0 < x_in && x_in <= target && target < x_out
-// @ requires 0 < acc_idx && acc_idx < len(r)
-// @ ensures acc(res) && 0 < idx && idx < len(res)
-// @ ensures forall i int :: 0 <= i && i < len(res) ==> 0 < res[i]
-//
+// @ requires acc(r)
+// @ requires 0 < len(r) && r[0] == 1
+// @ requires forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i]
+// @ requires 0 < x_in && x_in <= target
+// @ requires 0 < t2
+// @ requires 0 <= acc_idx && acc_idx < len(r)
 // Invariants on acc_x_in/out. Both arguments will have the same value as when
 // calling tStarRec_pure such that it returns immediately. These arguments allow
 // us to continue recursively constructing the binary ladder while memorizing
 // that the value stored at acc_idx is tStar.
 // @ requires !found ==> x_in == acc_x_in && x_out == acc_x_out
-// @ requires !found && target < t2 ==> t2 < x_out
-// @ requires !found && t2 < target ==> x_in <= t2
-//
-// Case 1: target < t2
-// @ requires target < t2 ==> acc_x_in <= target && target < acc_x_out
-// @ requires found && target < t2 ==> r[acc_idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
-// @ ensures  target < t2 ==> res[idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
-//
-// Case 2: t2 < target
-// @ requires t2 < target ==> acc_x_in <= t2 && t2 < acc_x_out
-// @ requires found && t2 < target ==> r[acc_idx] == tStarRec_pure(t2, target, acc_x_in, acc_x_out)
-// @ ensures  t2 < target ==> res[idx] == tStarRec_pure(t2, target, acc_x_in, acc_x_out)
-//
+// @ requires !found ==> x_in <= min(target, t2) && max(target, t2) < x_out
+// @ requires acc_x_in <= min(target, t2) && min(target, t2) < acc_x_out
+// @ requires found ==> r[acc_idx] == tStarRec_pure_general(target, t2, acc_x_in, acc_x_out)
+// @ requires target == t2 ==> found
+// @ ensures  acc(res)
+// @ ensures  0 <= idx && idx < len(res) && 0 < len(res) && res[0] == 1
+// @ ensures  forall i int :: { res[i] } 0 <= i && i < len(res) ==> 0 < res[i]
+// @ ensures  res[idx] == tStarRec_pure_general(target, t2, acc_x_in, acc_x_out)
 // @ decreases x_out - x_in
 func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, ghost t2 uint64, ghost acc_idx int, ghost acc_x_in uint64, ghost acc_x_out uint64, ghost found bool @*/) (res []uint64 /*@, ghost idx int @*/) {
 	if x_in+1 >= x_out {
@@ -366,7 +424,6 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 			// The recursive call in this case will mirror the binary ladder
 			// construction for t2, therefore, "recurse" on rec_x_in as the next
 			// x_out.
-			assert r[acc_idx] == tStarRec_pure(t2, target, x_in, rec_x_in)
 			acc_x_out = rec_x_in
 		}
 		@*/
@@ -376,8 +433,6 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 		ghost if rec_x_out <= t2 && !found {
 			acc_idx = len(r) - 1
 			found = true
-			assert r[acc_idx] == tStarRec_pure(target, t2, acc_x_in, rec_x_out)
-			assert r[acc_idx] == tStarRec_pure(target, t2, acc_x_in, acc_x_out)
 			acc_x_out = rec_x_out
 		}
 		@*/
@@ -386,31 +441,4 @@ func BinarySearchStep(target uint64, r []uint64, x_in uint64, x_out uint64 /*@, 
 	// @ rec_acc_x_in :=  found ? acc_x_in  : rec_x_in
 	// @ rec_acc_x_out := found ? acc_x_out : rec_x_out
 	return BinarySearchStep(target, r, rec_x_in, rec_x_out /*@, t2, acc_idx, rec_acc_x_in, rec_acc_x_out, found @*/)
-}
-
-// FullBinaryLadderSteps_wrapper is the public entry point for computing the full
-// binary ladder. It wraps FullBinaryLadderSteps and lifts the single-t2 guarantee
-// to a universal quantifier: for ALL possible t2 values, the returned ladder
-// contains TStar_pure(target, t2) (or TStar_pure(t2, target)). This is the
-// key interface used by CheckGreatest to obtain the ladder steps.
-//
-// Preconditions: target >= 0.
-// Postconditions: for every t2, TStar appears in r. TStar_wrapper holds for
-// all t2 in both orderings. All elements >= 0, r[0] == 0.
-//
-// Returns: r — the full binary ladder steps for target.
-//
-// @ requires 0 <= target && 0 <= t2
-// @ ensures acc(r)
-// @ ensures forall j int :: 0 <= j && j < len(r) ==> r[j] >= 0
-// @ ensures 0 <= i && i < len(r)
-// @ ensures target < t2 ==> target < r[i] && r[i] <= t2
-// @ ensures t2 < target ==> t2 < r[i] && r[i] <= target
-func FullBinaryLadderSteps_wrapper(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost i int@*/) {
-	// Ensure that we pass a t2 not equal to target to satisfy FullBinaryLadderSteps preconditions. When they're equal, idx is irrelevant.
-	res /*@, idx @*/ := FullBinaryLadderSteps(target /*@, target == t2 ? t2 + 1 : t2 @*/)
-	//@ assert target < t2 ==> TStar_pure(target, t2) == res[idx] && target < res[idx] && res[idx] <= t2
-	//@ assert t2 < target ==> TStar_pure(t2, target) == res[idx]
-
-	return res /*@, target == t2 ? 0 : idx @*/
 }
