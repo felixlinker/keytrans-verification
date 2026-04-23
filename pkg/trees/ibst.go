@@ -20,18 +20,7 @@ func frontier(size uint64) (r []uint64) {
 	}
 
 	rec := frontier(size - i_root)
-	// @ invariant acc(rec)
-	// @ invariant 0 <= i && i <= len(rec)
-	// @ invariant i < len(rec)  ==> rec[len(rec) - 1] == size - i_root
-	// @ invariant i == len(rec) ==> rec[len(rec) - 1] == size
-	// @ invariant forall j int :: 0 <= j && j < len(rec) ==> 0 < rec[j]
-	// @ invariant forall j int :: i <= j && j < len(rec) ==> rec[j] <= size - i_root
-	// @ invariant forall j int :: 0 <= j && j < i ==> rec[j] <= size
-	for i := 0; i < len(rec); i++ {
-		rec[i] = rec[i] + i_root
-	}
-
-	return append( /*@ perm(1/2), @*/ res, rec...)
+	return append( /*@ perm(1/2), @*/ res, utils.Increment(rec, i_root)...)
 }
 
 // @ requires 0 < size
