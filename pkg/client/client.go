@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	//@ "github.com/felixlinker/keytrans-verification/pkg/arb"
 	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
@@ -125,8 +126,7 @@ func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) 
     tail := getByteContentIsLow(data, idx + 1, p)
     result = seq[byte]{data[idx]} ++ tail
   }
-  // reveal after permissions are restored so the body is visible on the correct heap
-  revealedContent := reveal getByteContent(data, idx)
+  assert result == reveal getByteContent(data, idx)
 }
 
 // Build low ghost seq from a *[sha256.Size]byte array
@@ -299,7 +299,8 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 	if !determined {
-		ladderIndices := proofs.FullBinaryLadderSteps_wrapper(uint64(*resp.Version))
+		//@ ghost var idx int
+		ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(uint64(*resp.Version) /*@, 0 @*/)
 		if len(resp.Binary_ladder) != len(ladderIndices) {
 			err = errors.New("length of binary ladder does not match greatest version")
 			determined = true
@@ -359,119 +360,43 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	return res, err
 }
 
-/*@
-ghost
-decreases
-func GetInt() (res int)
-@*/
-
-/*@
-ghost
-decreases
-requires acc(steps)
-requires t >= 0
-requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
-requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
-ensures acc(steps)
-ensures rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[idx1],1) == rel(steps[idx1],0) && rel(t,0) < rel(steps[idx1],1) && rel(steps[idx1],1) <= rel(t,1) && rel(t,0) < rel(steps[idx1],0) && rel(steps[idx1],0) <= rel(t,1)
-ensures rel(t,0) < rel(t,1) ==> rel(steps[idx1],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
-ensures rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[idx2],1) == rel(steps[idx2],0) && rel(t,1) < rel(steps[idx2],1) && rel(steps[idx2],1) <= rel(t,0) && rel(t,1) < rel(steps[idx2],0) && rel(steps[idx2],0) <= rel(t,0)
-ensures rel(t,0) > rel(t,1) ==> rel(steps[idx2],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
-ensures idx1 > 0
-ensures idx2 > 0
-ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-func EstablishTStarWitnesses(steps []uint64, t uint64) (idx1 int, idx2 int){
-	// Replace it using rel(t,0), rel(t,1) and rel(steps,0), rel(steps,1)
-	assert proofs.TStar_wrapper(rel(steps,0), rel(t,0), rel(t,1))
-	assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,0),rel(t,1)), 1)
-
-	assert proofs.TStar_wrapper(rel(steps,0), rel(t,1), rel(t,0))
-	assert rel(proofs.TStar_wrapper(rel(steps,1),rel(t,1),rel(t,0)), 1)
-
-	assert rel(t,0) < rel(t,1) ==> (exists idx int :: {rel(steps,0)[idx]} rel(t,0) >= 0 ==> 0 <= idx && idx < len(rel(steps,0)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps,0)[idx] && rel(t,0) < proofs.TStar_pure(rel(t,0), rel(t,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) <= rel(t,1))
-	assert rel(t,0) < rel(t,1) ==> (exists idx int :: {rel(steps[idx],1)} rel(t,0) >= 0 ==> 0 <= idx && idx < len(rel(steps,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) == rel(steps[idx],1) && rel(t,0) < proofs.TStar_pure(rel(t,0), rel(t,1)) && proofs.TStar_pure(rel(t,0), rel(t,1)) <= rel(t,1))
-	assert rel(t,0) > rel(t,1) ==> (exists idx int :: {rel(steps,0)[idx]} rel(t,1) >= 0 ==> 0 <= idx && idx < len(rel(steps,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps,0)[idx] && rel(t,1) < proofs.TStar_pure(rel(t,1), rel(t,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) <= rel(t,0))
-	assert rel(t,0) > rel(t,1) ==> (exists idx int :: {rel(steps[idx],1)} rel(t,1) >= 0 ==> 0 <= idx && idx < len(rel(steps,1)) && proofs.TStar_pure(rel(t,1), rel(t,0)) == rel(steps[idx],1) && rel(t,1) < proofs.TStar_pure(rel(t,1), rel(t,0)) && proofs.TStar_pure(rel(t,1), rel(t,0)) <= rel(t,0))
-
-	//Remove existential quantifier to replace the statement, adding an assume with it
-	idx1 = GetInt()
-	idx2 = GetInt()
-	assume idx1 > 0 && idx2 > 0
-
-	assume rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(steps[rel(idx1,0)],0) == proofs.TStar_pure(rel(t,0), rel(t,1))
-	assume rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(steps[rel(idx2,0)],0) == proofs.TStar_pure(rel(t,1), rel(t,0))
-
-	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1)
-	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < rel(len(steps),1) && rel(steps[rel(idx2,0)],0) == rel(steps[rel(idx2,1)],1)  && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0)
-
-	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0)&& rel(t,0) <rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-
-	assert rel(t,0) < rel(t,1) ==> low(idx1 < len(steps))
-	assert rel(t,0) > rel(t,1) ==> low(idx2 < len(steps))
-
-	//Move existential quantifier to the right side of the implication
-
-	assert rel(t,0) < rel(t,1) ==> 0 <= rel(idx1,0) && rel(idx1,0) < len(rel(steps,0)) && 0 <= rel(idx1,1) && rel(idx1,1) < len(rel(steps,1)) && rel(steps[rel(idx1,1)],1) == rel(steps[rel(idx1,0)],0) && rel(t,0) < rel(steps[rel(idx1,1)],1) && rel(steps[rel(idx1,1)],1) <= rel(t,1) && rel(t,0) < rel(steps[rel(idx1,0)],0) && rel(steps[rel(idx1,0)],0) <= rel(t,1)
-	assert rel(t,0) > rel(t,1) ==> 0 <= rel(idx2,0) && rel(idx2,0) < len(rel(steps,0)) && 0 <= rel(idx2,1) && rel(idx2,1) < len(rel(steps,1)) && rel(steps[rel(idx2,1)],1) == rel(steps[rel(idx2,0)],0) && rel(t,1) < rel(steps[rel(idx2,1)],1) && rel(steps[rel(idx2,1)],1) <= rel(t,0) && rel(t,1) < rel(steps[rel(idx2,0)],0) && rel(steps[rel(idx2,0)],0) <= rel(t,0)
-}
-
-ghost
-decreases
-requires acc(steps)
-requires t >= 0
-requires len(steps) > 0 && steps[0] == 0
-requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t, t2)} proofs.TStar_wrapper(steps, t, t2)
-requires forall t2 uint64 :: {proofs.TStar_wrapper(steps, t2, t)} proofs.TStar_wrapper(steps, t2, t)
-ensures acc(steps)
-ensures forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-ensures 0 <= idx && idx < len(steps)
-ensures low(steps[idx])
-ensures IsTStar(steps[idx], rel(t, 0), rel(t, 1))
-func findTStarIdx(steps []uint64, t uint64) (idx int) {
-	if low(t) {
-		idx = 0 // concrete value doesn't really matter except that this value occurs in `steps`. `0` is, thus, an easy choice
-		// reveal IsTStar to see that t1 == t2 (since low(t)) gives true
-		revealedLow := reveal IsTStar(steps[idx], rel(t, 0), rel(t, 1))
-		assert IsTStar(steps[idx], rel(t, 0), rel(t, 1))
-		// steps[0] == 0 (precondition), 0 is low in both executions
-		assert low(steps[idx])
-	} else {
-		idx1, idx2 := EstablishTStarWitnesses(steps, t)
-		if rel(t, 0) < rel(t, 1) {
-			idx = idx1
-			assert low(idx < len(steps))
-			// EstablishTStarWitnesses: rel(steps[idx1],1) == rel(steps[idx1],0)
-			// Both equal TStar_pure(rel(t,0), rel(t,1)), so low(steps[idx])
-			assert rel(steps[idx],1) == rel(steps[idx],0)
-			assert low(steps[idx])
-			// reveal IsTStar to establish steps[idx] == TStarBetween(rel(t,0), rel(t,1))
-			revealedUpper := reveal IsTStar(steps[idx], rel(t, 0), rel(t, 1))
-		} else {
-			idx = idx2
-			assert low(idx < len(steps))
-			// EstablishTStarWitnesses: rel(steps[idx2],0) == rel(steps[idx2],1)
-			// Both equal TStar_pure(rel(t,1), rel(t,0)), so low(steps[idx])
-			assert rel(steps[idx2],0) == rel(steps[idx2],1)
-			assert low(steps[idx])
-			// reveal IsTStar to establish steps[idx] == TStarBetween(rel(t,0), rel(t,1))
-			revealedLower := reveal IsTStar(steps[idx], rel(t, 0), rel(t, 1))
-		}
+// @ requires 0 <= target
+// @ ensures  proofs.BinaryLadderInv(r)
+// @ ensures  proofs.IstStar(r, target, rel(target, 1), idx)
+// @ decreases
+// returns the full binary ladder together with tstar for the targets of the two
+// executions (if both executions are active).
+func FullBinaryLadderSteps_with_tstar(target uint64) (r []uint64 /*@, ghost idx int @*/) {
+	// the following ghost if stmt avoids an issue in the encoding where we
+	// access `rel(target, 1)` before it is available (as it gets first copied
+	// into a local variable)
+	//@ ghost if true {} // acts like a "barrier" in the encoding
+	/*@
+	t2 := rel(target, 1)
+	ghost if t2 < 0 {
+		t2 = 0 // make sure that t2 is non-negative even if the 2nd execution is not active
 	}
+	@*/
+	return proofs.FullBinaryLadderSteps(target /*@, t2 @*/)
 }
-@*/
 
-// @ requires target >= 0
-// @ ensures acc(r1)
-// @ ensures forall j int :: {r1[j]} j >= 0 && j < len(r1) ==> r1[j] >= 0
-// @ ensures 0 <= tStarIdx && tStarIdx < len(r1)
-// @ ensures low(r1[tStarIdx])
-// @ ensures IsTStar(r1[tStarIdx], rel(target, 0), rel(target, 1))
-func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tStarIdx int @*/) {
-	r1 = proofs.FullBinaryLadderSteps_wrapper(target)
-	//@ tStarIdx = findTStarIdx(r1, target)
+// @ requires 0 <= target
+// @ ensures  proofs.BinaryLadderInv(r)
+// @ ensures  proofs.IstStar(r, target, rel(target, 1), idx)
+// @ decreases
+// alternative implementation for `FullBinaryLadderSteps_with_tstar` based on universal introduction
+// but deriving the same property about tstar
+func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@, ghost idx int @*/) {
+	// let t2 be arbitrary:
+	//@ t2 := arb.GetArbUint64()
+	r /*@, idx @*/ = proofs.FullBinaryLadderSteps(target /*@, 0 <= t2 ? t2 : 0 @*/)
+
+	// since t2 is arbitrary, termination of `FullBinaryLadderSteps` does not depend on t2, and
+	// `r` is the same for all t2, we can perform a universal introduction on t2:
+	//@ assert 0 <= t2 ==> proofs.IstStar(r, target, t2, idx)
+	//@ assume forall t2 uint64 :: { proofs.IstStar(r, target, t2, idx) } 0 <= t2 ==> proofs.IstStar(r, target, t2, idx)
+	// since `proofs.IstStar(r, target, t2, idx)` holds for all non-negative t2, it also holds for `rel(target, 1)` as
+	// stated in the postcondition.
 	return
 }
 

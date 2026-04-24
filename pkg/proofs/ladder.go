@@ -238,6 +238,7 @@ pure func IstStar(r []uint64, t1, t2 uint64, idx int) bool {
 // @ ensures 0 <= idx && idx < len(r) && 0 < len(r) && r[0] == 1
 // @ ensures forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i]
 // @ ensures r[idx] == tStar_pure_general(target, t2)
+// @ decreases
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -262,6 +263,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ invariant 0 == jump_idx ==> i / 2 <= t2
 	// @ invariant jump_idx != 0 ==> t2 < target && jump_idx < len(r) && r[jump_idx] == tStar_pure(t2, target)
 	// @ invariant 0 < len(r) ==> r[0] == 1
+	// @ decreases target - i
 	for i-1 < target {
 		r = append( /*@ perm(1/2), @*/ r, i)
 
@@ -328,6 +330,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires 0 <= target && 0 <= t2
 // @ ensures BinaryLadderInv(r)
 // @ ensures IstStar(r, target, t2, idx)
+// @ decreases
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
 	steps /*@, r_idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
 	// @ tStarPlusOne := steps[r_idx]
@@ -339,6 +342,7 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /
 	// @ invariant steps[0] == (0 < i ? 0 : 1)
 	// @ invariant i <= r_idx ==> steps[r_idx] == tStarPlusOne
 	// @ invariant r_idx < i ==> steps[r_idx] == tStarPlusOne - 1
+	// @ decreases len(steps) - i
 	for i := 0; i < len(steps); i++ {
 		steps[i] = steps[i] - 1
 	}

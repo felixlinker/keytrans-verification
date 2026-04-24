@@ -1,0 +1,7 @@
+package arb
+
+// helper package providing functions returning arbitrary values of different types.
+
+ghost
+decreases
+func GetArbUint64() uint64
