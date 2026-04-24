@@ -1,0 +1,19 @@
+package utils
+
+ghost
+requires acc(arr, _)
+decreases
+pure
+func getContent(arr []byte) (res seq[byte]) {
+  return getByteContent(arr, 0)
+}
+
+ghost
+requires acc(arr, _)
+requires 0 <= idx && idx <= len(arr)
+decreases len(arr) - idx
+opaque
+pure
+func getByteContent(arr []byte, idx int) (res seq[byte]) {
+  return idx == len(arr) ? seq[byte]{} : seq[byte]{arr[idx]} ++ getByteContent(arr, idx + 1)
+}
