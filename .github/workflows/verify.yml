@@ -140,7 +140,7 @@ jobs:
             --hyperMode extended \
             --recursive \
             --include "." ".verification" \
-            --excludePackages ${{ env.EXCLUDE_PKGS }} "proofs" "commitment"
+            --excludePackages ${{ env.EXCLUDE_PKGS }} "proofs"
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
