@@ -1,5 +1,7 @@
 package commitment
 
+// ##(--hyperMode extended)
+
 // @ requires low(hash)
 // @ ensures  res ==> low(value)
 func verify(hash int, value int) (res bool) {
@@ -10,12 +12,15 @@ func verify(hash int, value int) (res bool) {
 // @ requires low(hash)
 // @ ensures  res ==> low(value)
 func verifyWithBranching(hash int, value int) (res bool) {
-	// the following if statement fails because the condition is not-low
-	// however, this limitation could be lifted by a more complicated encoding
+	// thanks to hyperMode `extended`, we can branch on a non-low expression.
+	// however, we cannot early return in a non-low context, such that we use
+	// assignements here.
 	if hash != computeHash(value) {
-		return false
+		res = false
+	} else {
+		res = true
 	}
-	return true
+	return
 }
 
 // the following postcondition specifies that the Go function `computeHash` behaves like the
