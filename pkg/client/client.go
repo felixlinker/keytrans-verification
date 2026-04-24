@@ -299,7 +299,6 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		}
 	}
 	if !determined {
-		//@ ghost var idx int
 		ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(uint64(*resp.Version) /*@, 0 @*/)
 		if len(resp.Binary_ladder) != len(ladderIndices) {
 			err = errors.New("length of binary ladder does not match greatest version")
