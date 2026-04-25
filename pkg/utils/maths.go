@@ -2,6 +2,18 @@ package utils
 
 /*@
 ghost
+decreases
+pure func min(a, b uint64) uint64 {
+  return a < b ? a : b
+}
+
+ghost
+decreases
+pure func max(a, b uint64) uint64 {
+  return a > b ? a : b
+}
+
+ghost
 ensures r >= 0
 ensures n >= 1 ==> PowOf2_pure(r) <= n && PowOf2_pure(r+1) > n && r < n
 ensures n == 1 ==> r == 0

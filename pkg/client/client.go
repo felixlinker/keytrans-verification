@@ -35,104 +35,14 @@ import (
 // PrefixTreesInv encapsulates per-element permissions for prefix tree slices.
 // Reduces quantifier count in the SIF product program.
 pred PrefixTreesInv(trees []*prefixtree.PrefixTree) {
-		forall i int :: {&trees[i]} i >= 0 && i < len(trees) ==> acc(&trees[i]) && trees[i].Inv() && trees[i] != nil
+		forall i int :: { &trees[i] } 0 <= i && i < len(trees) ==> acc(&trees[i]) && trees[i].Inv() && trees[i] != nil
 }
 
 // RootHashesInv encapsulates per-element permissions for root hash slices.
 pred RootHashesInv(hashes []*[sha256.Size]byte) {
-	forall i int :: {&hashes[i]} i >= 0 && i < len(hashes) ==> acc(&hashes[i]) && acc(hashes[i])
-}
-
-ghost
-decreases
-pure func min(a, b uint64) uint64 {
-  return a < b ? a : b
-}
-
-ghost
-decreases
-pure func max(a, b uint64) uint64 {
-  return a > b ? a : b
-}
-
-// IsTStar captures: tStarVal == TStar(min(t1,t2), max(t1,t2))
-// AND min(t1,t2) < tStarVal <= max(t1,t2) if t1 != t2
-ghost
-decreases
-opaque
-pure func IsTStar(tStarVal, t1, t2 uint64) bool {
-  return (t1 < 0 || t2 < 0) ? true :  // Cannot happen for uint64, but needed as proof hint
-    t1 == t2 ? true :
-        tStarVal == TStarBetween(t1, t2)
-}
-
-ghost
-requires min(t1,t2) >= 0 && max(t1,t2) > 0
-ensures t1 != t2 ==> min(t1, t2) < res && res <= max(t1, t2)
-decreases
-pure func TStarBetween(t1, t2 uint64) (res uint64) {
-  return t1 == t2 ? 0 :
-    t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
-}
-
-// Build low ghost seq from a *[sha256.Size]byte array
-ghost
-requires acc(arr, 1/2)
-requires forall k int :: {arr[k]} 0 <= k && k < sha256.Size ==> low(arr[k])
-ensures acc(arr, 1/2)
-ensures low(result)
-decreases
-func buildLowSeqFromHash(arr *[sha256.Size]byte) (result seq[byte]) {
-  i := 0
-
-  invariant acc(arr, 1/2)
-  invariant 0 <= i && i <= sha256.Size
-  invariant low(i)
-  invariant low(result)
-  invariant forall k int :: {arr[k]} 0 <= k && k < sha256.Size ==> low(arr[k])
-  decreases sha256.Size - i
-  for i < sha256.Size {
-    result = result ++ seq[byte]{arr[i]}
-    i = i + 1
-  }
-}
-
-
-ghost
-requires n >= 0
-requires low(n)
-requires forall i int :: {&hashes[i]} 0 <= i && i < n ==> acc(&hashes[i]) && acc(hashes[i])
-requires forall i int :: {&hashes[i]} 0 <= i && i < n ==> forall k int :: {hashes[i][k]} 0 <= k && k < sha256.Size ==> low(hashes[i][k])
-ensures low(result)
-ensures len(result) == n
-ensures forall i int :: {&hashes[i]} 0 <= i && i < n ==> acc(&hashes[i]) && acc(hashes[i])
-decreases
-func buildRootHashContents(hashes []*[sha256.Size]byte, n int) (result seq[seq[byte]]) {
-  i := 0
-
-  invariant 0 <= i && i <= n
-  invariant low(i)
-  invariant low(n)
-  invariant low(result)
-  invariant len(result) == i
-  invariant forall j int :: {&hashes[j]} 0 <= j && j < n ==> acc(&hashes[j]) && acc(hashes[j])
-  invariant forall j int :: {&hashes[j]} 0 <= j && j < n ==> forall k int :: {hashes[j][k]} 0 <= k && k < sha256.Size ==> low(hashes[j][k])
-  decreases n - i
-  for i < n {
-    s := buildLowSeqFromHash(hashes[i])
-    result = result ++ seq[seq[byte]]{s}
-    i = i + 1
-  }
+	forall i int :: { &hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i]) && acc(hashes[i])
 }
 @*/
-
-type PT interface {
-	// Returns non-nil if we can prove that the prefix tree contains a key for the
-	// label and version pair provided. Returns nil if we can prove that the
-	// prefix tree does not contain a key for the label and version pair provided.
-	// Returns error in any other case.
-	GetCommitment(Label []byte, Version uint64, RootHash []byte) (res []byte, err error)
-}
 
 type TreeHead struct {
 	Tree_size uint64
@@ -214,6 +124,7 @@ pred (s SearchResponse) Inv() {
 // @ requires low(len(resp.Search.Prefix_proofs))
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(resp.Version, p) && low(*resp.Version)
+// @ trusted // TODO: remove once we can verify the entire function
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	determined := false
@@ -362,6 +273,7 @@ func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@
 //	+1: a version above t is present (greater version exists)
 //
 // @ requires noPerm < p
+// @ requires prefixTree != nil
 // @ requires acc(prefixTree.Inv(), p)
 // @ requires acc(utils.BytesMem(label), p)
 // @ requires acc(utils.BytesMem(rootHash), p)
@@ -374,19 +286,18 @@ func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@
 // @ 	low(utils.getContent(rootHash)) ==>
 // @ 		low(t)
 // @ decreases
-func CheckGreatest(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, rootHash []byte, size uint64 /*@, ghost p perm @*/) (res int, err error) {
-	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar_alternative(t)
+func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte, size uint64 /*@, ghost p perm @*/) (res int, err error) {
+	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(t)
 	//@ unfold proofs.BinaryLadderInv(steps)
 
 	determined := false // this flag encodes early returns, which are not yet supported by Gobra's hypermode
 	//@ tStar := steps[tStarIdx]
 
+	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
+	// as desired, these two conditions are contradictory unless `low(t)` holds, which establishes the postcondition.
 	//@ labelSeq, rootHashSeq := utils.getContent(label), utils.getContent(rootHash)
 	//@ non_incl_expected :=  prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) && tStar <= t
 	//@ incl_expected 	  := !prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) &&     t  <  tStar
-
-	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
-	// as desired, this contradicts `IsTStar(tStar, rel(t, 0), rel(t, 1))` unless `low(t)` holds, which establishes the postcondition.
 
 	//@ invariant acc(prefixTree.Inv(), p/2)
 	//@ invariant acc(utils.BytesMem(rootHash), p/2) && rootHashSeq == utils.getContent(rootHash)
@@ -454,6 +365,7 @@ type MonitoringMapEntry struct {
 // @ ensures acc(prefixTrees, p)
 // @ ensures acc(prefixRootHash, p)
 // @ ensures err == nil && res ==> low(*resp.Version)
+// @ trusted // TODO: remove once we can verify the entire function
 func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)

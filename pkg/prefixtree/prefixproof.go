@@ -10,6 +10,21 @@ import (
 	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
+// Recursive prefix tree data structure
+type PrefixTree struct {
+	// Hash value of this node; must be computed if nil
+	Value *[sha256.Size]byte
+	// If set, this node is a leaf of the given value. Left and Right must be nil
+	// in this case.
+	Leaf *proofs.PrefixLeaf
+	// Left subtree. May be nil even if Right is not nil.
+	Left *PrefixTree
+	// Right subtree. May be nil even if Left is not nil.
+	Right *PrefixTree
+}
+
+//@ *PrefixTree implements PT
+
 /*@
 // note that a nil PrefixTree trivially satisfies the Invariant
 pred (t *PrefixTree) Inv() {
@@ -48,19 +63,6 @@ func (t *PrefixTree) GetValue() *[sha256.Size]byte {
 // @ pure
 func (t *PrefixTree) GetValueArray() [sha256.Size]byte {
 	return /*@ unfolding acc(t.Inv(), _) in @*/ *t.Value
-}
-
-// Recursive prefix tree data structure
-type PrefixTree struct {
-	// Hash value of this node; must be computed if nil
-	Value *[sha256.Size]byte
-	// If set, this node is a leaf of the given value. Left and Right must be nil
-	// in this case.
-	Leaf *proofs.PrefixLeaf
-	// Left subtree. May be nil even if Right is not nil.
-	Left *PrefixTree
-	// Right subtree. May be nil even if Left is not nil.
-	Right *PrefixTree
 }
 
 // Creates a prefix tree recursively from a list of binary ladder steps and
@@ -277,15 +279,6 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 // It is also one of the important lemmas we need to show that the commitment we get is consistent
 // We use the following paper to derive the following lemma
 // Paper: https://arxiv.org/pdf/2501.10802
-
-/*@
-// this captures our assumption that GetCommitment is deterministic
-ghost
-decreases
-// takes seq[byte] inputs so it remains pure (no heap permissions needed)
-// returns bool: true = commitment exists (inclusion), false = no commitment (non-inclusion)
-pure func GetCommitmentExists(label seq[byte], version uint64, rootHash seq[byte]) bool
-@*/
 
 // GetCommitment searches the authenticated prefix tree for the commitment
 // corresponding to the given (label, version) pair.
