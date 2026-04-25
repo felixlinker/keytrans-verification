@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
 // This file implements Section 4, "Updating Views of the Tree"
@@ -16,41 +17,95 @@ type ImplicitBinarySearchTree struct {
 
 /*@
 pred (t *ImplicitBinarySearchTree) Inv() {
-	acc(t) &&
+	acc(t) && 0 <= t.Root &&
 	(t.Left != nil ==> t.Left.Inv()) &&
-	(t.Right != nil ==> t.Right.Inv())
+	(t.Right != nil ==> t.Right.Inv()) &&
+	// valid ranges:
+	(t.Left != nil ==> t.Left.Max() < t.Root) &&
+	(t.Right != nil ==> t.Root < t.Right.Min())
 }
 
-
-//TODO
+ghost
+requires t != nil ==> acc(t.Inv(), _)
+ensures  0 <= res
 decreases
-//requires acc(tree.Inv(), _)
-pure func (tree *ImplicitBinarySearchTree) IsLow() bool
+pure func (t *ImplicitBinarySearchTree) Size() (res int) {
+	return t == nil ? 0 : t.sizeRec()
+}
+
+ghost
+requires acc(t.Inv(), _)
+ensures  0 <= res
+decreases acc(t.Inv(), _)
+pure func (t *ImplicitBinarySearchTree) sizeRec() (res int) {
+	return unfolding acc(t.Inv(), _) in 1 + (t.Left == nil ? 0 : t.Left.sizeRec()) + (t.Right == nil ? 0 : t.Right.sizeRec())
+}
+
+ghost
+requires acc(t.Inv(), _)
+ensures  0 <= res && res <= t.Max()
+decreases acc(t.Inv(), _)
+pure func (t *ImplicitBinarySearchTree) Min() (res uint64) {
+	return unfolding acc(t.Inv(), _) in t.Left == nil ? t.Root : t.Left.Min()
+}
+
+ghost
+requires acc(t.Inv(), _)
+decreases acc(t.Inv(), _)
+pure func (t *ImplicitBinarySearchTree) Max() uint64 {
+	return unfolding acc(t.Inv(), _) in t.Right == nil ? t.Root : t.Right.Max()
+}
 @*/
 
-// @ requires tree_size >= 0
-// @ requires low(tree_size)
-// @ ensures root >= 0
-// @ ensures tree_size >1 ==> root < tree_size
-// @ ensures low(root)
-func RootNode(tree_size uint64) (root uint64) {
+// @ requires 0 <= treeSize
+// @ ensures  0 <= root
+// @ ensures  1 < treeSize ==> root < treeSize
+// @ ensures  root == RootNodePure(treeSize)
+// @ ensures  low(treeSize) ==> low(root)
+// @ decreases
+func RootNode(treeSize uint64) (root uint64) {
 	var res uint64 = 0
-	if tree_size >= 1 {
+	if treeSize >= 1 {
 		var power uint64 = 1
 		var prev uint64 = 1
-		//@ invariant low(power) && low(tree_size) && low(prev)
-		//@ invariant prev - 1 < tree_size
-		//@ invariant power >=1 && prev >=1
-		for power-1 < tree_size {
+		//@ ghost var i uint64 = 0
+
+		//@ invariant 0 <= i
+		//@ invariant prev - 1 < treeSize
+		//@ invariant 1 <= power && 1 <= prev
+		//@ invariant power == utils.PowOf2_pure(i)
+		//@ invariant prev == (i == 0 ? 1 : utils.PowOf2_pure(i - 1))
+		//@ invariant utils.Log2Floor_pure(power) == i
+		//@ invariant utils.Log2Floor_pure(prev) == (i == 0 ? 0 : i - 1)
+		//@ invariant prev <= treeSize
+		//@ invariant low(treeSize) ==> low(power) && low(prev)
+		//@ decreases treeSize - power
+		for power-1 < treeSize {
 			prev = power
 			power = power * 2
+			//@ i++
 		}
+
+		//@ utils.Log2FloorInbetween(i - 1, prev, treeSize, power)
 		res = prev - 1
 	}
 	return res
 }
 
-// @ preserves tree!= nil ==> tree.Inv()
+/*@
+ghost
+decreases treeSize
+pure func RootNodePure(treeSize uint64) (root uint64) {
+	return treeSize == 0 ? 0 : utils.PowOf2_pure(utils.Log2Floor_pure(treeSize)) - 1
+}
+@*/
+
+// @ preserves tree != nil ==> tree.Inv()
+// @ requires  0 <= offset
+// @ ensures   old(tree.Size()) == tree.Size()
+// @ ensures   tree != nil ==> old(tree.Min()) + offset == tree.Min()
+// @ ensures   tree != nil ==> old(tree.Max()) + offset == tree.Max()
+// @ decreases tree.Size()
 func (tree *ImplicitBinarySearchTree) OffSet(offset uint64) {
 	if tree != nil {
 		//@ unfold tree.Inv()
@@ -131,59 +186,51 @@ func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) 
 //		return
 //	}
 //
-// TODO: analyse if we need to have full permissions if we incooperate with low or can we use partial permission.
 // @ requires  noPerm < p
-// @ requires tree != nil ==> tree.Inv()
-// @ requires tree == nil ==> low(tree)
-// @ requires tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
-// @ ensures tree != nil ==> tree.Inv()
-// @ ensures tree!= nil ==> unfolding tree.Inv() in low(tree.Root)
+// @ preserves tree != nil ==> acc(tree.Inv(), p)
 // @ ensures   acc(path)
-// @ ensures   tree != nil ==> len(path) > 0
-// @ ensures forall j int :: j >= 0 && j < len(path) ==> path[j] >= 0 && path[j] < bound
-// @ ensures (low(len(path)) && forall i int :: 0<= i && i< len(path) ==>  low(path[i]))
-// @ trusted
-func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm, ghost bound uint64 @*/ ) (path []uint64) {
+// @ ensures   (tree == nil) == (0 == len(path))
+// @ ensures   tree != nil ==> forall j int :: { path[j] } 0 <= j && j < len(path) ==> tree.Min() <= path[j] && path[j] <= tree.Max()
+// ensures   tree != nil ==> unfolding acc(tree.Inv(), p) in low(tree.Root) ==> (low(len(path)) && forall i int :: { path[i] } 0 <= i && i < len(path) ==> low(path[i]))
+// @ decreases tree.Size()
+func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
 	if tree != nil {
-		//@ unfold tree.Inv()
+		//@ unfold acc(tree.Inv(), p/2)
 		path = []uint64{tree.Root}
 		//@ assert low(len(path))
-		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
-		//@ assert tree.Right == nil ==> low(tree.Right)
-		//@ assert tree.Right != nil ==> unfolding tree.Right.Inv() in low(tree.Right.Root)
-		subtreePath := tree.Right.FrontierNodes( /*@ p, bound @*/ )
-		//@ assert low(len(subtreePath))
-		//@ assert forall j int :: j>= 0 && j < len(subtreePath) ==> low(subtreePath[j])
-		path = append( /*@ p, @*/ path, subtreePath...)
-		//@ assert low(len(path))
-		//@ assert forall j int :: j>= 0 && j < len(path) ==> low(path[j])
-		//@ fold tree.Inv()
+		//@ assert forall j int :: { path[j] } 0 <= j && j < len(path) && low(tree.Root) ==> low(path[j])
+		// assert tree.Right == nil ==> low(tree.Right)
+		// assert tree.Right != nil ==> unfolding tree.Right.Inv() in low(tree.Right.Root)
+		subtreePath := tree.Right.FrontierNodes( /*@ p/4 @*/ )
+		// assert low(len(subtreePath))
+		// assert forall j int :: 0 <= j && j < len(subtreePath) ==> low(subtreePath[j])
+		path = append( /*@ perm(1/2), @*/ path, subtreePath...)
+		// assert low(len(path))
+		// assert forall j int :: 0 <= j && j < len(path) ==> low(path[j])
+		//@ fold acc(tree.Inv(), p/2)
 	}
 	return
 }
 
-// @ requires tree_size >= 0
-// @ requires low(tree_size)
-// @ ensures tree_size == 0 ==> tree == nil
-// @ ensures tree_size != 0 ==> tree != nil
-// @ ensures tree != nil ==> tree.Inv()
-// @ ensures tree == nil ==> low(tree)
-// @ ensures tree != nil ==> unfolding tree.Inv() in low(tree.Root)
-func MkImplicitBinarySearchTree(tree_size uint64) (tree *ImplicitBinarySearchTree) {
-	if tree_size == 0 {
+// @ requires 0 <= treeSize
+// @ ensures  tree != nil ==> tree.Inv() && tree.Min() == 0 && tree.Max() == treeSize - 1
+// @ ensures  treeSize == uint64(tree.Size())
+// @ ensures  (treeSize == 0) == (tree == nil)
+// @ ensures  tree != nil ==> unfolding tree.Inv() in low(treeSize) ==> low(tree.Root)
+// @ decreases treeSize
+func MkImplicitBinarySearchTree(treeSize uint64) (tree *ImplicitBinarySearchTree) {
+	if treeSize == 0 {
 		tree = nil
-	} else if tree_size == 1 {
-		root := RootNode(tree_size)
+	} else if treeSize == 1 {
+		root := RootNode(treeSize)
 		tree = &ImplicitBinarySearchTree{root, nil, nil}
 		//@ fold tree.Inv()
-	} else if tree_size > 1 {
-		root := RootNode(tree_size)
+		//@ assert tree.Size() == 1
+	} else if treeSize > 1 {
+		root := RootNode(treeSize)
 		left := MkImplicitBinarySearchTree(root)
-		right := MkImplicitBinarySearchTree(tree_size - root - 1)
-
-		if right != nil {
-			right.OffSet(root + 1)
-		}
+		right := MkImplicitBinarySearchTree(treeSize - root - 1)
+		right.OffSet(root + 1)
 		tree = &ImplicitBinarySearchTree{root, left, right}
 		//@ fold tree.Inv()
 	}
@@ -258,8 +305,8 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 
 	oldSearchTree := MkImplicitBinarySearchTree(st.Size)
 	newSearchTree := MkImplicitBinarySearchTree(new_head.Tree_head.Tree_size)
-	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2, st.Size @*/ )
-	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2, new_head.Tree_head.Tree_size @*/ )
+	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2 @*/ )
+	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 
 	if st.Size == 0 {
 		// copy timestamps from `prf`:

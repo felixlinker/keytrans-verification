@@ -34,8 +34,8 @@ import (
 /*@
 // PrefixTreesInv encapsulates per-element permissions for prefix tree slices.
 // Reduces quantifier count in the SIF product program.
-pred PrefixTreesInv(trees []*prefixtree.PrefixTree) {
-		forall i int :: { &trees[i] } 0 <= i && i < len(trees) ==> acc(&trees[i]) && trees[i].Inv() && trees[i] != nil
+pred PrefixTreesInv(trees []prefixtree.PT) {
+		forall i int :: { &trees[i] } 0 <= i && i < len(trees) ==> acc(&trees[i]) && trees[i] != nil && trees[i].Inv()
 }
 
 // RootHashesInv encapsulates per-element permissions for root hash slices.
@@ -167,7 +167,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	n := len(resp.Search.Prefix_proofs)
 	//@ fold acc(resp.Inv(), p)
 
-	var trees []*prefixtree.PrefixTree
+	var trees []prefixtree.PT
 	var rootHashes []*[sha256.Size]byte
 	//@ ghost var rhContents seq[seq[byte]] = seq[seq[byte]]{}
 	if !determined {
@@ -342,39 +342,49 @@ type MonitoringMapEntry struct {
 }
 
 // @ requires noPerm < p
-// @ requires acc(config, p)
-// @ requires acc(monitor_map)
+// @ requires acc(PrefixTreesInv(prefixTrees), p)
+// @ requires acc(RootHashesInv(prefixRootHash), p)
+// @ requires 0 < size && size <= uint64(len(prefixTrees)) && size <= uint64(len(prefixRootHash))
+// query
 // @ requires acc(utils.BytesMem(query.Label), p)
 // @ requires query.Label != nil
-// requires low(len(query.Label)) && forall i int :: {query.Label[i]} 0 <= i && i < len(query.Label) ==> low(query.Label[i])
+// response
 // @ requires acc(resp.Version, p)
 // @ requires acc(utils.BytesMem(resp.Full_tree_head.RootHash), p)
 // @ requires resp.Version != nil
 // @ requires *resp.Version >= 0
 // @ requires resp.Full_tree_head.RootHash != nil
-// @ requires acc(PrefixTreesInv(prefixTrees), p)
-// @ requires acc(RootHashesInv(prefixRootHash), p)
-// @ requires size > 0 && size <= uint64(len(prefixTrees)) && size <= uint64(len(prefixRootHash))
-// @ requires len(rootHashContents) == len(prefixRootHash)
-// @ requires low(size)
-// @ requires low(rootHashContents)
-// @ ensures acc(config, p)
-// @ ensures acc(utils.BytesMem(query.Label), p)
-// @ ensures acc(resp.Version, p)
-// @ ensures resp.Full_tree_head.RootHash != nil ==> acc(utils.BytesMem(resp.Full_tree_head.RootHash), p)
-// @ ensures acc(prefixTrees, p)
-// @ ensures acc(prefixRootHash, p)
-// @ ensures err == nil && res ==> low(*resp.Version)
+// @ requires acc(monitorMap)
+// @ requires acc(config, p)
+// relational preconditions:
+// requires low(size)
+// requires low(len(query.Label)) && forall i int :: {query.Label[i]} 0 <= i && i < len(query.Label) ==> low(query.Label[i])
+// TODO remove:
+//
+//	requires len(rootHashContents) == len(prefixRootHash)
+//	requires low(rootHashContents)
+//
+// @ ensures  acc(PrefixTreesInv(prefixTrees), p)
+// @ ensures  acc(RootHashesInv(prefixRootHash), p)
+// @ ensures  acc(utils.BytesMem(query.Label), p)
+// @ ensures  acc(resp.Version, p)
+// @ ensures  acc(utils.BytesMem(resp.Full_tree_head.RootHash), p)
+// @ ensures  acc(monitorMap)
+// @ ensures  acc(config, p)
+// @ ensures err == nil && res &&
+// @	low(size) &&
+// @	low(rootHashContents) ==>
+// @		low(*resp.Version)
 // @ trusted // TODO: remove once we can verify the entire function
-func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
+func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitorMap []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
-	search_tree := MkImplicitBinarySearchTree(size)
+	searchTree := MkImplicitBinarySearchTree(size)
 	resultRes := true
 	var resultErr error = nil
-	frontiers := search_tree.FrontierNodes( /*@ p, size @*/ )
+	frontiers := searchTree.FrontierNodes( /*@ p @*/ )
 	terminalLogEntry := -1
-	determined := false
+	determined := false // encodes early returns
 
 	if size == 0 || tVal >= size {
 		resultRes = false
@@ -501,7 +511,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 			Position: uint64(len(frontiers) - 1),
 			Version:  *t,
 		}
-		monitor_map = append( /*@ perm(1/2), @*/ monitor_map, entry)
+		monitorMap = append( /*@ perm(1/2), @*/ monitorMap, entry)
 	}
 
 	//@ unfold acc(PrefixTreesInv(prefixTrees), p)
@@ -520,8 +530,8 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 // @ ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> acc(&rootHashes[j]) && acc(rootHashes[j])
 // @ ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> forall k int :: {rootHashes[j][k]} 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // @ trusted
-func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []*prefixtree.PrefixTree, rootHashes []*[sha256.Size]byte, err error) {
-	trees = make([]*prefixtree.PrefixTree, 0, n)
+func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []prefixtree.PT, rootHashes []*[sha256.Size]byte, err error) {
+	trees = make([]prefixtree.PT, 0, n)
 	rootHashes = make([]*[sha256.Size]byte, 0, n)
 	//@ unfold acc(resp.Inv(), p)
 	for i := 0; i < n; i++ {
