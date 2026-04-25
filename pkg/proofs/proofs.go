@@ -32,6 +32,12 @@ type BinaryLadderStep struct {
 	Commitment *[sha256.Size]byte // optional<HashValue> — nil for non-existing/target versions
 }
 
+/*@
+pred (s BinaryLadderStep) Inv() {
+	acc(s.Proof) && (s.Commitment != nil ==> acc(s.Commitment))
+}
+@*/
+
 type InclusionProof struct {
 	Elements []NodeValue // HashValue elements — log-tree inclusion/consistency batch proof
 }
@@ -103,25 +109,31 @@ type CompleteBinaryLadderStep struct {
 	Result PrefixSearchResult
 }
 
-// @ trusted
+// @ requires forall i int :: { &results[i] } 0 <= i && 0 < len(results) ==> acc(&results[i]) && acc(results[i].Inv())
+// @ requires forall i int :: { &steps[i] } 0 <= i && 0 < len(steps) ==> acc(&steps[i]) && steps[i].Commitment != nil && acc(steps[i].Inv())
+// @ ensures acc(completeSteps)
+// @ ensures len(completeSteps) == len(results)
 func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
-	completeSteps = make([]CompleteBinaryLadderStep, 0, len(results))
-	if len(steps) < len(results) {
-		return completeSteps, errors.New("not enough steps")
+	completeSteps = make([]CompleteBinaryLadderStep, len(results))
+	if len(steps) != len(results) {
+		return completeSteps, errors.New("steps mismatch")
 	}
 
-	sortedSteps := make([]BinaryLadderStep, 0, len(results))
-	copy(sortedSteps, steps[:len(results)])
-	sortBinaryLadderSteps(sortedSteps)
-
-	for i, step := range sortedSteps {
-		completeSteps = append(completeSteps, CompleteBinaryLadderStep{
+	// @ invariant 0 <= i && i <= len(results)
+	// @ invariant len(completeSteps) == len(results)
+	// @ invariant acc(completeSteps)
+	// @ invariant forall i int :: { &results[i] } 0 <= i && 0 < len(results) ==> acc(&results[i]) && acc(results[i].Inv())
+	// @ invariant forall j int :: { &steps[j] } 0 <= j && 0 < len(steps) ==> acc(&steps[j]) && steps[j].Commitment != nil && acc(steps[j].Inv())
+	for i := 0; i < len(results); i++ {
+		// @ unfold acc(steps[i].Inv())
+		completeSteps[i] = CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
-				Vrf_output: crypto.VRF_proof_to_hash(step.Proof),
-				Commitment: *step.Commitment,
+				Vrf_output: crypto.VRF_proof_to_hash(steps[i].Proof),
+				Commitment: *steps[i].Commitment,
 			},
 			Result: results[i],
-		})
+		}
+		// @ fold acc(steps[i].Inv())
 	}
 
 	return completeSteps, nil
