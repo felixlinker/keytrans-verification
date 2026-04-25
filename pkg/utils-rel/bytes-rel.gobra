@@ -1,0 +1,44 @@
+package utilsrel
+
+import "github.com/felixlinker/keytrans-verification/pkg/utils"
+
+// ##(--hyperMode extended)
+
+// Lemma: returns a low sequence equal to getContent(data).
+// As Gobra currently does not support hyper functions, this
+// lemma is used to show that getContent returns a low sequence if
+// the content of the byte slice is low.
+ghost
+requires noPerm < p
+requires acc(utils.BytesMem(s), p)
+requires low(len(s))
+requires unfolding acc(utils.BytesMem(s), p) in forall i int :: { s[i] } 0 <= i && i < len(s) ==> low(s[i])
+ensures  acc(utils.BytesMem(s), p)
+ensures  result == utils.getContent(s)
+ensures  low(result)
+decreases
+func getContentIsLow(s []byte, ghost p perm) (result seq[byte]) {
+  unfold acc(utils.BytesMem(s), p)
+  result = getByteContentIsLow(s, 0, p/2)
+  fold acc(utils.BytesMem(s), p)
+  assert result == reveal utils.getContent(s)
+}
+
+ghost
+requires noPerm < p
+requires acc(data, p)
+requires 0 <= idx && idx <= len(data)
+requires low(len(data)) && low(idx)
+requires forall i int :: { data[i] } 0 <= i && i < len(data) ==> low(data[i])
+ensures  acc(data, p)
+ensures  result == utils.getByteContent(data, idx)
+ensures  low(result)
+decreases len(data) - idx
+func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) {
+  if idx == len(data) {
+    result = seq[byte]{}
+  } else {
+    tail := getByteContentIsLow(data, idx + 1, p/2)
+    result = seq[byte]{data[idx]} ++ tail
+  }
+}
