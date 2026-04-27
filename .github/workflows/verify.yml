@@ -72,7 +72,6 @@ jobs:
       image: gobraverifier/gobra-base:v6_z3_4.8.7
     env:
       MOD_NAME: github.com/felixlinker/keytrans-verification
-      EXCLUDE_PKGS: "main"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -107,6 +106,7 @@ jobs:
     env:
       MOD_NAME: github.com/felixlinker/keytrans-verification
       EXCLUDE_PKGS: "main"
+      UNARY_MODE_PKGS: "proofs trees utils"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -130,7 +130,7 @@ jobs:
             --hyperMode off \
             --recursive \
             --include "." ".verification" \
-            --includePackages "proofs"
+            --includePackages ${{ env.UNARY_MODE_PKGS }}
 
       - name: Verify packages (with hyperMode)
         working-directory: keytrans-verification
@@ -140,7 +140,7 @@ jobs:
             --hyperMode extended \
             --recursive \
             --include "." ".verification" \
-            --excludePackages ${{ env.EXCLUDE_PKGS }} "proofs"
+            --excludePackages ${{ env.EXCLUDE_PKGS }} ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
