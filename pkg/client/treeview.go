@@ -8,52 +8,59 @@ import (
 )
 
 // This file implements Section 4, "Updating Views of the Tree"
-
 type ImplicitBinarySearchTree struct {
-	Root  uint64
-	Left  *ImplicitBinarySearchTree
-	Right *ImplicitBinarySearchTree
+	size uint64
+	tree *ImplicitBinarySearchNode
 }
 
 /*@
 pred (t *ImplicitBinarySearchTree) Inv() {
-	acc(t) && 0 <= t.Root &&
-	(t.Left != nil ==> t.Left.Inv()) &&
-	(t.Right != nil ==> t.Right.Inv()) &&
-	// valid ranges:
-	(t.Left != nil ==> t.Left.Max() < t.Root) &&
-	(t.Right != nil ==> t.Root < t.Right.Min())
+	acc(t) && 0 <= t.size &&
+	((t.tree == nil) == (t.size == 0)) &&
+	(t.tree != nil ==>
+		t.tree.Inv(0, t.size - 1) &&
+		t.size == uint64(t.tree.Size(0, t.size - 1)))
 }
 
 ghost
-requires t != nil ==> acc(t.Inv(), _)
+requires acc(t.Inv(), _)
 ensures  0 <= res
 decreases
-pure func (t *ImplicitBinarySearchTree) Size() (res int) {
-	return t == nil ? 0 : t.sizeRec()
+pure func (t *ImplicitBinarySearchTree) Size() (res uint64) {
+	return unfolding acc(t.Inv(), _) in t.size
+}
+@*/
+
+type ImplicitBinarySearchNode struct {
+	Root  uint64
+	Left  *ImplicitBinarySearchNode
+	Right *ImplicitBinarySearchNode
+}
+
+/*@
+pred (n *ImplicitBinarySearchNode) Inv(min, max uint64) {
+	acc(n) && n.Root == RootNodePure(max + 1 - min) + min &&
+	min <= n.Root && n.Root <= max &&
+	((n.Left == nil) == (n.Root == min)) &&
+	(n.Left != nil ==> n.Left.Inv(min, n.Root - 1)) &&
+	((n.Right == nil) == (n.Root == max)) &&
+	(n.Right != nil ==> n.Right.Inv(n.Root + 1, max))
 }
 
 ghost
-requires acc(t.Inv(), _)
+requires n != nil ==> acc(n.Inv(min, max), _)
 ensures  0 <= res
-decreases acc(t.Inv(), _)
-pure func (t *ImplicitBinarySearchTree) sizeRec() (res int) {
-	return unfolding acc(t.Inv(), _) in 1 + (t.Left == nil ? 0 : t.Left.sizeRec()) + (t.Right == nil ? 0 : t.Right.sizeRec())
+decreases
+pure func (n *ImplicitBinarySearchNode) Size(min, max uint64) (res int) {
+	return n == nil ? 0 : unfolding acc(n.Inv(min, max), _) in n.sizeRec(min, max)
 }
 
 ghost
-requires acc(t.Inv(), _)
-ensures  0 <= res && res <= t.Max()
-decreases acc(t.Inv(), _)
-pure func (t *ImplicitBinarySearchTree) Min() (res uint64) {
-	return unfolding acc(t.Inv(), _) in t.Left == nil ? t.Root : t.Left.Min()
-}
-
-ghost
-requires acc(t.Inv(), _)
-decreases acc(t.Inv(), _)
-pure func (t *ImplicitBinarySearchTree) Max() uint64 {
-	return unfolding acc(t.Inv(), _) in t.Right == nil ? t.Root : t.Right.Max()
+requires acc(n.Inv(min, max), _)
+ensures  0 < res
+decreases acc(n.Inv(min, max), _)
+pure func (n *ImplicitBinarySearchNode) sizeRec(min, max uint64) (res int) {
+	return unfolding acc(n.Inv(min, max), _) in 1 + (n.Left == nil ? 0 : unfolding acc(n.Left.Inv(min, n.Root - 1), _) in n.Left.sizeRec(min, n.Root - 1)) + (n.Right == nil ? 0 : unfolding acc(n.Right.Inv(n.Root + 1, max), _) in n.Right.sizeRec(n.Root + 1, max))
 }
 @*/
 
@@ -94,146 +101,124 @@ func RootNode(treeSize uint64) (root uint64) {
 
 /*@
 ghost
+ensures 1 <= treeSize ==> root < treeSize
 decreases treeSize
 pure func RootNodePure(treeSize uint64) (root uint64) {
 	return treeSize == 0 ? 0 : utils.PowOf2_pure(utils.Log2Floor_pure(treeSize)) - 1
 }
 @*/
 
-// @ preserves tree != nil ==> tree.Inv()
-// @ requires  0 <= offset
-// @ ensures   old(tree.Size()) == tree.Size()
-// @ ensures   tree != nil ==> old(tree.Min()) + offset == tree.Min()
-// @ ensures   tree != nil ==> old(tree.Max()) + offset == tree.Max()
-// @ decreases tree.Size()
-func (tree *ImplicitBinarySearchTree) OffSet(offset uint64) {
-	if tree != nil {
-		//@ unfold tree.Inv()
-		tree.Root += offset
-		tree.Left.OffSet(offset)
-		tree.Right.OffSet(offset)
-		//@ fold tree.Inv()
-	}
-	return
-}
-
 // @ requires  noPerm < p
 // @ preserves acc(tree.Inv(), p)
+// @ ensures   (err == nil) == (0 <= nodeVal && nodeVal < tree.Size())
 // @ ensures   err == nil ==> acc(path)
-func (tree *ImplicitBinarySearchTree) PathTo(node uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
+// @ decreases
+func (tree *ImplicitBinarySearchTree) PathTo(nodeVal uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(tree.Inv(), p)
-	if tree.Root == node {
-		path = []uint64{node}
+	if tree.tree == nil {
+		err = errors.New("no paths exist in an empty tree")
 	} else {
-		var recurse *ImplicitBinarySearchTree
-		if tree.Root < node {
-			recurse = tree.Right
-		} else { // tree.Root > node
-			recurse = tree.Left
-		}
-		if recurse == nil {
-			err = errors.New("not found")
-		} else {
-			path, err = recurse.PathTo(node /*@, p/2 @*/)
-		}
-		if err == nil {
-			path = append( /*@ p, @*/ []uint64{tree.Root}, path...)
-		}
+		path, err = tree.tree.pathTo(nodeVal /*@, 0, tree.size - 1, p/2 @*/)
 	}
 	//@ fold acc(tree.Inv(), p)
 	return
 }
 
-// Currently, magic wands do not get correctly processed by the SIF plugin
-// //@ requires  noPerm < p
-// //@ preserves tree != nil ==> acc(tree.Inv(), p)
-// //@ ensures   acc(path)
-// //@ ensures   tree != nil ==> len(path) > 0
-// func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
-// 	path = []uint64{}
-
-// 	if tree == nil {
-// 		return
-// 	}
-
-// 	t := tree
-// 	//@ package acc(t.Inv(), p) --* acc(tree.Inv(), p)
-// 	// temporarily unfold the invariant to obtain the knowledge that t cannot be nil:
-// 	//@ assert unfolding acc(tree.Inv(), p) in t != nil
-
-//		//@ invariant acc(path)
-//		//@ invariant t != nil ==> acc(t.Inv(), p)
-//		//@ invariant t != nil ==> acc(t.Inv(), p) --* acc(tree.Inv(), p)
-//		//@ invariant t == nil ==> acc(tree.Inv(), p)
-//		//@ invariant t == nil ==> len(path) > 0
-//		for t != nil {
-//			//@ unfold acc(t.Inv(), p)
-//			path = append( /*@ p, @*/ path, t.Root)
-//			//@ ghost oldT := t
-//			t = t.Right
-//			/*@
-//			ghost if t == nil {
-//				fold acc(oldT.Inv(), p)
-//				apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
-//			} else {
-//				package acc(t.Inv(), p) --* acc(tree.Inv(), p) {
-//					fold acc(oldT.Inv(), p)
-//					apply acc(oldT.Inv(), p) --* acc(tree.Inv(), p)
-//				}
-//			}
-//			@*/
-//		}
-//		return
-//	}
-//
 // @ requires  noPerm < p
-// @ preserves tree != nil ==> acc(tree.Inv(), p)
-// @ ensures   acc(path)
-// @ ensures   (tree == nil) == (0 == len(path))
-// @ ensures   tree != nil ==> forall j int :: { path[j] } 0 <= j && j < len(path) ==> tree.Min() <= path[j] && path[j] <= tree.Max()
-// ensures   tree != nil ==> unfolding acc(tree.Inv(), p) in low(tree.Root) ==> (low(len(path)) && forall i int :: { path[i] } 0 <= i && i < len(path) ==> low(path[i]))
-// @ decreases tree.Size()
-func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
-	if tree != nil {
-		//@ unfold acc(tree.Inv(), p/2)
-		path = []uint64{tree.Root}
-		//@ assert low(len(path))
-		//@ assert forall j int :: { path[j] } 0 <= j && j < len(path) && low(tree.Root) ==> low(path[j])
-		// assert tree.Right == nil ==> low(tree.Right)
-		// assert tree.Right != nil ==> unfolding tree.Right.Inv() in low(tree.Right.Root)
-		subtreePath := tree.Right.FrontierNodes( /*@ p/4 @*/ )
-		// assert low(len(subtreePath))
-		// assert forall j int :: 0 <= j && j < len(subtreePath) ==> low(subtreePath[j])
-		path = append( /*@ perm(1/2), @*/ path, subtreePath...)
-		// assert low(len(path))
-		// assert forall j int :: 0 <= j && j < len(path) ==> low(path[j])
-		//@ fold acc(tree.Inv(), p/2)
+// @ preserves acc(node.Inv(min, max), p)
+// @ requires  min <= max
+// @ ensures   (err == nil) == (min <= nodeVal && nodeVal <= max)
+// @ ensures   err == nil ==> acc(path)
+// @ decreases max - min
+func (node *ImplicitBinarySearchNode) pathTo(nodeVal uint64 /*@, ghost min, max uint64, ghost p perm @*/) (path []uint64, err error) {
+	//@ unfold acc(node.Inv(min, max), p/2)
+	if node.Root == nodeVal {
+		path = []uint64{nodeVal}
+	} else {
+		var recurse *ImplicitBinarySearchNode
+		//@ ghost var minRec, maxRec uint64 = min, max
+		if node.Root < nodeVal {
+			recurse = node.Right
+			//@ minRec = node.Root + 1
+		} else { // node.Root > nodeVal
+			recurse = node.Left
+			//@ maxRec = node.Root - 1
+		}
+		if recurse == nil {
+			err = errors.New("not found")
+		} else {
+			path, err = recurse.pathTo(nodeVal /*@, minRec, maxRec, p/4 @*/)
+		}
+		if err == nil {
+			path = append( /*@ perm(1/2), @*/ []uint64{node.Root}, path...)
+		}
 	}
+	//@ fold acc(node.Inv(min, max), p/2)
+	return
+}
+
+// @ requires  noPerm < p
+// @ preserves acc(tree.Inv(), p)
+// @ ensures   acc(path)
+// @ ensures   uint64(len(path)) <= tree.Size()
+// @ ensures   forall j int :: { path[j] } 0 <= j && j < len(path) ==> 0 <= path[j] && path[j] < tree.Size()
+// @ ensures   low(tree.Size()) ==> low(len(path)) && forall i int :: { path[i] } 0 <= i && i < len(path) ==> low(path[i])
+// @ decreases
+func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
+	//@ unfold acc(tree.Inv(), p/2)
+	if tree.tree != nil {
+		path = tree.tree.frontierNodes( /*@ 0, tree.size - 1, p/4 @*/ )
+	}
+	//@ fold acc(tree.Inv(), p/2)
+	return
+}
+
+// @ requires  noPerm < p
+// @ preserves acc(node.Inv(min, max), p)
+// @ ensures   acc(path)
+// @ ensures   uint64(len(path)) <= max - min + 1
+// @ ensures   forall j int :: { path[j] } 0 <= j && j < len(path) ==> min <= path[j] && path[j] <= max
+// @ ensures   low(min) && low(max) ==> low(len(path)) && forall i int :: { path[i] } 0 <= i && i < len(path) ==> low(path[i])
+// @ decreases acc(node.Inv(min, max), p)
+func (node *ImplicitBinarySearchNode) frontierNodes( /*@ ghost min, max uint64, ghost p perm @*/ ) (path []uint64) {
+	//@ unfold acc(node.Inv(min, max), p/2)
+	path = []uint64{node.Root}
+	if node.Right != nil {
+		subtreePath := node.Right.frontierNodes( /*@ node.Root + 1, max, p/4 @*/ )
+		path = append( /*@ perm(1/2), @*/ path, subtreePath...)
+	}
+	//@ fold acc(node.Inv(min, max), p/2)
 	return
 }
 
 // @ requires 0 <= treeSize
-// @ ensures  tree != nil ==> tree.Inv() && tree.Min() == 0 && tree.Max() == treeSize - 1
-// @ ensures  treeSize == uint64(tree.Size())
-// @ ensures  (treeSize == 0) == (tree == nil)
-// @ ensures  tree != nil ==> unfolding tree.Inv() in low(treeSize) ==> low(tree.Root)
-// @ decreases treeSize
+// @ ensures  tree.Inv() && tree.Size() == treeSize
+// @ decreases
 func MkImplicitBinarySearchTree(treeSize uint64) (tree *ImplicitBinarySearchTree) {
-	if treeSize == 0 {
-		tree = nil
-	} else if treeSize == 1 {
-		root := RootNode(treeSize)
-		tree = &ImplicitBinarySearchTree{root, nil, nil}
-		//@ fold tree.Inv()
-		//@ assert tree.Size() == 1
-	} else if treeSize > 1 {
-		root := RootNode(treeSize)
-		left := MkImplicitBinarySearchTree(root)
-		right := MkImplicitBinarySearchTree(treeSize - root - 1)
-		right.OffSet(root + 1)
-		tree = &ImplicitBinarySearchTree{root, left, right}
-		//@ fold tree.Inv()
+	root := mkImplicitBinarySearchNode(0, treeSize-1)
+	tree = &ImplicitBinarySearchTree{treeSize, root}
+	//@ fold tree.Inv()
+	return
+}
+
+// @ requires 0 <= min && min <= max + 1
+// @ ensures  (min <= max) == (node != nil)
+// @ ensures  node != nil ==> node.Inv(min, max)
+// @ ensures  node != nil ==> uint64(node.Size(min, max)) == max - min + 1
+// @ decreases max - min
+func mkImplicitBinarySearchNode(min, max uint64) (node *ImplicitBinarySearchNode) {
+	if min == max { // treeSize == 1
+		root := RootNode(max-min+1) + min
+		node = &ImplicitBinarySearchNode{root, nil, nil}
+		//@ fold node.Inv(min, max)
+	} else if min < max {
+		root := RootNode(max-min+1) + min
+		left := mkImplicitBinarySearchNode(min, root-1)
+		right := mkImplicitBinarySearchNode(root+1, max)
+		node = &ImplicitBinarySearchNode{root, left, right}
+		//@ fold node.Inv(min, max)
 	}
+	// else: min == max+1 and node == nil
 	return
 }
 
@@ -256,6 +241,7 @@ pred (s *UserState) Inv() {
 // @ requires noPerm < p
 // @ preserves acc(timestamps, p)
 // @ ensures res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] <= timestamps[j]
+// @ decreases
 func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	res = true
 	if len(timestamps) > 0 {
@@ -264,6 +250,7 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 		//@ invariant acc(timestamps, p)
 		//@ invariant res ==> forall i int :: { timestamps[i] } 0 <= i && i < k ==> timestamps[i] <= tmp
 		//@ invariant res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < k ==> timestamps[i] <= timestamps[j]
+		//@ decreases len(timestamps) - k
 		for k := 0; k < len(timestamps); k++ {
 			v := timestamps[k]
 			if tmp > v {
@@ -278,20 +265,20 @@ func checkIncreasing(timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 
 // @ requires  noPerm < p
 // @ preserves st.Inv()
-// @ preserves acc(new_head.Inv(), p)
+// @ preserves acc(newHead.Inv(), p)
 // since we take the timestamps from `prf`, we need full permissions to then
 // @ preserves acc(prf.Inv(), p)
-// @ ensures err == nil ==> unfolding st.Inv() in st.Size == new_head.Size()
-// @ ensures err == nil && low(new_head.Size()) ==> unfolding st.Inv() in low(st.Size)
+// @ ensures err == nil ==> unfolding st.Inv() in st.Size == newHead.Size()
+// @ ensures err == nil && low(newHead.Size()) ==> unfolding st.Inv() in low(st.Size)
 // @ trusted
-func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreeProof /*@, ghost p perm @*/) (err error) {
+func (st *UserState) UpdateView(newHead FullTreeHead, prf proofs.CombinedTreeProof /*@, ghost p perm @*/) (err error) {
 	//@ unfold acc(prf.Inv(), p)
 
 	if !checkIncreasing(prf.Timestamps /*@, p/2 @*/) {
 		//@ fold acc(prf.Inv(), p)
 		return errors.New("timestamps not increasing")
 	}
-	if new_head.Tree_head.Tree_size == 0 {
+	if newHead.Tree_head.Tree_size == 0 {
 		//@ fold acc(prf.Inv(), p)
 		return errors.New("new tree cannot be empty")
 	}
@@ -304,7 +291,7 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	origTimestamps := st.Frontier_timestamps
 
 	oldSearchTree := MkImplicitBinarySearchTree(st.Size)
-	newSearchTree := MkImplicitBinarySearchTree(new_head.Tree_head.Tree_size)
+	newSearchTree := MkImplicitBinarySearchTree(newHead.Tree_head.Tree_size)
 	oldFrontier := oldSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 	newFrontier := newSearchTree.FrontierNodes( /*@ 1/2 @*/ )
 
@@ -367,7 +354,7 @@ func (st *UserState) UpdateView(new_head FullTreeHead, prf proofs.CombinedTreePr
 	copy(newSubtrees, prf.Inclusion.Elements)
 	st.Full_subtrees = newSubtrees
 
-	st.Size = new_head.Tree_head.Tree_size
+	st.Size = newHead.Tree_head.Tree_size
 
 	//@ fold st.Inv()
 	//@ fold acc(prf.Inv(), p)
