@@ -51,8 +51,8 @@ func VRF_proof_to_hash(prf []byte) [32]byte {
 
 // @ trusted
 // @ preserves acc(pk) && input.Inv()
-func VRF_verify(pk []byte, input VrfInput, prf []byte) (bool, [32]byte) {
+func VRF_verify(pk []byte, input VrfInput, prf []byte) (r [32]byte, ok bool) {
 	hash := VRF_hash(nil, input)
 	proofHash := VRF_proof_to_hash(prf)
-	return hash == proofHash, proofHash
+	return proofHash, hash == proofHash
 }
