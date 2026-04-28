@@ -12,14 +12,13 @@ import (
 
 type PrefixTree interface {
 	GetRoot() [sha256.Size]byte
-	// TODO: Make return value *[...]...
-	GetCommitment(label []byte, version uint64) ([sha256.Size]byte, bool, error)
+	GetCommitment(label []byte, version uint64) (*[sha256.Size]byte, error)
 }
 
 type prefixLeaf struct {
 	value      [sha256.Size]byte
-	vrfOutput  [sha256.Size]byte
-	commitment [sha256.Size]byte
+	vrfOutput  *[sha256.Size]byte
+	commitment *[sha256.Size]byte
 }
 
 func commitmentLeaf(pl *proofs.PrefixLeaf) (t *prefixLeaf) {
@@ -33,8 +32,8 @@ func commitmentLeaf(pl *proofs.PrefixLeaf) (t *prefixLeaf) {
 	value /*@ @ @*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
 	return &prefixLeaf{
 		value:      value,
-		vrfOutput:  pl.Vrf_output,
-		commitment: pl.Commitment,
+		vrfOutput:  &pl.Vrf_output,
+		commitment: &pl.Commitment,
 	}
 }
 
@@ -48,8 +47,8 @@ func nodeValueLeaf(nodeValue proofs.NodeValue) (t *prefixTree) {
 	return &prefixTree{
 		leaf: &prefixLeaf{
 			value:      nodeValue,
-			vrfOutput:  [sha256.Size]byte{},
-			commitment: [sha256.Size]byte{},
+			vrfOutput:  nil,
+			commitment: nil,
 		},
 		left:  nil,
 		right: nil,
@@ -125,9 +124,13 @@ func (t prefixTree) getLeaf(searchKey []bool) (l *prefixLeaf) {
 	}
 }
 
-func (t prefixTree) search(searchKey [sha256.Size]byte) (r [sha256.Size]byte, ok bool) {
+func (t prefixTree) search(searchKey [sha256.Size]byte) (r *[sha256.Size]byte, ok bool) {
 	leaf := t.getLeaf(utils.Bits(searchKey))
-	return leaf.commitment, slices.Equal(leaf.vrfOutput[:], searchKey[:])
+	if leaf.vrfOutput == nil {
+		return nil, false
+	} else {
+		return leaf.commitment, slices.Equal(leaf.vrfOutput[:], searchKey[:])
+	}
 }
 
 type prefixDict struct {
@@ -188,14 +191,17 @@ func (d prefixDict) GetRoot() [sha256.Size]byte {
 	return d.root
 }
 
-func (d prefixDict) GetCommitment(label []byte, version uint64) (r [sha256.Size]byte, ok bool, err error) {
-	r = [sha256.Size]byte{}
+func (d prefixDict) GetCommitment(label []byte, version uint64) (r *[sha256.Size]byte, err error) {
+	r = nil
 	if !slices.Equal(label, d.label) {
-		return r, false, errors.New("wrong label")
+		return r, errors.New("wrong label")
 	} else if searchKey, ok := d.vrfOutputs[version]; !ok {
-		return r, false, errors.New("no proof for version")
+		return r, errors.New("no proof for version")
 	} else {
-		r, ok = d.tree.search(searchKey)
-		return r, ok, nil
+		if r, ok := d.tree.search(searchKey); ok {
+			return r, nil
+		} else {
+			return nil, nil
+		}
 	}
 }
