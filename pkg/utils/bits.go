@@ -2,19 +2,31 @@ package utils
 
 import "crypto/sha256"
 
-func ByteBits(b byte) []bool {
-	r := make([]bool, 0, 8)
-	for i := 0; i < 8; i++ {
-		r = append(r, b&0x80 > 0)
+// @ ensures acc(r)
+// @ ensures len(r) == 8
+func ByteBits(b byte) (r []bool) {
+	r = make([]bool, 8)
+	// @ ghost p := perm(1)
+	// @ invariant len(r) == 8
+	// @ invariant 0 <= i && i <= len(r)
+	// @ invariant acc(r)
+	for i := 0; i < len(r); i++ {
+		r[i] = b&0x80 > 0
 		b = b << 1
 	}
 	return r
 }
 
-func Bits(bytes [sha256.Size]byte) []bool {
-	r := make([]bool, 0, len(bytes)*8)
+// @ ensures acc(r)
+// @ ensures len(bytes) > 0 ==> len(r) > 0
+func Bits(bytes [sha256.Size]byte) (r []bool) {
+	r = make([]bool, 0, len(bytes)*8)
+	// @ ghost p := perm(1)
+	// @ invariant 0 <= i && i <= len(bytes)
+	// @ invariant 0 < i ==> len(r) > 0
+	// @ invariant acc(r, p)
 	for i := 0; i < len(bytes); i++ {
-		r = append(r, ByteBits(bytes[i])...)
+		r = append( /*@ p, @*/ r, ByteBits(bytes[i])...)
 	}
 	return r
 }
