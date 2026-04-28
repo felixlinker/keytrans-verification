@@ -7,6 +7,7 @@ import (
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
 /*@
@@ -286,7 +287,7 @@ ghost
 decreases
 // takes seq[byte] inputs so it remains pure (no heap permissions needed)
 // returns bool: true = commitment exists (inclusion), false = no commitment (non-inclusion)
-pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash seq[byte]) bool
+pure func GetCommitmentExists(Label seq[byte], Version uint64, RootHash seq[byte]) bool
 @*/
 
 // GetCommitment searches the authenticated prefix tree for the commitment
@@ -306,19 +307,15 @@ pure func GetCommitmentIsDeterministic(Label seq[byte], Version uint64, RootHash
 //   - (nil, nil)         if no matching leaf exists (non-inclusion)
 //   - (nil, error)       if the tree is in an invalid state
 //
-// @ requires p > noPerm
-// @ requires Label != nil && len(Label) >= 0
-// @ requires Version >= 0
-// @ requires acc(Label, p)
-// @ requires acc(RootHash, p)
-// @ ensures acc(res, p)
-// @ ensures acc(RootHash,p)
-// @ ensures acc(Label,p)
-// @ ensures low(len(Label)) && forall i int :: {Label[i]} 0 <= i && i < len(Label) ==> low(Label[i])
-// @ ensures low(len(RootHash)) && forall i int :: {RootHash[i]} 0 <= i && i < len(RootHash) ==> low(RootHash[i])
-// @ ensures err == nil ==> (res != nil) == GetCommitmentIsDeterministic(labelS, Version, rootHashS)
+// @ requires  noPerm < p
+// @ requires  Label != nil && 0 <= len(Label)
+// @ requires  0 <= Version
+// @ preserves acc(Label, p)
+// @ preserves acc(RootHash, p)
+// @ ensures   acc(res, p)
+// @ ensures   err == nil ==> (res != nil) == GetCommitmentExists(utils.getContent(Label), Version, utils.getContent(RootHash))
 // @ trusted
-func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost labelS seq[byte], ghost rootHashS seq[byte], ghost p perm@*/) (res []byte, err error) {
+func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost p perm@*/) (res []byte, err error) {
 	if tree == nil {
 		// Nil tree: non-inclusion (no commitments exist in an empty tree)
 		return nil, nil
