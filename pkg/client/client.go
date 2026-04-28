@@ -125,107 +125,70 @@ pred (s SearchResponse) Inv() {
 }
 @*/
 
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves st.Inv()
-// @ requires acc(config, p)
-// @ requires acc(query.Inv(), p)
-// @ requires unfolding acc(query.Inv(), p) in query.Label != nil
-// @ requires low(query.LabelContent())
-// @ requires acc(resp.Inv(), p)
-// @ requires resp.Version != nil
-// @ requires unfolding acc(resp.Inv(), p) in *resp.Version >= 0
-// @ requires resp.Full_tree_head.RootHash != nil
-// @ requires resp.Full_tree_head.Tree_head.Tree_size > 0
-// @ requires resp.Full_tree_head.Tree_head.Tree_size <= uint64(len(resp.Search.Prefix_proofs))
-// @ requires low(resp.Full_tree_head.Tree_head.Tree_size)
-// @ requires low(len(resp.Search.Prefix_proofs))
-// @ ensures err != nil ==> acc(resp.Inv(), p)
-// @ ensures err == nil ==> acc(resp.Version, p) && low(*resp.Version)
-// @ trusted // TODO: remove once we can verify the entire function
+// @ preserves acc(config, p)
+// @ preserves acc(query.Inv(), p)
+// @ requires  acc(resp.Inv(), p)
+// @ requires  unfolding acc(resp.Inv(), p) in 0 < len(resp.Search.Prefix_proofs)
+// @ ensures   acc(resp.Inv(), p)
+// @ ensures   err == nil ==> acc(res) && res.Inv()
+// hyper-postcondition:
+// @ ensures   err == nil &&
+// @	low(query.LabelContent()) &&
+// @ 	(unfolding acc(resp.Inv(), p) in low(resp.Full_tree_head.Tree_head.Tree_size) && low(len(resp.Search.Prefix_proofs))) ==>
+// @		unfolding acc(resp.Inv(), p) in resp.Version != nil && low(*resp.Version)
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
-	// flag encoding early termination
-	determined := false
+	// we use `err` to skip later phases instead of returning early, which is not yet supported by Gobra's hypermode.
 
 	// Phase 1: UpdateView
 	//@ unfold acc(resp.Inv(), p)
 	err = st.UpdateView(resp.Full_tree_head, resp.Search /*@, p/2 @*/)
-	if err != nil {
-		determined = true
-	}
 
 	// Phase 2: Validation checks (resp.Inv() still unfolded)
-	if !determined && resp.Version == nil {
+	if err == nil && resp.Version == nil {
 		err = errors.New("no version provided")
-		determined = true
 	}
-	if !determined && len(resp.Search.Prefix_roots) != 0 {
-		err = errors.New("prefix roots provided")
-		determined = true
+	if err == nil && len(resp.Search.Prefix_roots) == 0 {
+		err = errors.New("no prefix roots provided")
 	}
-	if !determined {
+	if err == nil {
 		ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(uint64(*resp.Version) /*@, 0 @*/)
 		if len(resp.Binary_ladder) != len(ladderIndices) {
 			err = errors.New("length of binary ladder does not match greatest version")
-			determined = true
 		}
 	}
-
-	// Phase 3: Build prefix trees
-	n := len(resp.Search.Prefix_proofs)
 	//@ fold acc(resp.Inv(), p)
 
+	// Phase 3: Build prefix trees
 	var trees []prefixtree.PT
 	var rootHashes []*[sha256.Size]byte
-	//@ ghost var rhContents seq[seq[byte]] = seq[seq[byte]]{}
-	if !determined {
-		trees, rootHashes, err = buildPrefixTrees(resp, n /*@, p @*/)
-		if err != nil {
-			determined = true
-		} else {
-			//@ rhContents = utilsrel.buildRootHashContents(rootHashes, n)
-			//@ fold acc(RootHashesInv(rootHashes), p)
-		}
+	if err == nil {
+		trees, rootHashes, err = buildPrefixTrees(resp /*@, p @*/)
 	}
 
 	// Phase 4: VerifyLatestKey
-	decision := false // TODO: remove
-	if !determined {
-		//@ unfold acc(resp.Inv(), p)
-		//@ unfold acc(resp.Full_tree_head.Inv(), p)
-		size := resp.Full_tree_head.Tree_head.Tree_size
-		//@ assert size <= n
-		//@ assert len(trees) == n && len(rootHashes) == n
+	if err == nil {
 		monitoringMap := make([]*MonitoringMapEntry, 0)
 		var entry *MonitoringMapEntry
-		entry, err = VerifyLatestKey(trees, rootHashes, query, resp, config /*@, rhContents, p @*/)
-		decision = err == nil
-		//@ unfold acc(query.Inv(), p)
-		if entry != nil {
+		entry, err = VerifyLatestKey(trees, rootHashes, query, resp, config /*@, p/2 @*/)
+		if err == nil && entry != nil {
 			monitoringMap = append( /*@ perm(1/2), @*/ monitoringMap, entry)
-		}
-
-		if !decision || err != nil {
-			//@ fold acc(resp.Full_tree_head.Inv(), p)
-			//@ fold acc(resp.Inv(), p)
-			if err == nil {
-				err = errors.New("Query response does not contain latest version")
-			}
-			determined = true
 		}
 	}
 
 	// Phase 5: Single return
-	if !determined && decision {
-		// VerifyLatestKey ensures: err == nil && res ==> low(*resp.Version)
-		// Don't fold resp.Inv() — keep acc(resp.Version, p) for postcondition
-		//@ unfold acc(resp.Value.Inv(), p)
-		res = &proofs.UpdateValue{Value: resp.Value.Value}
-		//@ fold acc(resp.Value.Inv(), p)
-		err = nil
-	} else {
-		res = nil
+	if err == nil {
+		//@ unfold acc(resp.Inv(), p/2)
+		value := make([]byte, len(resp.Value.Value))
+		//@ unfold acc(resp.Value.Inv(), p/2)
+		copy(value, resp.Value.Value /*@, p/2 @*/)
+		//@ fold acc(resp.Value.Inv(), p/2)
+		//@ fold acc(resp.Inv(), p/2)
+		res = &proofs.UpdateValue{Value: value}
+		//@ fold res.Inv()
 	}
-	return res, err
+	return
 }
 
 // returns the full binary ladder together with tstar for the targets of the two
@@ -369,7 +332,7 @@ type MonitoringMapEntry struct {
 // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse, monitorMap []MonitoringMapEntry, config *Configuration /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
+func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
 	size := uint64(len(prefixTrees))
 	t := /*@ unfolding acc(resp.Inv(), p) in @*/ uint64(*resp.Version) // claimed greatest version
 	searchTree := MkImplicitBinarySearchTree(uint64(len(prefixTrees)))
@@ -448,20 +411,27 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 }
 
 // buildPrefixTrees constructs prefix trees from the response's prefix proofs.
-// @ requires noPerm < p
-// @ requires acc(resp.Inv(), p)
-// @ ensures acc(resp.Inv(), p)
-// @ ensures resp.Version != nil ==> (unfolding acc(resp.Inv(), p) in *resp.Version >= 0)
-// @ ensures err == nil ==> len(trees) == n
-// @ ensures err == nil ==> acc(PrefixTreesInv(trees), p)
-// @ ensures err == nil ==> len(rootHashes) == n
-// @ ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> acc(&rootHashes[j]) && acc(rootHashes[j])
-// @ ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> forall k int :: {rootHashes[j][k]} 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
+// @ requires  noPerm < p
+// @ requires  acc(resp.Inv(), p)
+// @ requires  unfolding acc(resp.Inv(), p) in 0 < len(resp.Search.Prefix_proofs)
+// @ ensures   acc(resp.Inv(), p)
+// ensures   resp.Version != nil ==> (unfolding acc(resp.Inv(), p) in *resp.Version >= 0)
+// @ ensures   err == nil ==> len(trees) == unfolding acc(resp.Inv(), p) in len(resp.Search.Prefix_proofs)
+// @ ensures   err == nil ==> acc(PrefixTreesInv(trees), p)
+// @ ensures   err == nil ==> len(rootHashes) == len(trees)
+// @ ensures   err == nil ==> RootHashesInv(rootHashes)
+// ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> forall k int :: {rootHashes[j][k]} 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
+// hyper-postcondition expressing that this function checks correctness of the root hashes:
+// @ ensures err == nil &&
+// @ 	(unfolding acc(resp.Inv(), p) in low(len(resp.Search.Prefix_proofs))) ==>
+// @ 		low(GetRootHashContent(rootHashes, len(rootHashes)-1))
 // @ trusted
-func buildPrefixTrees(resp SearchResponse, n int /*@, ghost p perm @*/) (trees []prefixtree.PT, rootHashes []*[sha256.Size]byte, err error) {
+// TODO: this spec might not be fully correct yet!
+func buildPrefixTrees(resp SearchResponse /*@, ghost p perm @*/) (trees []prefixtree.PT, rootHashes []*[sha256.Size]byte, err error) {
+	//@ unfold acc(resp.Inv(), p)
+	n := len(resp.Search.Prefix_proofs)
 	trees = make([]prefixtree.PT, 0, n)
 	rootHashes = make([]*[sha256.Size]byte, 0, n)
-	//@ unfold acc(resp.Inv(), p)
 	for i := 0; i < n; i++ {
 		prf := /*@ unfolding acc(resp.Search.Inv(), p/2) in @*/ resp.Search.Prefix_proofs[i]
 		if tree, treeErr := prefixtree.ToTree(prf, resp.Binary_ladder); treeErr != nil {
