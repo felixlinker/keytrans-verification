@@ -214,6 +214,7 @@ pred (s SearchResponse) Inv() {
 // @ requires low(len(resp.Search.Prefix_proofs))
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(resp.Version, p) && low(*resp.Version)
+// @ trusted // TODO remove once we have refactored 'VerifyLatest'
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	determined := false
@@ -454,6 +455,7 @@ type MonitoringMapEntry struct {
 // @ ensures acc(prefixTrees, p)
 // @ ensures acc(prefixRootHash, p)
 // @ ensures err == nil && res ==> low(*resp.Version)
+// @ trusted // TODO remove once we have refactored 'VerifyLatestKey'
 func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
