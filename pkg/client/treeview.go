@@ -161,7 +161,9 @@ func (node *ImplicitBinarySearchNode) pathTo(nodeVal uint64 /*@, ghost min, max 
 // @ preserves acc(tree.Inv(), p)
 // @ ensures   acc(path)
 // @ ensures   uint64(len(path)) <= tree.Size()
+// @ ensures   0 < tree.Size() ==> 0 < len(path)
 // @ ensures   forall j int :: { path[j] } 0 <= j && j < len(path) ==> 0 <= path[j] && path[j] < tree.Size()
+// @ ensures   0 < tree.Size() ==> path[len(path) - 1] == tree.Size() - 1
 // @ ensures   low(tree.Size()) ==> low(len(path)) && forall i int :: { path[i] } 0 <= i && i < len(path) ==> low(path[i])
 // @ decreases
 func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (path []uint64) {
@@ -176,8 +178,10 @@ func (tree *ImplicitBinarySearchTree) FrontierNodes( /*@ ghost p perm @*/ ) (pat
 // @ requires  noPerm < p
 // @ preserves acc(node.Inv(min, max), p)
 // @ ensures   acc(path)
+// @ ensures   0 < len(path)
 // @ ensures   uint64(len(path)) <= max - min + 1
 // @ ensures   forall j int :: { path[j] } 0 <= j && j < len(path) ==> min <= path[j] && path[j] <= max
+// @ ensures   path[len(path) - 1] == max
 // @ ensures   low(min) && low(max) ==> low(len(path)) && forall i int :: { path[i] } 0 <= i && i < len(path) ==> low(path[i])
 // @ decreases acc(node.Inv(min, max), p)
 func (node *ImplicitBinarySearchNode) frontierNodes( /*@ ghost min, max uint64, ghost p perm @*/ ) (path []uint64) {
