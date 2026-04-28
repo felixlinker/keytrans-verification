@@ -40,7 +40,7 @@ pred PrefixTreesInv(trees []prefixtree.PT) {
 
 // RootHashesInv encapsulates per-element permissions for root hash slices.
 pred RootHashesInv(hashes []*[sha256.Size]byte) {
-	forall i int :: { hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i]) && utils.BytesMem(hashes[i][:])
+	forall i int :: { &hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i]) && utils.BytesMem(hashes[i][:])
 }
 
 ghost
