@@ -1,10 +1,8 @@
 package proofs
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"errors"
-	"slices"
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
@@ -138,15 +136,4 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 	}
 
 	return completeSteps, nil
-}
-
-// @ trusted
-// @ preserves acc(sortedSteps)
-func sortBinaryLadderSteps(sortedSteps []BinaryLadderStep) {
-	slices.SortFunc(sortedSteps, func(a, b BinaryLadderStep) int {
-		hashA := crypto.VRF_proof_to_hash(a.Proof)
-		hashB := crypto.VRF_proof_to_hash(b.Proof)
-		return bytes.Compare(hashA[:], hashB[:])
-	})
-	return
 }
