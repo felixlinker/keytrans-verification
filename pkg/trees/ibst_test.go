@@ -37,9 +37,9 @@ func TestPathToFrontier(t *testing.T) {
 		want []uint64
 	}{
 		{n: 0, size: 14, want: []uint64{0, 1, 3, 7}},
-		// {n: 5, size: 14, want: []uint64{5, 3, 7}},
-		// {n: 10, size: 14, want: []uint64{10, 9, 11, 7}},
-		// {n: 12, size: 14, want: []uint64{12, 13, 11, 7}},
+		{n: 5, size: 14, want: []uint64{5, 3, 7}},
+		{n: 10, size: 14, want: []uint64{10, 9, 11, 7}},
+		{n: 12, size: 14, want: []uint64{12, 13, 11, 7}},
 	}
 
 	for _, tc := range tests {
