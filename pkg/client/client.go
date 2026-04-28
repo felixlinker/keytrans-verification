@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"errors"
 
-	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
+	//@ "github.com/felixlinker/keytrans-verification/pkg/arb"
 	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
+	//@ utilsrel "github.com/felixlinker/keytrans-verification/pkg/utils-rel"
 )
 
 // Package client implements the client-side verification logic for key
@@ -30,16 +32,6 @@ import (
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 /*@
-//Helper functions
-//Compare the bytes of the arrays
-ghost
-requires acc(r1, _) && acc(r2, _)
-decreases
-pure func BytesEqual(r1, r2 []byte) bool {
-	return len(r1) == len(r2) &&
-		forall i int :: {r1[i], r2[i]} 0 <= i && i < len(r1) ==> r1[i] == r2[i]
-}
-
 // PrefixTreesInv encapsulates per-element permissions for prefix tree slices.
 // Reduces quantifier count in the SIF product program.
 pred PrefixTreesInv(trees []*prefixtree.PrefixTree) {
@@ -81,34 +73,6 @@ decreases
 pure func TStarBetween(t1, t2 uint64) (res uint64) {
   return t1 == t2 ? 0 :
     t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
-}
-
-// Lemma: returns a low sequence equal to getByteContent(data, idx).
-// Recurses matching getByteContent's structure. Workaround for Gobra issue #974:
-// low() cannot directly wrap a recursive pure function, so we build the result
-// imperatively (making low() provable) while ensuring equality with getByteContent.
-ghost
-requires p > noPerm
-requires acc(data, p)
-requires low(len(data))
-requires 0 <= idx && idx <= len(data)
-requires low(idx)
-requires forall i int :: {data[i]} 0 <= i && i < len(data) ==> low(data[i])
-ensures acc(data, p)
-ensures low(len(data))
-ensures forall i int :: {data[i]} 0 <= i && i < len(data) ==> low(data[i])
-ensures low(result)
-ensures result == utils.getByteContent(data, idx)
-decreases len(data) - idx
-func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) {
-  if idx == len(data) {
-    result = seq[byte]{}
-  } else {
-    tail := getByteContentIsLow(data, idx + 1, p)
-    result = seq[byte]{data[idx]} ++ tail
-  }
-  // reveal after permissions are restored so the body is visible on the correct heap
-  revealedContent := reveal utils.getByteContent(data, idx)
 }
 
 // Build low ghost seq from a *[sha256.Size]byte array
@@ -250,6 +214,7 @@ pred (s SearchResponse) Inv() {
 // @ requires low(len(resp.Search.Prefix_proofs))
 // @ ensures err != nil ==> acc(resp.Inv(), p)
 // @ ensures err == nil ==> acc(resp.Version, p) && low(*resp.Version)
+// @ trusted // TODO remove once we have refactored 'VerifyLatest'
 func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	//@ unfold acc(resp.Inv(), p)
 	determined := false
@@ -341,122 +306,124 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	return res, err
 }
 
-// @ requires target >= 0
-// @ ensures acc(r1)
-// @ ensures forall j int :: {r1[j]} j >= 0 && j < len(r1) ==> r1[j] >= 0
-// @ ensures 0 <= tStarIdx && tStarIdx < len(r1)
-// @ ensures low(r1[tStarIdx])
-// @ ensures IsTStar(r1[tStarIdx], rel(target, 0), rel(target, 1))
-func FullBinaryLadderSteps_with_tstar(target uint64) (r1 []uint64 /*@, ghost tStarIdx int @*/) {
-	assert false // TODO
-	// r1 = proofs.FullBinaryLadderSteps_wrapper(target)
-	// tStarIdx = findTStarIdx(r1, target)
+// returns the full binary ladder together with tstar for the targets of the two
+// executions (if both executions are active).
+// @ requires 0 <= target
+// @ ensures  proofs.BinaryLadderInv(r)
+// @ ensures  0 <= idx && idx < len(r)
+// @ ensures  proofs.IstStar(r, target, rel(target, 1), idx) // this is the same as wrapping it in `rel(_, 0)`
+// @ ensures  rel(proofs.IstStar(r, target, rel(target, 0), idx), 1)
+// @ decreases
+func FullBinaryLadderSteps_with_tstar(target uint64) (r []uint64 /*@, ghost idx int @*/) {
+	// the following ghost if stmt avoids an issue in the encoding where we
+	// access `rel(target, 1)` before it is available (as it gets first copied
+	// into a local variable)
+	//@ ghost if true {} // acts like a "barrier" in the encoding
+	/*@
+	// t2 should be the other execution's target (if both are active).
+	// we obtain the other execution's target by checking whether "this" execution's target
+	// is equal to the first execution's target. This is an indirect way of figuring out
+	// whether we currently look at the first or second execution:
+	t2 := target == rel(target, 0) ? rel(target, 1) : rel(target, 0)
+	ghost if t2 < 0 {
+		t2 = 0 // make sure that t2 is non-negative even if the other execution is not active
+	}
+	@*/
+	return proofs.FullBinaryLadderSteps(target /*@, t2 @*/)
+}
+
+// alternative implementation for `FullBinaryLadderSteps_with_tstar` based on universal introduction
+// but deriving the same property about tstar
+// @ requires 0 <= target
+// @ ensures  proofs.BinaryLadderInv(r)
+// @ ensures  0 <= idx && idx < len(r)
+// @ ensures  proofs.IstStar(r, target, rel(target, 1), idx) // this is the same as wrapping it in `rel(_, 0)`
+// @ ensures  rel(proofs.IstStar(r, target, rel(target, 0), idx), 1)
+// @ decreases
+func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@, ghost idx int @*/) {
+	// let t2 be arbitrary:
+	//@ t2 := arb.GetArbUint64()
+	r /*@, idx @*/ = proofs.FullBinaryLadderSteps(target /*@, 0 <= t2 ? t2 : 0 @*/)
+
+	// since t2 is arbitrary, termination of `FullBinaryLadderSteps` does not depend on t2, and
+	// `r` is the same for all t2, we can perform a universal introduction on t2:
+	//@ assert 0 <= t2 ==> proofs.IstStar(r, target, t2, idx)
+	//@ assume forall t2 uint64 :: { proofs.IstStar(r, target, t2, idx) } 0 <= t2 ==> proofs.IstStar(r, target, t2, idx)
+	// since `proofs.IstStar(r, target, t2, idx)` holds for all non-negative t2, it also holds for `rel(target, 1)` as
+	// stated in the postcondition.
 	return
 }
 
-// CheckGreatest wraps FullBinaryLadderSteps_with_tstar and CheckCommitment
-// into a single function to create a verification boundary. The SMT solver verifies
-// this function once; at the call site in VerifyLatestKey, it only reasons about the
-// postcondition, reducing the proof obligation in the main loop.
-// @ requires p > noPerm
-// @ requires label != nil
-// @ requires acc(label, p)
-// @ requires acc(RootHash, p)
-// @ requires prefixTree != nil ==> acc(prefixTree.Inv(), p)
-// @ requires low(labelSeq)
-// @ requires low(RootHashSeq)
-// @ requires t >= 0
-// @ ensures prefixTree != nil ==> acc(prefixTree.Inv(), p)
-// @ ensures acc(label, p)
-// @ ensures acc(RootHash, p)
-// @ ensures err == nil && res == 0 ==> low(t)
-func CheckGreatest(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte], ghost p perm@*/) (res int, err error) {
-	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(t)
-	return CheckCommitment(prefixTree, steps, label, t, RootHash, size /*@, tStarIdx, labelSeq, RootHashSeq, p@*/)
-}
-
-// CheckCommitment iterates over the binary ladder steps and queries the prefix
+// CheckGreatest iterates over the binary ladder steps and queries the prefix
 // tree at each step to check consistency with t being the greatest version.
 // Returns:
-//   -1: a version at or below t is absent (gap detected)
-//    0: all steps are consistent (t is the greatest version)
-//   +1: a version above t is present (greater version exists)
 //
+//	-1: a version at or below t is absent (gap detected)
+//	 0: all steps are consistent (t is the greatest version)
+//	+1: a version above t is present (greater version exists)
+//
+// @ requires noPerm < p
+// @ requires acc(prefixTree.Inv(), p)
+// @ requires acc(utils.BytesMem(label), p)
+// @ requires acc(utils.BytesMem(rootHash), p)
+// @ requires 0 <= t
+// @ ensures acc(prefixTree.Inv(), p)
+// @ ensures acc(utils.BytesMem(label), p)
+// @ ensures acc(utils.BytesMem(rootHash), p)
+// @ ensures err == nil && res == 0 &&
+// @ 	low(utils.getContent(label)) &&
+// @ 	low(utils.getContent(rootHash)) ==>
+// @ 		low(t)
+// @ decreases
+func CheckGreatest(prefixTree *prefixtree.PrefixTree, label []byte, t uint64, rootHash []byte, size uint64 /*@, ghost p perm @*/) (res int, err error) {
+	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar_alternative(t)
+	//@ unfold proofs.BinaryLadderInv(steps)
 
-// @ requires p > noPerm
-// @ requires label != nil
-// @ requires acc(label, p)
-// @ requires acc(RootHash, p)
-// @ requires acc(steps,p)
-// @ requires prefixTree != nil ==> acc(prefixTree.Inv(), p)
-// @ requires low(labelSeq)
-// @ requires low(RootHashSeq)
-// @ requires t >= 0
-// @ requires forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
-// @ requires 0 <= tStarIdx && tStarIdx < len(steps)
-// @ requires low(steps[tStarIdx])
-// @ requires IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
-// @ ensures prefixTree != nil ==> acc(prefixTree.Inv(), p)
-// @ ensures acc(label, p)
-// @ ensures acc(RootHash, p)
-// @ ensures err == nil && res == 0 ==> low(t)
-func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []byte, t uint64, RootHash []byte, size uint64 /*@, ghost tStarIdx int, ghost labelSeq seq[byte], ghost RootHashSeq seq[byte], ghost p perm@*/) (res int, err error) {
-	resultRes := 0
-	var resultErr error
 	determined := false // this flag encodes early returns, which are not yet supported by Gobra's hypermode
-	//@ ghost tStar := steps[tStarIdx]
-	//@ ghost revealedIsTStar := reveal IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
+	//@ tStar := steps[tStarIdx]
 
-	//@ non_incl_expected := prefixtree.GetCommitmentExists(labelSeq, tStar, RootHashSeq) && tStar <= t
-	//@ incl_expected := !prefixtree.GetCommitmentExists(labelSeq, tStar, RootHashSeq) && t < tStar
+	//@ labelSeq, rootHashSeq := utils.getContent(label), utils.getContent(rootHash)
+	//@ non_incl_expected :=  prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) && tStar <= t
+	//@ incl_expected 	  := !prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) &&     t  <  tStar
 
 	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
 	// as desired, this contradicts `IsTStar(tStar, rel(t, 0), rel(t, 1))` unless `low(t)` holds, which establishes the postcondition.
 
-	//@ invariant prefixTree != nil ==> acc(prefixTree.Inv(), p)
-	//@ invariant acc(RootHash, p)
-	//@ invariant acc(label,p)
-	//@ invariant acc(steps,p)
-	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> steps[i] >= 0
+	//@ invariant acc(prefixTree.Inv(), p/2)
+	//@ invariant acc(utils.BytesMem(rootHash), p/2) && rootHashSeq == utils.getContent(rootHash)
+	//@ invariant acc(utils.BytesMem(label), p/2) && labelSeq == utils.getContent(label)
+	//@ invariant acc(steps, 1/2)
+	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> 0 <= steps[i]
 	//@ invariant 0 <= idx && idx <= len(steps)
+	//@ invariant 0 <= tStarIdx && tStarIdx < len(steps)
 	//@ invariant tStar == steps[tStarIdx]
-	//@ invariant IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
-	//@ invariant determined ==> resultRes != 0
-	//@ invariant !determined ==> resultRes == 0 && resultErr == nil
+	//@ invariant determined != (res == 0 && err == nil)
 	//@ invariant tStarIdx < idx && !determined ==> non_incl_expected || incl_expected
+	//@ decreases len(steps) - idx
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
-			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, p @*/)
+			var commitment []byte
+			commitment, err = prefixTree.GetCommitment(label, step, rootHash /*@, p/4 @*/)
 			if err != nil {
 				if !determined {
-					resultRes = 404
-					resultErr = err
+					res = 404
 					determined = true
 				}
 			} else {
 				incl := commitment != nil
-				if !incl {
-					if step <= t {
-						resultRes = -1
-						determined = true
-					}
-				} else {
-					if t < step {
-						resultRes = 1
-						determined = true
-					}
+				if !incl && step <= t {
+					res = -1
+					determined = true
 				}
-				/*@
-				ghost if idx == tStarIdx {
-					assert !determined ==> (non_incl_expected || incl_expected)
+				if incl && t < step {
+					res = 1
+					determined = true
 				}
-				@*/
 			}
 		}
 	}
-	return resultRes, resultErr
-
+	return
 }
 
 type MonitoringMapEntry struct {
@@ -467,11 +434,11 @@ type MonitoringMapEntry struct {
 // @ requires noPerm < p
 // @ requires acc(config, p)
 // @ requires acc(monitor_map)
-// @ requires acc(query.Label, p)
+// @ requires acc(utils.BytesMem(query.Label), p)
 // @ requires query.Label != nil
-// @ requires low(len(query.Label)) && forall i int :: {query.Label[i]} 0 <= i && i < len(query.Label) ==> low(query.Label[i])
+// requires low(len(query.Label)) && forall i int :: {query.Label[i]} 0 <= i && i < len(query.Label) ==> low(query.Label[i])
 // @ requires acc(resp.Version, p)
-// @ requires acc(resp.Full_tree_head.RootHash, p)
+// @ requires acc(utils.BytesMem(resp.Full_tree_head.RootHash), p)
 // @ requires resp.Version != nil
 // @ requires *resp.Version >= 0
 // @ requires resp.Full_tree_head.RootHash != nil
@@ -482,19 +449,20 @@ type MonitoringMapEntry struct {
 // @ requires low(size)
 // @ requires low(rootHashContents)
 // @ ensures acc(config, p)
-// @ ensures acc(query.Label, p)
+// @ ensures acc(utils.BytesMem(query.Label), p)
 // @ ensures acc(resp.Version, p)
-// @ ensures resp.Full_tree_head.RootHash != nil ==> acc(resp.Full_tree_head.RootHash, p)
+// @ ensures resp.Full_tree_head.RootHash != nil ==> acc(utils.BytesMem(resp.Full_tree_head.RootHash), p)
 // @ ensures acc(prefixTrees, p)
 // @ ensures acc(prefixRootHash, p)
 // @ ensures err == nil && res ==> low(*resp.Version)
+// @ trusted // TODO remove once we have refactored 'VerifyLatestKey'
 func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sha256.Size]byte, size uint64, query SearchRequest, resp SearchResponse, monitor_map []MonitoringMapEntry, config *Configuration /*@, ghost rootHashContents seq[seq[byte]], ghost p perm @*/) (res bool, err error) {
 	t := resp.Version //Claimed greatest version
 	tVal := uint64(*t)
 	search_tree := MkImplicitBinarySearchTree(size)
 	resultRes := true
 	var resultErr error = nil
-	frontiers := search_tree.FrontierNodes( /*@p, size@*/ )
+	frontiers := search_tree.FrontierNodes( /*@ p, size @*/ )
 	terminalLogEntry := -1
 	determined := false
 
@@ -505,14 +473,14 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	}
 
 	// Loop: process all frontiers except the last
-	//@ ghost var labelSeq seq[byte] = getByteContentIsLow(query.Label, 0, p)
+	// labelSeq := utilsrel.getContentIsLow(query.Label, p)
 
 	//@ invariant acc(PrefixTreesInv(prefixTrees), p)
 	//@ invariant acc(RootHashesInv(prefixRootHash), p)
 	//@ invariant acc(frontiers)
 	//@ invariant acc(resp.Version, p)
-	//@ invariant acc(resp.Full_tree_head.RootHash, p)
-	//@ invariant acc(query.Label, p)
+	//@ invariant acc(utils.BytesMem(resp.Full_tree_head.RootHash), p)
+	//@ invariant acc(utils.BytesMem(query.Label), p)
 	//@ invariant acc(config, p)
 	//@ invariant tVal == uint64(*t)
 	//@ invariant tVal >= 0
@@ -525,7 +493,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 	//@ invariant !determined ==> resultRes && resultErr == nil
 	//@ invariant low(fIdx)
 	//@ invariant low(size)
-	//@ invariant low(labelSeq)
+	// invariant low(labelSeq)
 	//@ invariant low(rootHashContents)
 	//@ invariant low(len(frontiers)) && forall j int :: {frontiers[j]} j>= 0 && j < len(frontiers) ==> low(frontiers[j])
 	for fIdx := 0; fIdx < len(frontiers)-1; fIdx++ {
@@ -542,7 +510,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				resultErr = errors.New("prefix tree is nil")
 				determined = true
 			} else {
-				rootHash := prefixRootHash[frontier]
+				rootHash := prefixRootHash[frontier][:]
 				if frontier >= size {
 					//@ fold acc(PrefixTreesInv(prefixTrees), p)
 					//@ fold acc(RootHashesInv(prefixRootHash), p)
@@ -551,8 +519,9 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 					determined = true
 				}
 				if !determined {
-					//@ ghost var rootHashSeq seq[byte] = rootHashContents[int(frontier)]
-					LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size /*@, labelSeq, rootHashSeq, p@*/)
+					//@ fold acc(utils.BytesMem(rootHash), p)
+					LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash, size /*@, p @*/)
+					//@ unfold acc(utils.BytesMem(rootHash), p)
 					//@ fold acc(PrefixTreesInv(prefixTrees), p)
 					//@ fold acc(RootHashesInv(prefixRootHash), p)
 					if cgErr != nil {
@@ -584,7 +553,7 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 			resultErr = errors.New("prefix tree is nil")
 			determined = true
 		} else {
-			rootHash := prefixRootHash[frontier]
+			rootHash := prefixRootHash[frontier][:]
 			if frontier >= size {
 				//@ fold acc(PrefixTreesInv(prefixTrees), p)
 				//@ fold acc(RootHashesInv(prefixRootHash), p)
@@ -593,8 +562,9 @@ func VerifyLatestKey(prefixTrees []*prefixtree.PrefixTree, prefixRootHash []*[sh
 				determined = true
 			}
 			if !determined {
-				//@ ghost var rootHashSeq seq[byte] = rootHashContents[int(frontier)]
-				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash[:], size /*@, labelSeq, rootHashSeq, p@*/)
+				//@ fold acc(utils.BytesMem(rootHash), p)
+				LtGtOrEq, cgErr := CheckGreatest(Prefix_tree, query.Label, tVal, rootHash, size /*@, p @*/)
+				//@ unfold acc(utils.BytesMem(rootHash), p)
 				//@ fold acc(PrefixTreesInv(prefixTrees), p)
 				//@ fold acc(RootHashesInv(prefixRootHash), p)
 				if cgErr != nil {
