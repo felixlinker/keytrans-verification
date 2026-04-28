@@ -11,27 +11,24 @@ import (
 )
 
 /*@
+// note that a nil PrefixTree trivially satisfies the Invariant
 pred (t *PrefixTree) Inv() {
-	acc(t) && (t != nil ==> t.InvRec())
-}
-
-pred (t PrefixTree) InvRec() {
-	acc(t.Value) && acc(t.Leaf) && acc(t.Left) && acc(t.Right) &&
-	// Value dereference
-	(t.Value != nil ==> acc(t.Value)) &&
-	// Leaf content access
-	(t.Leaf != nil ==> acc(t.Leaf)) &&
-	// Recursive children
-	(t.Left != nil ==> t.Left.Inv()) &&
-	(t.Right != nil ==> t.Right.Inv()) &&
-	// One of value, leaf, or both children must be defined
-	(t.Value != nil || t.Leaf != nil || (t.Left != nil && t.Right != nil)) &&
-	// If there's one children, there must be two
-	(t.Left != nil) == (t.Right != nil) &&
-	// Node is either a leaf or has children
-	(t.Leaf != nil) != (t.Left != nil && t.Right != nil) &&
-	// If a node's value is defined, its children's values must be defined
-	((t.Value != nil && t.Left != nil && t.Right != nil) ==> (t.Left.GetValue() != nil && t.Right.GetValue() != nil))
+	t != nil ==>
+		acc(t) &&
+		// Value dereference
+		(t.Value != nil ==> acc(t.Value)) &&
+		// Leaf content access
+		(t.Leaf != nil ==> acc(t.Leaf)) &&
+		// Recursive children
+		t.Left.Inv() && t.Right.Inv() &&
+		// One of value, leaf, or both children must be defined
+		(t.Value != nil || t.Leaf != nil || (t.Left != nil && t.Right != nil)) &&
+		// If there's one children, there must be two
+		((t.Left != nil) == (t.Right != nil)) &&
+		// Node is either a leaf or has children
+		((t.Leaf != nil) != (t.Left != nil && t.Right != nil)) &&
+		// If a node's value is defined, its children's values must be defined
+		(t.Value != nil && t.Left != nil && t.Right != nil ==> t.Left.GetValue() != nil && t.Right.GetValue() != nil)
 }
 
 @*/
@@ -41,7 +38,7 @@ pred (t PrefixTree) InvRec() {
 // @ decreases
 // @ pure
 func (t *PrefixTree) GetValue() *[sha256.Size]byte {
-	return /*@ unfolding acc(t.Inv(), _) in unfolding acc(t.InvRec(), _) in @*/ t.Value
+	return /*@ unfolding acc(t.Inv(), _) in @*/ t.Value
 }
 
 // @ requires t != nil
@@ -50,7 +47,7 @@ func (t *PrefixTree) GetValue() *[sha256.Size]byte {
 // @ decreases
 // @ pure
 func (t *PrefixTree) GetValueArray() [sha256.Size]byte {
-	return /*@ unfolding acc(t.Inv(), _) in unfolding acc(t.InvRec(), _) in @*/ *t.Value
+	return /*@ unfolding acc(t.Inv(), _) in @*/ *t.Value
 }
 
 // Recursive prefix tree data structure
@@ -287,18 +284,18 @@ ghost
 decreases
 // takes seq[byte] inputs so it remains pure (no heap permissions needed)
 // returns bool: true = commitment exists (inclusion), false = no commitment (non-inclusion)
-pure func GetCommitmentExists(Label seq[byte], Version uint64, RootHash seq[byte]) bool
+pure func GetCommitmentExists(label seq[byte], version uint64, rootHash seq[byte]) bool
 @*/
 
 // GetCommitment searches the authenticated prefix tree for the commitment
-// corresponding to the given (Label, Version) pair.
+// corresponding to the given (label, version) pair.
 //
 // Following the Authentikit pattern from "Logical Relations for Formally
 // Verified Authenticated Data Structures" (Gregersen et al., CCS '25):
 // This implements the "ideal" retrieve operation. The tree has already been
 // constructed from proofs (ToTree) and its hashes computed (ComputeHash),
 // which corresponds to the verifier's unauth checks at each level (Figure 3c).
-// GetCommitment computes the VRF output for (Label, Version) and searches
+// GetCommitment computes the VRF output for (label, version) and searches
 // the prefix tree for a matching leaf.
 // WARNING: Be aware this is a stub implementation and will need to be revised!
 //
@@ -308,14 +305,15 @@ pure func GetCommitmentExists(Label seq[byte], Version uint64, RootHash seq[byte
 //   - (nil, error)       if the tree is in an invalid state
 //
 // @ requires  noPerm < p
-// @ requires  Label != nil && 0 <= len(Label)
-// @ requires  0 <= Version
-// @ preserves acc(Label, p)
-// @ preserves acc(RootHash, p)
-// @ ensures   acc(res, p)
-// @ ensures   err == nil ==> (res != nil) == GetCommitmentExists(utils.getContent(Label), Version, utils.getContent(RootHash))
+// @ preserves acc(tree.Inv(), p)
+// @ preserves acc(utils.BytesMem(label), p)
+// @ preserves acc(utils.BytesMem(rootHash), p)
+// @ requires  0 <= version
+// @ ensures   err == nil && res != nil ==> acc(res)
+// @ ensures   err == nil ==> (res != nil) == GetCommitmentExists(utils.getContent(label), version, utils.getContent(rootHash))
+// @ decreases
 // @ trusted
-func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []byte /*@, ghost p perm@*/) (res []byte, err error) {
+func (tree *PrefixTree) GetCommitment(label []byte, version uint64, rootHash []byte /*@, ghost p perm@*/) (res []byte, err error) {
 	if tree == nil {
 		// Nil tree: non-inclusion (no commitments exist in an empty tree)
 		return nil, nil
@@ -323,20 +321,20 @@ func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []b
 
 	// Verify the tree's root hash matches the provided root hash.
 	if tree.Value != nil {
-		if !bytes.Equal(tree.Value[:], RootHash) {
+		if !bytes.Equal(tree.Value[:], rootHash) {
 			return nil, errors.New("root hash mismatch")
 		}
 	} else if value, hashErr := tree.ComputeHash(); hashErr != nil {
 		return nil, hashErr
-	} else if !bytes.Equal(value[:], RootHash) {
+	} else if !bytes.Equal(value[:], rootHash) {
 		return nil, errors.New("root hash mismatch")
 	}
 
 	// Compute the VRF output for the (Label, Version) pair.
 	// The VRF output determines the path through the prefix tree.
 	VRFInput := crypto.VrfInput{
-		Label:   Label,
-		Version: uint32(Version),
+		Label:   label,
+		Version: uint32(version),
 	}
 	//@ fold VRFInput.Inv()
 	//TODO: The current VRF_hash is not using sk to compute VRF hash, it's a stub implementation

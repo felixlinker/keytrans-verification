@@ -65,9 +65,9 @@ pure func tStarRec_pure_general(t1 uint64, t2 uint64, x_in uint64, x_out uint64)
 @*/
 
 // TStar returns a value r such that t1 < r <= t2
-// TStar returns a value r such that t1 < t2 ==> t1 < r <= t2
 // @ requires 0 <= t1 && 0 <= t2
-// @ ensures t_star == TStar_pure(t1,t2)
+// @ ensures t1 != t2 ==> 1 <= t_star
+// @ ensures t_star == TStar_pure(t1, t2)
 func TStar(t1 uint64, t2 uint64) (t_star uint64) {
 	return tStar(t1+1, t2+1) - 1
 }
@@ -128,6 +128,7 @@ pure func IstStar(r []uint64, t1, t2 uint64, idx int) bool {
 // @ ensures 0 <= idx && idx < len(r) && 0 < len(r) && r[0] == 1
 // @ ensures forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i]
 // @ ensures r[idx] == tStar_pure(target, t2)
+// @ decreases
 func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*@, ghost idx int @*/) {
 	r = make([]uint64, 0)
 	var i uint64 = 1
@@ -152,6 +153,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ invariant jump_idx == 0 ==> i / 2 <= t2
 	// @ invariant jump_idx != 0 ==> t2 < target && jump_idx < len(r) && r[jump_idx] == tStar_pure(t2, target)
 	// @ invariant 0 < len(r) ==> r[0] == 1
+	// @ decreases target - i
 	for i-1 < target {
 		// i = 2^k
 		r = append( /*@ perm(1/2), @*/ r, i)
@@ -216,12 +218,12 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // @ requires 0 <= target && 0 <= t2
 // @ ensures BinaryLadderInv(r)
 // @ ensures IstStar(r, target, t2, idx)
+// @ decreases
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
-	steps /*@, r_idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
-	// @ tStarPlusOne := steps[r_idx]
-	steps = utils.Decrement(steps)
-	//@ fold BinaryLadderInv(steps)
-	return steps /*@, r_idx @*/
+	steps /*@, idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
+	r = utils.Decrement(steps)
+	//@ fold BinaryLadderInv(r)
+	return
 }
 
 // @ requires acc(r)
