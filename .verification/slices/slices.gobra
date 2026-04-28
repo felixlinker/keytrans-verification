@@ -1,1 +1,6 @@
 package slices
+
+requires noPerm < p
+preserves acc(data, p)
+decreases
+func Equal([]byte, []byte, ghost pa perm, ghost pb perm) bool
