@@ -34,7 +34,7 @@ type BinaryLadderStep struct {
 
 /*@
 pred (s BinaryLadderStep) Inv() {
-	acc(s.Proof) && (s.Commitment != nil ==> acc(s.Commitment))
+	acc(s.Proof)
 }
 @*/
 
@@ -110,7 +110,7 @@ type CompleteBinaryLadderStep struct {
 }
 
 // @ requires forall i int :: { &results[i] } 0 <= i && 0 < len(results) ==> acc(&results[i]) && acc(results[i].Inv())
-// @ requires forall i int :: { &steps[i] } 0 <= i && 0 < len(steps) ==> acc(&steps[i]) && steps[i].Commitment != nil && acc(steps[i].Inv())
+// @ requires forall i int :: { &steps[i] } 0 <= i && 0 < len(steps) ==> acc(&steps[i]) && acc(steps[i].Inv())
 // @ ensures acc(completeSteps)
 // @ ensures len(completeSteps) == len(results)
 func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
@@ -123,7 +123,7 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 	// @ invariant len(completeSteps) == len(results)
 	// @ invariant acc(completeSteps)
 	// @ invariant forall i int :: { &results[i] } 0 <= i && 0 < len(results) ==> acc(&results[i]) && acc(results[i].Inv())
-	// @ invariant forall j int :: { &steps[j] } 0 <= j && 0 < len(steps) ==> acc(&steps[j]) && steps[j].Commitment != nil && acc(steps[j].Inv())
+	// @ invariant forall j int :: { &steps[j] } 0 <= j && 0 < len(steps) ==> acc(&steps[j]) && acc(steps[j].Inv())
 	for i := 0; i < len(results); i++ {
 		// @ unfold acc(steps[i].Inv())
 		completeSteps[i] = CompleteBinaryLadderStep{
