@@ -7,12 +7,8 @@ import (
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
-
-func bits(searchKey [sha256.Size]byte) []bool {
-	// TODO:
-	return []bool{}
-}
 
 type PrefixTree interface {
 	GetRoot() [sha256.Size]byte
@@ -130,7 +126,7 @@ func (t prefixTree) getLeaf(searchKey []bool) (l *prefixLeaf) {
 }
 
 func (t prefixTree) search(searchKey [sha256.Size]byte) (r [sha256.Size]byte, ok bool) {
-	leaf := t.getLeaf(bits(searchKey))
+	leaf := t.getLeaf(utils.Bits(searchKey))
 	return leaf.commitment, slices.Equal(leaf.vrfOutput[:], searchKey[:])
 }
 
@@ -165,7 +161,7 @@ func Dict(label []byte, version uint64, prf proofs.PrefixProof, fullLadder []pro
 			return prefixDict{}, errors.New("VRF verification failed")
 		} else {
 			d.vrfOutputs[ladderVersion] = searchKey
-			searchKeyBits := bits(searchKey)
+			searchKeyBits := utils.Bits(searchKey)
 			if ladderVersion <= version {
 				t.insertLeaf(searchKeyBits, result.Depth, commitmentLeaf(&proofs.PrefixLeaf{Vrf_output: searchKey, Commitment: leafData.Commitment}))
 			} else {
