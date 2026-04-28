@@ -28,8 +28,8 @@ type CommitmentValue struct {
 }
 
 type BinaryLadderStep struct {
-	Proof      []byte             // opaque proof[VRF.Np] — variable length per VRF scheme
-	Commitment *[sha256.Size]byte // optional<HashValue> — nil for non-existing/target versions
+	Proof      []byte            // opaque proof[VRF.Np] — variable length per VRF scheme
+	Commitment [sha256.Size]byte // optional<HashValue> - only use for versions that should exist
 }
 
 /*@
@@ -129,7 +129,8 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 		completeSteps[i] = CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
 				Vrf_output: crypto.VRF_proof_to_hash(steps[i].Proof),
-				Commitment: *steps[i].Commitment,
+				// TODO: This might be nil
+				Commitment: steps[i].Commitment,
 			},
 			Result: results[i],
 		}
