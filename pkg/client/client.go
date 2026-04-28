@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
 	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 )
@@ -82,25 +83,6 @@ pure func TStarBetween(t1, t2 uint64) (res uint64) {
     t1 < t2 ? proofs.TStar_pure(t1, t2) : proofs.TStar_pure(t2, t1)
 }
 
-
-ghost
-requires acc(arr, _)
-decreases
-pure
-func getContent(arr []byte) (res seq[byte]) {
-  return getByteContent(arr, 0)
-}
-
-ghost
-requires acc(arr, _)
-requires 0 <= idx && idx <= len(arr)
-decreases len(arr) - idx
-opaque
-pure
-func getByteContent(arr []byte, idx int) (res seq[byte]) {
-  return idx == len(arr) ? seq[byte]{} : seq[byte]{arr[idx]} ++ getByteContent(arr, idx + 1)
-}
-
 // Lemma: returns a low sequence equal to getByteContent(data, idx).
 // Recurses matching getByteContent's structure. Workaround for Gobra issue #974:
 // low() cannot directly wrap a recursive pure function, so we build the result
@@ -116,7 +98,7 @@ ensures acc(data, p)
 ensures low(len(data))
 ensures forall i int :: {data[i]} 0 <= i && i < len(data) ==> low(data[i])
 ensures low(result)
-ensures result == getByteContent(data, idx)
+ensures result == utils.getByteContent(data, idx)
 decreases len(data) - idx
 func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) {
   if idx == len(data) {
@@ -126,7 +108,7 @@ func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) 
     result = seq[byte]{data[idx]} ++ tail
   }
   // reveal after permissions are restored so the body is visible on the correct heap
-  revealedContent := reveal getByteContent(data, idx)
+  revealedContent := reveal utils.getByteContent(data, idx)
 }
 
 // Build low ghost seq from a *[sha256.Size]byte array
@@ -425,8 +407,8 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 	//@ ghost tStar := steps[tStarIdx]
 	//@ ghost revealedIsTStar := reveal IsTStar(steps[tStarIdx], rel(t, 0), rel(t, 1))
 
-	//@ non_incl_expected := prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && tStar <= t
-	//@ incl_expected := !prefixtree.GetCommitmentIsDeterministic(labelSeq, tStar, RootHashSeq) && t < tStar
+	//@ non_incl_expected := prefixtree.GetCommitmentExists(labelSeq, tStar, RootHashSeq) && tStar <= t
+	//@ incl_expected := !prefixtree.GetCommitmentExists(labelSeq, tStar, RootHashSeq) && t < tStar
 
 	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
 	// as desired, this contradicts `IsTStar(tStar, rel(t, 0), rel(t, 1))` unless `low(t)` holds, which establishes the postcondition.
@@ -445,7 +427,7 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 	for idx := 0; idx < len(steps); idx++ {
 		if !determined {
 			step := steps[idx]
-			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, labelSeq, RootHashSeq, p@*/)
+			commitment, err := prefixTree.GetCommitment(label, step, RootHash /*@, p @*/)
 			if err != nil {
 				if !determined {
 					resultRes = 404

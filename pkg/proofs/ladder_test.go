@@ -70,7 +70,7 @@ func TestFullBinaryLadderSteps(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		got := FullBinaryLadderSteps_wrapper(tc.target)
+		got := FullBinaryLadderSteps(tc.target)
 		if len(got) != len(tc.want) {
 			t.Errorf("FullBinaryLadderSteps(%d) = %v; want %v", tc.target, got, tc.want)
 		} else {
