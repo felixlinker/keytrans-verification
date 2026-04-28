@@ -188,7 +188,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	}
 
 	// Phase 4: VerifyLatestKey
-	decision := false
+	decision := false // TODO: remove
 	if !determined {
 		//@ unfold acc(resp.Inv(), p)
 		//@ unfold acc(resp.Full_tree_head.Inv(), p)
@@ -197,7 +197,8 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 		//@ assert len(trees) == n && len(rootHashes) == n
 		monitoringMap := make([]*MonitoringMapEntry, 0)
 		var entry *MonitoringMapEntry
-		decision, entry, err = VerifyLatestKey(trees, rootHashes, query, resp, config /*@, rhContents, p @*/)
+		entry, err = VerifyLatestKey(trees, rootHashes, query, resp, config /*@, rhContents, p @*/)
+		decision = err == nil
 		//@ unfold acc(query.Inv(), p)
 		if entry != nil {
 			monitoringMap = append( /*@ perm(1/2), @*/ monitoringMap, entry)
@@ -362,29 +363,25 @@ type MonitoringMapEntry struct {
 // @ ensures   acc(resp.Inv(), p)
 // @ ensures   err == nil && entry != nil ==> acc(entry)
 // hyper-postcondition:
-// @ ensures   err == nil && res &&
+// @ ensures   err == nil &&
 // @	low(len(prefixTrees)) && low(query.LabelContent()) &&
 // @	low(GetRootHashContent(prefixRootHash, len(prefixTrees)-1)) ==>
 // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // @ decreases
-// returns a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse, monitorMap []MonitoringMapEntry, config *Configuration /*@, ghost p perm @*/) (res bool, entry *MonitoringMapEntry, err error) {
+// returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
+func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse, monitorMap []MonitoringMapEntry, config *Configuration /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
 	size := uint64(len(prefixTrees))
 	t := /*@ unfolding acc(resp.Inv(), p) in @*/ uint64(*resp.Version) // claimed greatest version
 	searchTree := MkImplicitBinarySearchTree(uint64(len(prefixTrees)))
 	frontiers := searchTree.FrontierNodes( /*@ 1/2 @*/ )
 	terminalLogEntry := -1
-	// flag encoding early termination:
-	determined := false
 
-	// TODO use res and err instead
-	resultRes := true
-	var resultErr error = nil
-	if size == 0 || size <= t {
-		resultRes = false
-		resultErr = errors.New("version out of bounds")
-		determined = true
+	if size <= t {
+		err = errors.New("version out of bounds")
 	}
+
+	// we use `err` to skip loop iterations instead of
+	// returning early, which is not yet supported by Gobra's hypermode.
 
 	//@ invariant noPerm < p
 	//@ invariant acc(PrefixTreesInv(prefixTrees), p/2)
@@ -395,11 +392,9 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 	//@ invariant 0 <= fIdx && fIdx <= len(frontiers)
 	//@ invariant -1 <= terminalLogEntry && terminalLogEntry < len(prefixTrees)
 	//@ invariant forall i int :: { frontiers[i] } 0 <= i && i < len(frontiers) ==> 0 <= frontiers[i] && frontiers[i] < uint64(len(prefixTrees))
-	//@ invariant determined ==> !resultRes
-	//@ invariant !determined ==> resultRes && resultErr == nil
 	// hyper-invariants:
 	//@ invariant low(size) ==> low(fIdx)
-	//@ invariant low(size) && fIdx == len(frontiers) && !determined &&
+	//@ invariant low(size) && fIdx == len(frontiers) && err == nil &&
 	//@ 	low(query.LabelContent()) &&
 	//@ 	low(GetRootHashContent(prefixRootHash, int(frontiers[fIdx - 1]))) ==>
 	//@			low(t)
@@ -409,34 +404,26 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 	//@ decreases len(frontiers) - fIdx
 	for fIdx := 0; fIdx < len(frontiers); fIdx++ {
 		frontier := frontiers[fIdx]
-		if !determined {
+		if err == nil {
 			//@ unfold acc(PrefixTreesInv(prefixTrees), p/4)
 			prefixTree := prefixTrees[frontier]
 			//@ unfold acc(RootHashesInv(prefixRootHash), p/4)
 			rootHash := prefixRootHash[frontier][:]
 			if frontier >= size {
-				resultRes = false
-				resultErr = errors.New("version out of bounds")
-				determined = true
+				err = errors.New("version out of bounds")
 			}
-			if !determined {
+			if err == nil {
 				//@ unfold acc(query.Inv(), p/4)
 				LtGtOrEq, cgErr := CheckGreatest(prefixTree, query.Label, t, rootHash, size /*@, p/8 @*/)
 				//@ fold acc(query.Inv(), p/4)
 				if cgErr != nil {
-					resultRes = false
-					resultErr = cgErr
-					determined = true
+					err = cgErr
 				} else if LtGtOrEq == 1 {
-					resultRes = false
-					resultErr = errors.New("greater version exists")
-					determined = true
+					err = errors.New("greater version exists")
 				} else if LtGtOrEq == -1 && fIdx == len(frontiers)-1 {
 					// last frontier node for which we expect
 					// a zero result. Anything else is an error
-					resultRes = false
-					resultErr = errors.New("Greatest version is not the greatest in the last iteration")
-					determined = true
+					err = errors.New("Greatest version is not the greatest in the last iteration")
 				} else if LtGtOrEq == 0 && terminalLogEntry == -1 {
 					// we found a frontier node that has `t` as
 					// the greatest version
@@ -448,9 +435,8 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 		}
 	}
 
-	if terminalLogEntry == -1 && resultErr == nil {
-		resultRes = false
-		resultErr = errors.New("Claimed Version is not found.")
+	if terminalLogEntry == -1 && err == nil {
+		err = errors.New("Claimed Version is not found.")
 	}
 	if frontiers[0] < uint64(terminalLogEntry) && config.Mode == 1 {
 		entry = &MonitoringMapEntry{
@@ -458,8 +444,7 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 			Version:  uint32(t),
 		}
 	}
-
-	return resultRes, entry, resultErr
+	return
 }
 
 // buildPrefixTrees constructs prefix trees from the response's prefix proofs.
