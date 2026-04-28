@@ -232,7 +232,7 @@ pred (s SearchRequest) Inv() {
 
 type SearchResponse struct {
 	Full_tree_head FullTreeHead
-	Version        *uint32
+	Version        *uint64
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
 	Inclusion      proofs.InclusionProof
@@ -479,7 +479,7 @@ func CheckCommitment(prefixTree *prefixtree.PrefixTree, steps []uint64, label []
 
 type MonitoringMapEntry struct {
 	Position uint64
-	Version  uint32
+	Version  uint64
 }
 
 // @ requires noPerm < p

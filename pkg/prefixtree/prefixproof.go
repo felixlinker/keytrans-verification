@@ -339,7 +339,7 @@ func (tree *PrefixTree) GetCommitment(Label []byte, Version uint64, RootHash []b
 	// The VRF output determines the path through the prefix tree.
 	VRFInput := crypto.VrfInput{
 		Label:   Label,
-		Version: uint32(Version),
+		Version: Version,
 	}
 	//@ fold VRFInput.Inv()
 	//TODO: The current VRF_hash is not using sk to compute VRF hash, it's a stub implementation
