@@ -4,6 +4,7 @@ import (
 	"testing"
 )
 
+// @ trusted
 func TestTStar(t *testing.T) {
 	tests := []struct {
 		t1   uint64
@@ -52,6 +53,7 @@ func TestTStar(t *testing.T) {
 	}
 }
 
+// @ trusted
 func TestFullBinaryLadderSteps(t *testing.T) {
 	tests := []struct {
 		target uint64
