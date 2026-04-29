@@ -149,3 +149,31 @@ jobs:
           name: stats.json
           path: keytrans-verification/.gobra/stats.json
           if-no-files-found: warn
+
+
+  test-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: keytrans-verification
+
+      - name: Install Go
+        run: |
+          mkdir tmp
+          cd tmp
+          wget --quiet https://go.dev/dl/go1.17.3.linux-amd64.tar.gz
+          rm -rf /usr/local/go && tar -C /usr/local -xzf go1.17.3.linux-amd64.tar.gz
+          cd ../
+          rm -rf tmp
+          # add go to path
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+
+      - name: Test package 'proofs'
+        run: go test github.com/felixlinker/keytrans-verification/pkg/proofs
+        working-directory: keytrans-verification
+
+      - name: Test package 'trees'
+        run: go test github.com/felixlinker/keytrans-verification/pkg/trees
+        working-directory: keytrans-verification
