@@ -112,6 +112,7 @@ pure func RootNodePure(treeSize uint64) (root uint64) {
 // @ preserves acc(tree.Inv(), p)
 // @ ensures   (err == nil) == (0 <= nodeVal && nodeVal < tree.Size())
 // @ ensures   err == nil ==> acc(path)
+// @ ensures   err == nil ==> forall i int :: { path[i] } 0 <= i && i < len(path) ==> 0 <= path[i] && path[i] < tree.Size()
 // @ decreases
 func (tree *ImplicitBinarySearchTree) PathTo(nodeVal uint64 /*@, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(tree.Inv(), p)
@@ -129,6 +130,7 @@ func (tree *ImplicitBinarySearchTree) PathTo(nodeVal uint64 /*@, ghost p perm @*
 // @ requires  min <= max
 // @ ensures   (err == nil) == (min <= nodeVal && nodeVal <= max)
 // @ ensures   err == nil ==> acc(path)
+// @ ensures   err == nil ==> forall i int :: { path[i] } 0 <= i && i < len(path) ==> min <= path[i] && path[i] <= max
 // @ decreases max - min
 func (node *ImplicitBinarySearchNode) pathTo(nodeVal uint64 /*@, ghost min, max uint64, ghost p perm @*/) (path []uint64, err error) {
 	//@ unfold acc(node.Inv(min, max), p/2)
