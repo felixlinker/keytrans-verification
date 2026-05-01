@@ -4,14 +4,14 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
-// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+// ##(--hyperMode extended)
 
-// @ requires 0 < size
-// @ ensures  acc(r)
-// @ ensures  0 < len(r) && uint64(len(r)) <= size
-// @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i] && r[i] <= size
-// @ ensures  r[len(r) - 1] == size
-// @ ensures  low(size) ==> low(len(r)) && forall i int :: { r[i] } 0 <= i && i < len(r) ==> low(r[i])
+// @ requires  0 < size
+// @ ensures   acc(r)
+// @ ensures   0 < len(r) && uint64(len(r)) <= size
+// @ ensures   forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i] && r[i] <= size
+// @ ensures   r[len(r) - 1] == size
+// @ ensures   low(size) ==> low(len(r)) && forall i int :: { r[i] } 0 <= i && i < len(r) ==> low(r[i])
 // @ decreases size
 func frontier(size uint64) (r []uint64) {
 	i_root := utils.PowOf2(utils.Log2Floor(size))
