@@ -5,30 +5,19 @@ import "github.com/felixlinker/keytrans-verification/pkg/utils"
 /*@
 ghost
 requires 0 <= t1 && 0 <= t2
-ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
+ensures t1 != t2 ==> utils.min(t1, t2) < r && r <= utils.max(t1, t2)
 decreases
 pure func TStar_pure(t1 uint64, t2 uint64) (r uint64) {
 	return tStar_pure(t1 + 1, t2 + 1) - 1
 }
-
-ghost
-decreases
-pure func min(a uint64, b uint64) (r uint64) {
-	return a <= b ? a : b
-}
-
-ghost
-decreases
-pure func max(a uint64, b uint64) (r uint64) {
-	return a >= b ? a : b
-}
 @*/
+
 // =============================Core Lemma======================================
 /*@
 ghost
 requires 0 < t1 && 0 < t2
 ensures 1 <= r
-ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
+ensures t1 != t2 ==> utils.min(t1, t2) < r && r <= utils.max(t1, t2)
 decreases
 pure func tStar_pure(t1 uint64, t2 uint64) (r uint64) {
 	return t1 == t2 ? 1 :
@@ -55,9 +44,9 @@ func tStarRec_pure(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 }
 
 ghost
-requires 0 < min(t1, t2)
-requires x_in <= min(t1, t2) && min(t1, t2) < x_out
-ensures t1 != t2 ==> min(t1, t2) < r && r <= max(t1, t2)
+requires 0 < utils.min(t1, t2)
+requires x_in <= utils.min(t1, t2) && utils.min(t1, t2) < x_out
+ensures t1 != t2 ==> utils.min(t1, t2) < r && r <= utils.max(t1, t2)
 decreases x_out - x_in
 pure func tStarRec_pure_general(t1 uint64, t2 uint64, x_in uint64, x_out uint64) (r uint64) {
 	return t1 == t2 ? 1 : t1 < t2 ? tStarRec_pure(t1, t2, x_in, x_out) : tStarRec_pure(t2, t1, x_in, x_out)
@@ -237,8 +226,8 @@ func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /
 // us to continue recursively constructing the binary ladder while memorizing
 // that the value stored at acc_idx is tStar.
 // @ requires !found ==> x_in == acc_x_in && x_out == acc_x_out
-// @ requires !found ==> x_in <= min(target, t2) && max(target, t2) < x_out
-// @ requires acc_x_in <= min(target, t2) && min(target, t2) < acc_x_out
+// @ requires !found ==> x_in <= utils.min(target, t2) && utils.max(target, t2) < x_out
+// @ requires acc_x_in <= utils.min(target, t2) && utils.min(target, t2) < acc_x_out
 // @ requires found ==> r[acc_idx] == tStarRec_pure_general(target, t2, acc_x_in, acc_x_out)
 // @ requires target == t2 ==> found
 // @ ensures  acc(res)
