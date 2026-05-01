@@ -163,8 +163,5 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
-      - name: Test package 'proofs'
-        run: go test github.com/felixlinker/keytrans-verification/pkg/proofs
-
-      - name: Test package 'trees'
-        run: go test github.com/felixlinker/keytrans-verification/pkg/trees
+      - name: Test all packages
+        run: go test ./...

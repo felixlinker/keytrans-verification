@@ -26,7 +26,10 @@ func verifyWithBranching(hash int, value int) (res bool) {
 // the following postcondition specifies that the Go function `computeHash` behaves like the
 // pure (mathematical) function `hashFn` for which we assume injectivity (see domain below)
 // @ ensures res == hashFn(input)
-func computeHash(input int) (res int)
+// @ trusted
+func computeHash(input int) (res int) {
+	return res // dummy implementation
+}
 
 /* @
 ghost type HashFunction domain {
