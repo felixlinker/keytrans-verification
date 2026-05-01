@@ -12,31 +12,6 @@ on:
   workflow_dispatch: # allow to manually trigger this workflow
 
 jobs:
-  type-check-packages:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    container:
-      image: ghcr.io/viperproject/gobra:v26.02
-    env:
-      MOD_NAME: github.com/felixlinker/keytrans-verification
-      EXCLUDE_PKGS: "main"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create stats dir
-        run: mkdir .gobra
-
-      - name: Type-check packages
-        run: |
-          java -jar -Xss128m /gobra/gobra.jar \
-            --module ${{ env.MOD_NAME }} \
-            --hyperMode extended \
-            --recursive \
-            --include "." ".verification" \
-            --noVerify
-
-
   verify-packages:
     runs-on: ubuntu-latest
     timeout-minutes: 15
