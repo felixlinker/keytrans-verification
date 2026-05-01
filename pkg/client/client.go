@@ -337,7 +337,8 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 	t := /*@ unfolding acc(resp.Inv(), p) in @*/ uint64(*resp.Version) // claimed greatest version
 	searchTree := MkImplicitBinarySearchTree(uint64(len(prefixTrees)))
 	frontiers := searchTree.FrontierNodes( /*@ 1/2 @*/ )
-	terminalLogEntry := -1
+	terminalLogEntryFound := false
+	var terminalLogEntry uint64
 
 	if size <= t {
 		err = errors.New("version out of bounds")
@@ -353,7 +354,7 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 	//@ invariant acc(query.Inv(), p/2)
 	//@ invariant acc(resp.Inv(), p/2)
 	//@ invariant 0 <= fIdx && fIdx <= len(frontiers)
-	//@ invariant -1 <= terminalLogEntry && terminalLogEntry < len(prefixTrees)
+	//@ invariant terminalLogEntryFound ==> 0 <= terminalLogEntry && terminalLogEntry < uint64(len(prefixTrees))
 	//@ invariant forall i int :: { frontiers[i] } 0 <= i && i < len(frontiers) ==> 0 <= frontiers[i] && frontiers[i] < uint64(len(prefixTrees))
 	// hyper-invariants:
 	//@ invariant low(size) ==> low(fIdx)
@@ -361,9 +362,10 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 	//@ 	low(query.LabelContent()) &&
 	//@ 	low(GetRootHashContent(prefixRootHash, int(frontiers[fIdx - 1]))) ==>
 	//@			low(t)
-	// note that `terminalLogEntry` might get set in different loop iterations
-	// such that we do not obtain any hyper properties about it as CheckGreatest
-	// provides information about `t` only if _both_ executions return 0.
+	// note that `terminalLogEntry` might get set in different loop iterations in
+	// the two executions, such that we do not obtain any hyper properties about it
+	// as CheckGreatest provides information about `t` only if _both_ executions
+	// return 0.
 	//@ decreases len(frontiers) - fIdx
 	for fIdx := 0; fIdx < len(frontiers); fIdx++ {
 		frontier := frontiers[fIdx]
@@ -387,10 +389,11 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 					// last frontier node for which we expect
 					// a zero result. Anything else is an error
 					err = errors.New("Greatest version is not the greatest in the last iteration")
-				} else if LtGtOrEq == 0 && terminalLogEntry == -1 {
+				} else if LtGtOrEq == 0 && !terminalLogEntryFound {
 					// we found a frontier node that has `t` as
 					// the greatest version
-					terminalLogEntry = int(frontier)
+					terminalLogEntryFound = true
+					terminalLogEntry = frontier
 				}
 			}
 			//@ fold acc(RootHashesInv(prefixRootHash), p/4)
@@ -398,10 +401,10 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 		}
 	}
 
-	if terminalLogEntry == -1 && err == nil {
+	if err == nil && !terminalLogEntryFound {
 		err = errors.New("Claimed Version is not found.")
 	}
-	if frontiers[0] < uint64(terminalLogEntry) && config.Mode == 1 {
+	if err == nil && frontiers[0] < terminalLogEntry && config.Mode == 1 {
 		entry = &MonitoringMapEntry{
 			Position: uint64(len(frontiers) - 1),
 			Version:  uint32(t),
