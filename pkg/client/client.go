@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	//@ "math"
+
 	//@ "github.com/felixlinker/keytrans-verification/pkg/arb"
 	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
@@ -318,7 +320,8 @@ type MonitoringMapEntry struct {
 // @ requires  noPerm < p
 // @ preserves acc(PrefixTreesInv(prefixTrees), p)
 // @ preserves acc(RootHashesInv(prefixRootHash), p)
-// @ requires  0 < len(prefixTrees) && len(prefixTrees) == len(prefixRootHash)
+// @ requires  0 < len(prefixTrees) && len(prefixTrees) <= math.MaxUint64
+// @ requires  len(prefixTrees) == len(prefixRootHash)
 // @ preserves acc(query.Inv(), p)
 // @ requires  acc(resp.Inv(), p)
 // @ requires  unfolding acc(resp.Inv(), p) in resp.Version != nil
@@ -421,7 +424,7 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 // ensures   resp.Version != nil ==> (unfolding acc(resp.Inv(), p) in *resp.Version >= 0)
 // @ ensures   err == nil ==> len(trees) == unfolding acc(resp.Inv(), p) in len(resp.Search.Prefix_proofs)
 // @ ensures   err == nil ==> acc(PrefixTreesInv(trees), p)
-// @ ensures   err == nil ==> len(rootHashes) == len(trees)
+// @ ensures   err == nil ==> len(rootHashes) == len(trees) && len(trees) <= math.MaxUint64
 // @ ensures   err == nil ==> RootHashesInv(rootHashes)
 // ensures err == nil ==> forall j int :: {&rootHashes[j]} 0 <= j && j < n ==> forall k int :: {rootHashes[j][k]} 0 <= k && k < sha256.Size ==> low(rootHashes[j][k])
 // hyper-postcondition expressing that this function checks correctness of the root hashes:

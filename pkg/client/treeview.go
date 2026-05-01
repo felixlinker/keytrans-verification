@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"math"
 
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
@@ -64,7 +65,7 @@ pure func (n *ImplicitBinarySearchNode) sizeRec(min, max uint64) (res int) {
 }
 @*/
 
-// @ requires 0 <= treeSize
+// @ requires 0 <= treeSize && treeSize <= math.MaxUint64
 // @ ensures  0 <= root
 // @ ensures  1 < treeSize ==> root < treeSize
 // @ ensures  root == RootNodePure(treeSize)
@@ -75,25 +76,32 @@ func RootNode(treeSize uint64) (root uint64) {
 	if treeSize >= 1 {
 		var power uint64 = 1
 		var prev uint64 = 1
+		overflowed := false
 		//@ ghost var i uint64 = 0
 
 		//@ invariant 0 <= i
+		//@ invariant overflowed ==> 0 < i && treeSize < 2*power
 		//@ invariant prev - 1 < treeSize
-		//@ invariant 1 <= power && 1 <= prev
-		//@ invariant power == utils.PowOf2_pure(i)
+		//@ invariant 1 <= power && power <= math.MaxUint64
+		//@ invariant 1 <= prev && prev <= math.MaxUint64
+		//@ invariant power == utils.PowOf2_pure(overflowed ? i-1 : i)
 		//@ invariant prev == (i == 0 ? 1 : utils.PowOf2_pure(i - 1))
-		//@ invariant utils.Log2Floor_pure(power) == i
+		//@ invariant utils.Log2Floor_pure(power) == (overflowed ? i-1 : i)
 		//@ invariant utils.Log2Floor_pure(prev) == (i == 0 ? 0 : i - 1)
 		//@ invariant prev <= treeSize
-		//@ invariant low(treeSize) ==> low(power) && low(prev)
+		//@ invariant low(treeSize) ==> low(power) && low(prev) && low(overflowed)
 		//@ decreases treeSize - power
-		for power-1 < treeSize {
+		for power-1 < treeSize && !overflowed {
 			prev = power
-			power = power * 2
+			if power > math.MaxUint64/2 {
+				overflowed = true
+			} else {
+				power = power * 2
+			}
 			//@ i++
 		}
 
-		//@ utils.Log2FloorInbetween(i - 1, prev, treeSize, power)
+		//@ utils.Log2FloorInbetween(i - 1, prev, treeSize, overflowed ? power*2 : power)
 		res = prev - 1
 	}
 	return res
@@ -197,34 +205,41 @@ func (node *ImplicitBinarySearchNode) frontierNodes( /*@ ghost min, max uint64, 
 	return
 }
 
-// @ requires 0 <= treeSize
+// @ requires 0 <= treeSize && treeSize <= math.MaxUint64
 // @ ensures  tree.Inv() && tree.Size() == treeSize
 // @ decreases
 func MkImplicitBinarySearchTree(treeSize uint64) (tree *ImplicitBinarySearchTree) {
-	root := mkImplicitBinarySearchNode(0, treeSize-1)
+	var root *ImplicitBinarySearchNode
+	if treeSize != 0 {
+		root = mkImplicitBinarySearchNode(0, treeSize-1)
+	}
 	tree = &ImplicitBinarySearchTree{treeSize, root}
 	//@ fold tree.Inv()
 	return
 }
 
-// @ requires 0 <= min && min <= max + 1
-// @ ensures  (min <= max) == (node != nil)
-// @ ensures  node != nil ==> node.Inv(min, max)
-// @ ensures  node != nil ==> uint64(node.Size(min, max)) == max - min + 1
+// @ requires  0 <= min && min <= max && max + 1 <= math.MaxUint64
+// @ ensures   node != nil
+// @ ensures   node.Inv(min, max)
+// @ ensures   uint64(node.Size(min, max)) == max - min + 1
 // @ decreases max - min
 func mkImplicitBinarySearchNode(min, max uint64) (node *ImplicitBinarySearchNode) {
+	root := RootNode(max+1-min) + min
 	if min == max { // treeSize == 1
-		root := RootNode(max-min+1) + min
 		node = &ImplicitBinarySearchNode{root, nil, nil}
 		//@ fold node.Inv(min, max)
-	} else if min < max {
-		root := RootNode(max-min+1) + min
-		left := mkImplicitBinarySearchNode(min, root-1)
-		right := mkImplicitBinarySearchNode(root+1, max)
+	} else { // min < max
+		var left *ImplicitBinarySearchNode
+		if root != min {
+			left = mkImplicitBinarySearchNode(min, root-1)
+		}
+		var right *ImplicitBinarySearchNode
+		if root != max {
+			right = mkImplicitBinarySearchNode(root+1, max)
+		}
 		node = &ImplicitBinarySearchNode{root, left, right}
 		//@ fold node.Inv(min, max)
 	}
-	// else: min == max+1 and node == nil
 	return
 }
 
