@@ -14,5 +14,5 @@ ghost
 requires 0 <= idx && idx <= sha256.Size
 decreases sha256.Size - idx
 pure func getHashContentRec(s [sha256.Size]byte, idx int) seq[byte] {
-  return idx == sha256.Size ? seq[byte]{} : seq[byte]{s[idx]} ++ getHashContentRec(s, idx + 1)  
+  return idx == sha256.Size ? seq[byte]{} : seq[byte]{s[idx]} ++ getHashContentRec(s, idx + 1)
 }
