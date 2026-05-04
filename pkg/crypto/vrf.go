@@ -7,39 +7,28 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
-type VrfInput struct {
-	Label   []byte // max length is 2^8-1, i.e., length can be stored in one byte
-	Version uint64
-}
-
-/*@
-pred (input VrfInput) Inv() {
-	acc(input.Label) && len(input.Label) <= 255
-}
-@*/
-
 // @ requires noPerm < p
-// @ preserves acc(input.Inv(), p)
+// @ preserves acc(label, p)
 // @ ensures   acc(res)
-func encode(input VrfInput /*@, ghost p perm @*/) (res []byte) {
+func encode(label []byte, version uint64 /*@, ghost p perm @*/) (res []byte) {
 	buf := bytes.NewBuffer([]byte{})
-	buf.WriteByte(utils.Uint8(len(input.Label)))
-	buf.Write(input.Label)
-	buf.Write(utils.Uint64(input.Version))
+	buf.WriteByte(utils.Uint8(len(label)))
+	buf.Write(label)
+	buf.Write(utils.Uint64(version))
 	return buf.Bytes()
 }
 
 // @ requires noPerm < p
-// @ preserves acc(sk, p) && acc(input.Inv(), p)
-func VRF_hash(sk []byte, input VrfInput /*@, ghost p perm @*/) (r [32]byte) {
-	r = sha256.Sum256(encode(input /*@, p @*/) /*@, p @*/)
+// @ preserves acc(sk, p) && acc(label, p)
+func VRF_hash(sk []byte, label []byte, version uint64 /*@, ghost p perm @*/) (r [32]byte) {
+	r = sha256.Sum256(encode(label, version /*@, p @*/) /*@, p @*/)
 	return r
 }
 
 // @ requires noPerm < p
-// @ preserves acc(sk, p) && acc(input.Inv(), p)
-func VRF_prove(sk []byte, input VrfInput /*@, ghost p perm @*/) [32]byte {
-	return VRF_hash(sk, input /*@, p @*/)
+// @ preserves acc(sk, p) && acc(label, p)
+func VRF_prove(sk []byte, label []byte, version uint64 /*@, ghost p perm @*/) [32]byte {
+	return VRF_hash(sk, label, version /*@, p @*/)
 }
 
 // @ trusted
@@ -51,9 +40,10 @@ func VRF_proof_to_hash(prf []byte) [32]byte {
 }
 
 // @ trusted
-// @ preserves acc(pk) && input.Inv()
-func VRF_verify(pk []byte, input VrfInput, prf []byte) (r [32]byte, ok bool) {
-	hash := VRF_hash(nil, input)
+// @ requires noPerm < p
+// @ preserves acc(pk) && acc(label, p) && acc(prf, p)
+func VRF_verify(pk []byte, label []byte, version uint64, prf []byte /*@, ghost p perm @*/) (r [32]byte, ok bool) {
+	hash := VRF_hash(nil, label, version)
 	proofHash := VRF_proof_to_hash(prf)
 	return proofHash, hash == proofHash
 }

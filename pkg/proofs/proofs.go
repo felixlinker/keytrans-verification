@@ -62,12 +62,6 @@ type PrefixLeaf struct {
 	Commitment [sha256.Size]byte
 }
 
-/*@
-pred (p *PrefixLeaf) Inv() {
-     acc(p)
-}
-@*/
-
 type PrefixSearchResult struct {
 	Result_type int
 	Leaf        *PrefixLeaf // only present when result_type == NonInclusionLeaf
@@ -76,8 +70,11 @@ type PrefixSearchResult struct {
 
 /*@
 pred (p PrefixSearchResult) Inv() {
-	(p.Result_type == Inclusion || p.Result_type == NonInclusionParent || p.Result_type == NonInclusionLeaf) &&
-	p.Result_type == NonInclusionLeaf ==> p.Leaf.Inv()
+	p.Leaf != nil ==> acc(p.Leaf)
+}
+
+pred PrefixSearchResultsInv(rs []PrefixSearchResult) {
+	forall i int :: {&rs[i]} 0 <= i && i < len(rs) ==> acc(&rs[i]) && acc(rs[i].Inv())
 }
 @*/
 
@@ -85,6 +82,12 @@ type PrefixProof struct {
 	Results  []PrefixSearchResult
 	Elements []NodeValue
 }
+
+/*@
+pred (p PrefixProof) Inv() {
+	PrefixSearchResultsInv(p.Results) && acc(p.Elements)
+}
+@*/
 
 type CombinedTreeProof struct {
 	Timestamps    []uint64

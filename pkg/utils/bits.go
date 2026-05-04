@@ -18,12 +18,12 @@ func ByteBits(b byte) (r []bool) {
 }
 
 // @ ensures acc(r)
-// @ ensures len(bytes) > 0 ==> len(r) > 0
+// @ ensures len(r) == 32*8
 func Bits(bytes [sha256.Size]byte) (r []bool) {
 	r = make([]bool, 0, len(bytes)*8)
 	// @ ghost p := perm(1)
 	// @ invariant 0 <= i && i <= len(bytes)
-	// @ invariant 0 < i ==> len(r) > 0
+	// @ invariant len(r) == i*8
 	// @ invariant acc(r, p)
 	for i := 0; i < len(bytes); i++ {
 		r = append( /*@ p, @*/ r, ByteBits(bytes[i])...)
