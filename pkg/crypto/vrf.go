@@ -18,10 +18,10 @@ pred (input VrfInput) Inv() {
 }
 @*/
 
-// @ trusted
-// @ preserves input.Inv()
+// @ requires noPerm < p
+// @ preserves acc(input.Inv(), p)
 // @ ensures   acc(res)
-func encode(input VrfInput) (res []byte) {
+func encode(input VrfInput /*@, ghost p perm @*/) (res []byte) {
 	buf := bytes.NewBuffer([]byte{})
 	buf.WriteByte(utils.Uint8(len(input.Label)))
 	buf.Write(input.Label)
@@ -29,16 +29,17 @@ func encode(input VrfInput) (res []byte) {
 	return buf.Bytes()
 }
 
-// @ trusted
-// @ preserves acc(sk) && input.Inv()
-func VRF_hash(sk []byte, input VrfInput) [32]byte {
-	return sha256.Sum256(encode(input))
+// @ requires noPerm < p
+// @ preserves acc(sk, p) && acc(input.Inv(), p)
+func VRF_hash(sk []byte, input VrfInput /*@, ghost p perm @*/) (r [32]byte) {
+	r = sha256.Sum256(encode(input /*@, p @*/) /*@, p @*/)
+	return r
 }
 
-// @ trusted
-// @ preserves acc(sk) && input.Inv()
-func VRF_prove(sk []byte, input VrfInput) [32]byte {
-	return VRF_hash(sk, input)
+// @ requires noPerm < p
+// @ preserves acc(sk, p) && acc(input.Inv(), p)
+func VRF_prove(sk []byte, input VrfInput /*@, ghost p perm @*/) [32]byte {
+	return VRF_hash(sk, input /*@, p @*/)
 }
 
 // @ trusted
