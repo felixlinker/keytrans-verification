@@ -3,8 +3,6 @@ package proofs
 import (
 	"crypto/sha256"
 	"errors"
-
-	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
 
 type NodeValue = [sha256.Size]byte
@@ -133,7 +131,8 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 		// @ unfold acc(steps[i].Inv())
 		completeSteps[i] = CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
-				Vrf_output: crypto.VRF_proof_to_hash(steps[i].Proof),
+				// TODO: To be replaced with actual VRF output
+				Vrf_output: [32]byte{},
 				// TODO: This might be nil
 				Commitment: steps[i].Commitment,
 			},

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 
-	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	//@ "github.com/felixlinker/keytrans-verification/pkg/utils"
 )
@@ -330,18 +329,11 @@ func (tree *PrefixTree) GetCommitment(label []byte, version uint64, rootHash []b
 		return nil, errors.New("root hash mismatch")
 	}
 
-	// Compute the VRF output for the (Label, Version) pair.
-	// The VRF output determines the path through the prefix tree.
-	//TODO: The current VRF_hash is not using sk to compute VRF hash, it's a stub implementation
-	// Real implementation needs to be aware of this issue.
-	vrfOutput := crypto.VRF_hash(nil, label, version)
-	vrfOutputSlice := make([]byte, sha256.Size)
-	for i := 0; i < sha256.Size; i++ {
-		vrfOutputSlice[i] = vrfOutput[i]
-	}
+	// TODO: Below is wrong, we would need to search for a VRF output; only
+	// changed so that we can refactor the VRF package
 
 	// Search the prefix tree following the VRF output bits
-	res, err = tree.SearchForCommitment(vrfOutputSlice, 0)
+	res, err = tree.SearchForCommitment(label, 0)
 	return
 }
 
