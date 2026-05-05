@@ -31,8 +31,12 @@ type BinaryLadderStep struct {
 }
 
 /*@
-pred (s BinaryLadderStep) Inv() {
-	acc(s.Proof)
+pred (s *BinaryLadderStep) Inv() {
+	acc(s) && acc(s.Proof)
+}
+
+pred BinaryLadderStepsInv(steps []BinaryLadderStep) {
+	forall i int :: {&steps[i]} 0 <= i && i < len(steps) ==> acc((&steps[i]).Inv())
 }
 @*/
 
@@ -69,12 +73,12 @@ type PrefixSearchResult struct {
 }
 
 /*@
-pred (p PrefixSearchResult) Inv() {
-	p.Leaf != nil ==> acc(p.Leaf)
+pred (p *PrefixSearchResult) Inv() {
+	acc(p) && (p.Leaf != nil ==> acc(p.Leaf))
 }
 
 pred PrefixSearchResultsInv(rs []PrefixSearchResult) {
-	forall i int :: {&rs[i]} 0 <= i && i < len(rs) ==> acc(&rs[i]) && acc(rs[i].Inv())
+	forall i int :: {&rs[i]} 0 <= i && i < len(rs) ==> acc((&rs[i]).Inv())
 }
 @*/
 

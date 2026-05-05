@@ -125,19 +125,20 @@ func (t *prefixTree) insertLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 	// @ fold t.Inv()
 }
 
-// @ requires acc(t.Inv())
-// @ requires acc(elements, _)
-// @ ensures err == nil ==> acc(t.Inv()) && acc(es, _)
-func (t *prefixTree) fill(elements []proofs.NodeValue) (es []proofs.NodeValue, err error) {
-	// @ unfold t.Inv()
+// @ requires noPerm < p
+// @ requires acc(elements, p)
+// @ preserves acc(t.Inv())
+// @ ensures err == nil ==> acc(es, p)
+func (t *prefixTree) fill(elements []proofs.NodeValue /*@, ghost p perm @*/) (es []proofs.NodeValue, err error) {
+	// @ unfold acc(t.Inv())
+	// @ defer fold acc(t.Inv())
 	if t.leaf != nil {
-		// @ fold t.Inv()
 		return elements, nil
 	}
 
 	var esL []proofs.NodeValue
 	if t.left != nil {
-		if esL, err = t.left.fill(elements); err != nil {
+		if esL, err = t.left.fill(elements /*@, p @*/); err != nil {
 			return nil, err
 		}
 	} else if len(elements) == 0 {
@@ -149,7 +150,7 @@ func (t *prefixTree) fill(elements []proofs.NodeValue) (es []proofs.NodeValue, e
 	}
 
 	if t.right != nil {
-		if es, err = t.right.fill(esL); err != nil {
+		if es, err = t.right.fill(esL /*@, p @*/); err != nil {
 			return nil, err
 		}
 	} else if len(esL) == 0 {
@@ -160,7 +161,6 @@ func (t *prefixTree) fill(elements []proofs.NodeValue) (es []proofs.NodeValue, e
 		// @ assert forall i int :: {&es[i]} 0 <= i && i < len(es) ==> &es[i] == &esL[i+1]
 	}
 
-	// @ fold t.Inv()
 	return es, nil
 }
 
@@ -252,8 +252,8 @@ pred (d prefixDict) Inv(p perm) {
 
 // @ requires 0 <= version
 // @ requires noPerm < p
-// @ preserves acc(label, p) && acc(prf.Inv(), _) && acc(fullLadder, p)
-// @ preserves forall i int :: 0 <= i && i < len(fullLadder) ==> acc(fullLadder[i].Inv(), p)
+// @ requires acc(label, p) && acc(prf.Inv(), p)
+// @ preserves acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 // @ ensures err == nil ==> acc(d.Inv(p))
 func Dict(label []byte, version uint64, prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep /*@, ghost p perm @*/) (d prefixDict, err error) {
 	// @ ghost var idx int
@@ -266,28 +266,32 @@ func Dict(label []byte, version uint64, prf proofs.PrefixProof, fullLadder []pro
 	// @ fold tree.Inv()
 	vrfOutputs := make(map[uint64][32]byte, len(steps))
 
-	// @ unfold acc(prf.Inv(), _)
+	// @ unfold acc(prf.Inv(), p)
 	// @ unfold proofs.BinaryLadderInv(steps)
 
 	// @ invariant tree.Inv()
 	// @ invariant 0 <= i && i <= len(fullLadder)
 	// @ invariant len(steps) == len(fullLadder) && len(fullLadder) == len(prf.Results)
-	// @ invariant acc(label, p) && acc(steps) && acc(proofs.PrefixSearchResultsInv(prf.Results), _) && acc(prf.Elements, _) && acc(vrfOutputs) && acc(fullLadder, p)
-	// @ invariant forall i int :: 0 <= i && i < len(fullLadder) ==> acc(fullLadder[i].Inv(), p)
+	// @ invariant acc(label, p) && acc(steps) && acc(proofs.PrefixSearchResultsInv(prf.Results), p) && acc(prf.Elements, p) && acc(vrfOutputs)
+	// @ invariant acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 	for i := 0; i < len(fullLadder); i++ {
-		// @ unfold acc(proofs.PrefixSearchResultsInv(prf.Results), _)
+		// @ unfold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
+		// @ unfold acc((&fullLadder[i]).Inv(), p)
+		// @ unfold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
+		// @ unfold acc((&prf.Results[i]).Inv(), p)
 		ladderVersion := steps[i]
 		leafData := fullLadder[i]
 		result := prf.Results[i]
 		// TODO: Should verify `result.result_type`, but I skip this for now as it seems to
 		// be redundant information
 
-		// @ unfold acc(leafData.Inv(), p)
 		// TODO: Use server public key
 		if searchKey, ok := crypto.VRF_verify(nil, label, version, leafData.Proof /*@, p @*/); !ok {
-			// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), _)
-			// @ fold acc(prf.Inv(), _)
-			// @ fold acc(leafData.Inv(), p)
+			// @ fold acc((&fullLadder[i]).Inv(), p)
+			// @ fold acc((&prf.Results[i]).Inv(), p)
+			// @ fold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
+			// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
+			// @ fold acc(prf.Inv(), p)
 			return prefixDict{}, errors.New("VRF verification failed")
 		} else {
 			vrfOutputs[ladderVersion] = searchKey
@@ -296,20 +300,19 @@ func Dict(label []byte, version uint64, prf proofs.PrefixProof, fullLadder []pro
 			if ladderVersion <= version {
 				toInsert = commitmentLeaf(&proofs.PrefixLeaf{Vrf_output: searchKey, Commitment: leafData.Commitment} /*@, p @*/)
 			} else {
-				// @ unfold acc(result.Inv(), p)
 				toInsert = commitmentLeaf(result.Leaf /*@, p @*/)
-				// @ fold acc(result.Inv(), p)
 			}
 			// TODO: Express as invariant or enhance gobra
 			// @ assume 0 <= result.Depth && result.Depth <= 255
 			tree.insertLeaf(searchKeyBits, int(result.Depth), toInsert)
 		}
-		// @ fold acc(leafData.Inv(), p)
-		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), _)
+		// @ fold acc((&fullLadder[i]).Inv(), p)
+		// @ fold acc((&prf.Results[i]).Inv(), p)
+		// @ fold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
+		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
 	}
 
-	remaining, err := tree.fill(prf.Elements)
-	// @ fold acc(prf.Inv(), _)
+	remaining, err := tree.fill(prf.Elements /*@, p @*/)
 	if len(remaining) > 0 {
 		return d, errors.New("too many elements provided")
 	} else if err != nil {
