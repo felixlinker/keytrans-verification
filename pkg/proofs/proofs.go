@@ -59,10 +59,16 @@ const (
 // A leaf in a prefix tree
 type PrefixLeaf struct {
 	// Vrf_output for the search key and version pair stored at this leaf.
-	Vrf_output [sha256.Size]byte
+	Vrf_output []byte
 	// Commitment to the public key of the search key and version pair.
 	Commitment [sha256.Size]byte
 }
+
+/*@
+pred (l *PrefixLeaf) Inv() {
+	acc(l) && acc(l.Vrf_output)
+}
+@*/
 
 type PrefixSearchResult struct {
 	Result_type int
@@ -72,7 +78,7 @@ type PrefixSearchResult struct {
 
 /*@
 pred (p *PrefixSearchResult) Inv() {
-	acc(p) && (p.Leaf != nil ==> acc(p.Leaf))
+	acc(p) && (p.Leaf != nil ==> acc(p.Leaf.Inv()))
 }
 
 pred PrefixSearchResultsInv(rs []PrefixSearchResult) {
@@ -132,7 +138,7 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 		completeSteps[i] = CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
 				// TODO: To be replaced with actual VRF output
-				Vrf_output: [32]byte{},
+				Vrf_output: make([]byte, 0),
 				// TODO: This might be nil
 				Commitment: steps[i].Commitment,
 			},
