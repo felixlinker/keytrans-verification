@@ -9,5 +9,8 @@ func NewPublicKey(pkBytes []byte, ghost p perm) (pk *PublicKey, err error)
 
 requires noPerm < p
 preserves acc(pk) && acc(message, p) && acc(prf, p)
-ensures acc(vrf)
+// len(vrf) == 64 because:
+// - ecvrf uses SHA-512 (https://github.com/ProtonMail/go-ecvrf/blob/v0.0.1/ecvrf/ecvrf.go#L250)
+// - SHA-512 sum has length 64 (https://pkg.go.dev/crypto/sha512#pkg-constants)
+ensures vrf != nil ==> len(vrf) == 64 && acc(vrf)
 func (pk *PublicKey) Verify(message []byte, prf []byte, ghost p perm) (verified bool, vrf []byte, err error)
