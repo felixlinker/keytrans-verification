@@ -1,0 +1,14 @@
+package edwards25519
+
+type PublicKey struct{}
+
+requires noPerm < p
+preserves acc(pkBytes, p)
+ensures err == nil ==> acc(pk)
+func NewPublicKey(pkBytes []byte, ghost p perm) (pk *PublicKey, err error)
+
+requires noPerm < p
+preserves acc(pk) && acc(message, p) && acc(prf, p)
+// len(vrf) == 32 because of truncation
+ensures vrf != nil ==> len(vrf) == 32 && acc(vrf)
+func (pk *PublicKey) Verify(message []byte, prf []byte, ghost p perm) (vrf []byte, err error)
