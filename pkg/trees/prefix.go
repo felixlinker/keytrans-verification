@@ -269,9 +269,9 @@ pred (d prefixDict) Inv() {
 // @ requires 0 <= version
 // @ requires noPerm < p
 // @ requires acc(label, p) && acc(prf.Inv(), p)
-// @ preserves acc(proofs.BinaryLadderStepsInv(fullLadder), p)
+// @ preserves acc(pk, p) && acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 // @ ensures err == nil ==> acc(d.Inv(), p)
-func Dict(label []byte, version uint64, prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep /*@, ghost p perm @*/) (d prefixDict, err error) {
+func Dict(label []byte, version uint64, pk []byte, prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep /*@, ghost p perm @*/) (d prefixDict, err error) {
 	// @ ghost var idx int
 	steps /*@, idx @*/ := proofs.FullBinaryLadderSteps(version /*@, version @*/)
 	if len(steps) != len(fullLadder) || len(steps) != len(prf.Results) {
@@ -289,7 +289,7 @@ func Dict(label []byte, version uint64, prf proofs.PrefixProof, fullLadder []pro
 	// @ invariant tree.Inv()
 	// @ invariant 0 <= i && i <= len(fullLadder)
 	// @ invariant len(steps) == len(fullLadder) && len(fullLadder) == len(prf.Results)
-	// @ invariant acc(label, p) && acc(steps) && acc(proofs.PrefixSearchResultsInv(prf.Results), p) && acc(prf.Elements, p) && acc(VOInv(vrfOutputs))
+	// @ invariant acc(label, p) && acc(pk, p) && acc(steps) && acc(proofs.PrefixSearchResultsInv(prf.Results), p) && acc(prf.Elements, p) && acc(VOInv(vrfOutputs))
 	// @ invariant acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 	for i := 0; i < len(fullLadder); i++ {
 		// @ unfold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
@@ -303,7 +303,7 @@ func Dict(label []byte, version uint64, prf proofs.PrefixProof, fullLadder []pro
 		// be redundant information
 
 		// TODO: Use server public key
-		if searchKey, ok := crypto.VRF_verify(nil, label, version, leafData.Proof /*@, p @*/); !ok {
+		if searchKey, ok := crypto.VRF_verify(pk, label, version, leafData.Proof /*@, p @*/); !ok {
 			// @ fold acc((&fullLadder[i]).Inv(), p)
 			// @ fold acc((&prf.Results[i]).Inv(), p)
 			// @ fold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
