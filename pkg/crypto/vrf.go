@@ -20,13 +20,14 @@ func encode(label []byte, version uint64 /*@, ghost p perm @*/) (res []byte) {
 
 // @ requires noPerm < p
 // @ preserves acc(pk, p) && acc(label, p) && acc(prf, p)
-// @ ensures ok ==> len(r) == 64 && acc(r)
+// @ ensures ok ==> len(r) == 32 && acc(r)
 func VRF_verify(pk []byte, label []byte, version uint64, prf []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
 	if pk, err := ecvrf.NewPublicKey(pk /*@, p @*/); err != nil {
 		return nil, false
 	} else if ok, out, err := pk.Verify(encode(label, version /*@, p @*/), prf /*@, p @*/); !ok || out == nil || err != nil {
 		return nil, false
 	} else {
-		return out, true
+		// Truncation required in https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#name-kt-cipher-suites
+		return out[:32], true
 	}
 }
