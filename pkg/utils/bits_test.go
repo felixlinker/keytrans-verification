@@ -45,7 +45,7 @@ func TestByteBits(t *testing.T) {
 func TestBits(t *testing.T) {
 	for run := 0; run < 5; run++ {
 		t.Run(fmt.Sprintf("run%d", run), func(t *testing.T) {
-			var bytes [sha256.Size]byte
+			bytes := make([]byte, sha256.Size)
 			want := make([]bool, 0, sha256.Size*8)
 			r := rand.New(rand.NewSource(int64(run)))
 
