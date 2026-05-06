@@ -19,7 +19,7 @@ func encode(label []byte, version uint64 /*@, ghost p perm @*/) (res []byte) {
 }
 
 // @ requires noPerm < p
-// @ preserves acc(pk) && acc(label, p) && acc(prf, p)
+// @ preserves acc(pk, p) && acc(label, p) && acc(prf, p)
 // @ ensures ok ==> len(r) == 64 && acc(r)
 func VRF_verify(pk []byte, label []byte, version uint64, prf []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
 	if pk, err := ecvrf.NewPublicKey(pk /*@, p @*/); err != nil {
