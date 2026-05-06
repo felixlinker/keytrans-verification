@@ -303,7 +303,7 @@ func Dict(label []byte, version uint64, pk []byte, prf proofs.PrefixProof, fullL
 		// be redundant information
 
 		// TODO: Use server public key
-		if searchKey, ok := crypto.VRF_verify(pk, label, version, leafData.Proof /*@, p @*/); !ok {
+		if searchKey, ok := crypto.VRF_verify(pk, label, ladderVersion, leafData.Proof /*@, p @*/); !ok {
 			// @ fold acc((&fullLadder[i]).Inv(), p)
 			// @ fold acc((&prf.Results[i]).Inv(), p)
 			// @ fold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
