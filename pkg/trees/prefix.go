@@ -38,8 +38,8 @@ func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf)
 	}
 	// @ unfold acc(pl.Inv(), p)
 
-	// Spec: leaf.value = Hash(0x01 || vrf_output || commitment)
-	input := []byte{0x01}
+	// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
+	input := []byte{0x02}
 	input = append( /*@ p, @*/ input, pl.Vrf_output...)
 	input = append( /*@ p, @*/ input, utils.FromDigest(pl.Commitment)...)
 	value := sha256.Sum256(input /*@, perm(1/2) @*/)
@@ -187,7 +187,7 @@ func (t *prefixTree) value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err err
 		return r, errR
 	} else {
 		input := make([]byte, 1+sha256.Size+sha256.Size)
-		input[0] = 0x02
+		input[0] = 0x03
 		// @ invariant 0 <= i && i <= sha256.Size
 		// @ invariant acc(input)
 		for i := 0; i < sha256.Size; i++ {
