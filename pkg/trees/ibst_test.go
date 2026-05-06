@@ -2,6 +2,7 @@ package trees
 
 import "testing"
 
+// @ trusted
 func TestFrontier(t *testing.T) {
 	tests := []struct {
 		size uint64
@@ -30,6 +31,7 @@ func TestFrontier(t *testing.T) {
 	}
 }
 
+// @ trusted
 func TestPathToFrontier(t *testing.T) {
 	tests := []struct {
 		n    uint64
