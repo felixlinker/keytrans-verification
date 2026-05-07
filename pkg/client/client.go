@@ -410,7 +410,7 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 	if err == nil && frontiers[0] < terminalLogEntry && config.Mode == 1 {
 		entry = &MonitoringMapEntry{
 			Position: uint64(len(frontiers) - 1),
-			Version:  uint32(t),
+			Version:  t,
 		}
 	}
 	return
