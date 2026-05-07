@@ -19,3 +19,10 @@ func Uint32(x uint32) (res []byte) {
 	return buf
 }
 
+// @ trusted
+// @ ensures acc(res)
+func Uint64(x uint64) (res []byte) {
+	buf := make([]byte, 0, 8)
+	buf = binary.BigEndian.AppendUint64(buf, x)
+	return buf
+}

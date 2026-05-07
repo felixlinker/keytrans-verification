@@ -2,57 +2,32 @@ package crypto
 
 import (
 	"bytes"
-	"crypto/sha256"
 
+	vrf "github.com/Bren2010/katie/crypto/vrf/edwards25519"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
-type VrfInput struct {
-	Label   []byte // max length is 2^8-1, i.e., length can be stored in one byte
-	Version uint32
-}
-
-/*@
-pred (input VrfInput) Inv() {
-	acc(input.Label) && len(input.Label) <= 255
-}
-@*/
-
-// @ trusted
-// @ preserves input.Inv()
+// @ requires noPerm < p
+// @ preserves acc(label, p)
 // @ ensures   acc(res)
-func encode(input VrfInput) (res []byte) {
+func encode(label []byte, version uint64 /*@, ghost p perm @*/) (res []byte) {
 	buf := bytes.NewBuffer([]byte{})
-	buf.WriteByte(utils.Uint8(len(input.Label)))
-	buf.Write(input.Label)
-	buf.Write(utils.Uint32(input.Version))
+	buf.WriteByte(utils.Uint8(len(label)))
+	buf.Write(label)
+	buf.Write(utils.Uint64(version))
 	return buf.Bytes()
 }
 
-// @ trusted
-// @ preserves acc(sk) && input.Inv()
-func VRF_hash(sk []byte, input VrfInput) [32]byte {
-	return sha256.Sum256(encode(input))
-}
-
-// @ trusted
-// @ preserves acc(sk) && input.Inv()
-func VRF_prove(sk []byte, input VrfInput) [32]byte {
-	return VRF_hash(sk, input)
-}
-
-// @ trusted
-// @ preserves acc(prf)
-func VRF_proof_to_hash(prf []byte) [32]byte {
-	var out [32]byte
-	copy(out[:], prf)
-	return out
-}
-
-// @ trusted
-// @ preserves acc(pk) && input.Inv()
-func VRF_verify(pk []byte, input VrfInput, prf []byte) (bool, [32]byte) {
-	hash := VRF_hash(nil, input)
-	proofHash := VRF_proof_to_hash(prf)
-	return hash == proofHash, proofHash
+// @ requires noPerm < p
+// @ preserves acc(pk, p) && acc(label, p) && acc(prf, p)
+// @ ensures ok ==> len(r) == 32 && acc(r)
+func VRF_verify(pk []byte, label []byte, version uint64, prf []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
+	if pk, err := vrf.NewPublicKey(pk /*@, p @*/); err != nil {
+		return nil, false
+	} else if out, err := pk.Verify(encode(label, version /*@, p @*/), prf /*@, p @*/); out == nil || err != nil {
+		return nil, false
+	} else {
+		// Truncation required in https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#name-kt-cipher-suites
+		return out[:32], true
+	}
 }

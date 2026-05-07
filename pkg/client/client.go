@@ -105,7 +105,7 @@ pure func (s SearchRequest) LabelContent() seq[byte] {
 
 type SearchResponse struct {
 	Full_tree_head FullTreeHead
-	Version        *uint32
+	Version        *uint64
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
 	Inclusion      proofs.InclusionProof
@@ -314,7 +314,7 @@ func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []
 
 type MonitoringMapEntry struct {
 	Position uint64
-	Version  uint32
+	Version  uint64
 }
 
 // @ requires  noPerm < p

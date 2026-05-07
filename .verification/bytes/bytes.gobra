@@ -5,3 +5,14 @@ preserves acc(a, p1) && acc(b, p2)
 ensures res == (len(a) == len(b) && forall i int :: { a[i], b[i] } 0 <= i && i < len(a) ==> a[i] == b[i])
 decreases
 func Equal(a []byte, b []byte, ghost p1 perm, ghost p2 perm) (res bool)
+
+type Buffer struct {}
+
+func NewBuffer(buf []byte) *Buffer
+
+ensures acc(r)
+func (b *Buffer) Bytes() (r []byte)
+
+func (b *Buffer) WriteByte(c byte) error
+
+func (b *Buffer) Write(p []byte) (n int, err error)
