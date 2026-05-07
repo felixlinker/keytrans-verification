@@ -1,0 +1,5 @@
+package testing
+
+type T struct {
+    dummy int
+}
