@@ -6,6 +6,7 @@ import (
 )
 
 // ##(--hyperMode extended)
+
 type Node struct {
 	hasData bool
 	key     uint64
