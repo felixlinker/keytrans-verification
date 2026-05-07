@@ -8,6 +8,7 @@ func TestFrontier(t *testing.T) {
 		size uint64
 		want []uint64
 	}{
+		{size: 4, want: []uint64{3}},
 		{size: 14, want: []uint64{7, 11, 13}},
 		{size: 15, want: []uint64{7, 11, 13, 14}},
 	}
