@@ -109,3 +109,12 @@ func PowOf2(exp uint64) (r uint64) {
 	}
 	return r
 }
+
+// @ requires 1 <= size
+// @ ensures 1 <= r && r <= size
+// @ ensures r == PowOf2_pure(Log2Floor_pure(size))
+// @ decreases
+func LargestSmallerPower(size uint64) (r uint64) {
+	r = PowOf2(Log2Floor(size))
+	return r
+}

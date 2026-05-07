@@ -14,7 +14,7 @@ import (
 // @ ensures   low(size) ==> low(len(r)) && forall i int :: { r[i] } 0 <= i && i < len(r) ==> low(r[i])
 // @ decreases size
 func frontier(size uint64) (r []uint64) {
-	i_root := utils.PowOf2(utils.Log2Floor(size))
+	i_root := utils.LargestSmallerPower(size)
 	// @ assert 0 < i_root && i_root <= size
 	r = []uint64{i_root}
 
@@ -44,7 +44,7 @@ func Frontier(size uint64) (r []uint64) {
 // note that this function operates on tree nodes starting at 0
 // size = 3: nodes 0, 1, 2 with min=0 and max=2
 func pathToRoot(n uint64, min, max uint64) (r []uint64) {
-	i_root := utils.PowOf2(utils.Log2Floor(max+1-min)) + min - 1
+	i_root := utils.LargestSmallerPower(max+1-min) + min - 1
 	// @ assert min <= i_root && i_root <= max
 	var p []uint64
 	if i_root == n {
