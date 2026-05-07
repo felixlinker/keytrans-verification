@@ -34,25 +34,6 @@ pure func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 			(a == 1 ? Log2FloorMonotonic(1, b/2) :
 				Log2FloorMonotonic(a/2,b/2)))
 }
-
-ghost
-requires 0 <= i
-requires Log2Floor_pure(prev) == i
-requires Log2Floor_pure(next) == i + 1
-requires next == PowOf2_pure(i + 1)
-requires prev <= n && n < next
-ensures  Log2Floor_pure(n) == i
-decreases
-func Log2FloorInbetween(i, prev, n, next uint64) {
-	ghost if Log2Floor_pure(n) < i {
-		PowOf2Monotonic(Log2Floor_pure(n) + 1, i)
-		assert false
-	}
-	ghost if i < Log2Floor_pure(n) {
-		PowOf2Monotonic(i + 1, Log2Floor_pure(n))
-		assert false
-	}
-}
 @*/
 
 // @ requires  0 < base
