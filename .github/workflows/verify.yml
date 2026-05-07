@@ -23,7 +23,7 @@ jobs:
       UNARY_MODE_PKGS: "proofs utils"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Create stats dir
         run: mkdir .gobra-unary .gobra-hyper
@@ -40,7 +40,7 @@ jobs:
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unary-stats.json
           path: .gobra-unary/stats.json
@@ -57,7 +57,7 @@ jobs:
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hyper-stats.json
           path: .gobra-hyper/stats.json
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v6
