@@ -16,3 +16,21 @@ pure func getByteContent(s []byte, idx int) seq[byte] {
   return idx == len(s) ? seq[byte]{} : seq[byte]{s[idx]} ++ getByteContent(s, idx + 1)
 }
 
+ghost
+requires acc(s, _)
+decreases
+ensures len(s) == len(r) && forall i int :: 0 <= i && i < len(r) ==> r[i] == s[i]
+opaque
+pure func getUint64sContent(s []uint64) (r seq[uint64]) {
+  return getUint64Content(s, 0)
+}
+
+ghost
+requires acc(s, _)
+requires 0 <= idx && idx <= len(s)
+ensures len(r) == len(s) - idx
+ensures forall i int :: 0 <= i && i < len(r) ==> r[i] == s[idx+i]
+decreases len(s) - idx
+pure func getUint64Content(s []uint64, idx int) (r seq[uint64]) {
+  return idx == len(s) ? seq[uint64]{} : seq[uint64]{s[idx]} ++ getUint64Content(s, idx + 1)
+}

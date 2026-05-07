@@ -66,3 +66,36 @@ func pathToRoot(n uint64, min, max uint64) (r []uint64) {
 func PathToNode(n uint64, size uint64) (r []uint64) {
 	return utils.Reverse(pathToRoot(n, 0, size-1))
 }
+
+// @ requires 0 < rmw
+// @ requires noPerm < p && p < writePerm
+// @ requires 0 < len(timestamps)
+// @ requires acc(timestamps, p) &&
+// @   forall i int :: 0 <= i && i < len(timestamps) ==> 0 <= timestamps[i] &&
+// @   forall i, j int :: 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] < timestamps[j]
+// @ ensures acc(timestamps, p)
+// @ ensures 0 <= i && i < len(timestamps)
+// @ ensures low(utils.getUint64sContent(timestamps)) && low(rmw) ==> low(i)
+func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @*/) (i int) {
+	var t uint64 = 0 // left timestamp in recursive algorithm from spec
+	// @ ghost pureTimestamps := utils.getUint64sContent(timestamps)
+	rightMost := timestamps[len(timestamps)-1] // right timestamp in recursive algorithm from spec
+	i = 0
+	done := false
+	// @ invariant 0 <= t && t <= rightMost
+	// @ invariant 0 <= i && i <= len(timestamps)
+	// @ invariant acc(timestamps, p) && p < writePerm
+	// @ invariant forall j int :: 0 <= j && j < len(timestamps) ==> 0 <= timestamps[j] && timestamps[j] <= rightMost && timestamps[j] == pureTimestamps[j]
+	// @ invariant done ==> 0 < i
+	// @ invariant low(pureTimestamps) && low(rmw) ==> low(rightMost) && low(done) && low(t) && low(i)
+	for ; !done && i < len(timestamps); i++ {
+		if rightMost-t < rmw {
+			done = true
+		} else {
+			t = timestamps[i]
+			// @ assert t == pureTimestamps[i]
+		}
+	}
+
+	return i - 1
+}
