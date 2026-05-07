@@ -1,0 +1,54 @@
+package utilsrel
+
+import "crypto/sha256"
+import "github.com/felixlinker/keytrans-verification/pkg/utils"
+
+// ##(--hyperMode extended)
+
+// Build low ghost seq from a *[sha256.Size]byte array
+ghost
+requires noPerm < p
+requires acc(s, p)
+requires forall k int :: { s[k] } 0 <= k && k < sha256.Size ==> low(s[k])
+ensures acc(s, p)
+ensures result == utils.GetHashContent(s)
+ensures low(result)
+decreases
+func buildLowSeqFromHash(s *[sha256.Size]byte, p perm) (result seq[byte]) {
+  invariant acc(s, p/2)
+  invariant 0 <= i && i <= sha256.Size
+  invariant result == utils.getHashContentRec(*s, i)
+  invariant forall k int :: { s[k] } 0 <= k && k < sha256.Size ==> low(s[k])
+  invariant low(i) && low(result)
+  decreases i
+  for i := sha256.Size; i > 0; i-- {
+    result = seq[byte]{s[i - 1]} ++ result
+  }
+  assert result == reveal utils.GetHashContent(s)
+}
+
+ghost
+requires noPerm < p
+requires forall i int :: { &hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i], p) && acc(hashes[i], p)
+requires low(len(hashes))
+requires forall i, k int :: { hashes[i][k] } 0 <= i && i < len(hashes) && 0 <= k && k < sha256.Size ==> low(hashes[i][k])
+ensures forall i int :: { &hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i], p) && acc(hashes[i], p)
+ensures len(result) == len(hashes)
+ensures forall i int :: { result[i] } 0 <= i && i < len(result) ==> result[i] == utils.GetHashContent(hashes[i])
+ensures low(result)
+decreases
+func buildRootHashContents(hashes []*[sha256.Size]byte, p perm) (result seq[seq[byte]]) {
+  invariant 0 <= i && i <= len(hashes)
+  invariant forall j int :: { &hashes[j] } 0 <= j && j < len(hashes) ==> acc(&hashes[j], p/2) && acc(hashes[j], p/2)
+  invariant len(result) == i
+  invariant forall i int :: { result[i] } 0 <= i && i < len(result) ==> result[i] == utils.GetHashContent(hashes[i])
+  invariant low(i)
+  invariant low(len(hashes))
+  invariant forall j int :: { &hashes[j] } 0 <= j && j < len(hashes) ==> forall k int :: {hashes[j][k]} 0 <= k && k < sha256.Size ==> low(hashes[j][k])
+  invariant low(result)  
+  decreases len(hashes) - i
+  for i := 0; i < len(hashes); i++ {
+    s := buildLowSeqFromHash(hashes[i], p/4)
+    result = result ++ seq[seq[byte]]{s}
+  }
+}

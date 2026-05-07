@@ -1,0 +1,5 @@
+package math
+
+// taken from https://cs.opensource.google/go/go/+/refs/tags/go1.26.2:src/math/const.go
+
+const MaxUint64 = 1<<64 - 1           // 18446744073709551615
