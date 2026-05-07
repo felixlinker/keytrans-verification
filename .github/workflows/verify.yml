@@ -20,7 +20,7 @@ jobs:
     env:
       MOD_NAME: github.com/felixlinker/keytrans-verification
       EXCLUDE_PKGS: "main"
-      UNARY_MODE_PKGS: "proofs utils trees"
+      UNARY_MODE_PKGS: "proofs utils trees crypto"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
