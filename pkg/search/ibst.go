@@ -1,4 +1,4 @@
-package trees
+package search
 
 import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
