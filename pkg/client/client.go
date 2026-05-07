@@ -166,6 +166,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	var trees []prefixtree.PT
 	var rootHashes []*[sha256.Size]byte
 	if err == nil {
+		// TODO: Build prefix trees should check that they match the nodes on the frontier
 		trees, rootHashes, err = buildPrefixTrees(resp /*@, p @*/)
 	}
 
@@ -261,7 +262,7 @@ func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@
 // @ 	low(utils.getContent(rootHash)) ==>
 // @ 		low(t)
 // @ decreases
-func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte, size uint64 /*@, ghost p perm @*/) (res int, err error) {
+func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte /*@, ghost p perm @*/) (res int, err error) {
 	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(t)
 	//@ unfold proofs.BinaryLadderInv(steps)
 
@@ -336,16 +337,7 @@ type MonitoringMapEntry struct {
 // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
 func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
-	size := uint64(len(prefixTrees))
-	t := /*@ unfolding acc(resp.Inv(), p) in @*/ uint64(*resp.Version) // claimed greatest version
-	searchTree := MkImplicitBinarySearchTree(uint64(len(prefixTrees)))
-	frontiers := searchTree.FrontierNodes( /*@ 1/2 @*/ )
-	terminalLogEntryFound := false
-	var terminalLogEntry uint64
-
-	if size <= t {
-		err = errors.New("version out of bounds")
-	}
+	t := /*@ unfolding acc(resp.Inv(), p) in @*/ *resp.Version // claimed greatest version
 
 	// we use `err` to skip loop iterations instead of
 	// returning early, which is not yet supported by Gobra's hypermode.
@@ -353,66 +345,40 @@ func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size
 	//@ invariant noPerm < p
 	//@ invariant acc(PrefixTreesInv(prefixTrees), p/2)
 	//@ invariant acc(RootHashesInv(prefixRootHash), p/2)
-	//@ invariant acc(frontiers, 1/2)
 	//@ invariant acc(query.Inv(), p/2)
 	//@ invariant acc(resp.Inv(), p/2)
-	//@ invariant 0 <= fIdx && fIdx <= len(frontiers)
-	//@ invariant terminalLogEntryFound ==> 0 <= terminalLogEntry && terminalLogEntry < uint64(len(prefixTrees))
-	//@ invariant forall i int :: { frontiers[i] } 0 <= i && i < len(frontiers) ==> 0 <= frontiers[i] && frontiers[i] < uint64(len(prefixTrees))
+	//@ invariant 0 <= idx && idx <= len(prefixTrees)
 	// hyper-invariants:
-	//@ invariant low(size) ==> low(fIdx)
-	//@ invariant low(size) && fIdx == len(frontiers) && err == nil &&
+	//@ invariant low(len(prefixTrees)) ==> low(idx)
+	//@ invariant low(len(prefixTrees)) && idx == len(prefixTrees) && err == nil &&
 	//@ 	low(query.LabelContent()) &&
-	//@ 	low(GetRootHashContent(prefixRootHash, int(frontiers[fIdx - 1]))) ==>
+	//@ 	low(GetRootHashContent(prefixRootHash, len(prefixTrees)-1)) ==>
 	//@			low(t)
-	// note that `terminalLogEntry` might get set in different loop iterations in
-	// the two executions, such that we do not obtain any hyper properties about it
-	// as CheckGreatest provides information about `t` only if _both_ executions
-	// return 0.
-	//@ decreases len(frontiers) - fIdx
-	for fIdx := 0; fIdx < len(frontiers); fIdx++ {
-		frontier := frontiers[fIdx]
+	//@ decreases len(prefixTrees) - idx
+	for idx := 0; idx < len(prefixTrees); idx++ {
 		if err == nil {
 			//@ unfold acc(PrefixTreesInv(prefixTrees), p/4)
-			prefixTree := prefixTrees[frontier]
+			prefixTree := prefixTrees[idx]
 			//@ unfold acc(RootHashesInv(prefixRootHash), p/4)
-			rootHash := prefixRootHash[frontier][:]
-			if frontier >= size {
-				err = errors.New("version out of bounds")
-			}
-			if err == nil {
-				//@ unfold acc(query.Inv(), p/4)
-				LtGtOrEq, cgErr := CheckGreatest(prefixTree, query.Label, t, rootHash, size /*@, p/8 @*/)
-				//@ fold acc(query.Inv(), p/4)
-				if cgErr != nil {
-					err = cgErr
-				} else if LtGtOrEq == 1 {
-					err = errors.New("greater version exists")
-				} else if LtGtOrEq == -1 && fIdx == len(frontiers)-1 {
-					// last frontier node for which we expect
-					// a zero result. Anything else is an error
-					err = errors.New("Greatest version is not the greatest in the last iteration")
-				} else if LtGtOrEq == 0 && !terminalLogEntryFound {
-					// we found a frontier node that has `t` as
-					// the greatest version
-					terminalLogEntryFound = true
-					terminalLogEntry = frontier
-				}
+			rootHash := prefixRootHash[idx][:]
+			//@ unfold acc(query.Inv(), p/4)
+			LtGtOrEq, cgErr := CheckGreatest(prefixTree, query.Label, t, rootHash /*@, p/8 @*/)
+			//@ fold acc(query.Inv(), p/4)
+			if cgErr != nil {
+				err = cgErr
+			} else if LtGtOrEq == 1 {
+				err = errors.New("greater version exists")
+			} else if LtGtOrEq == -1 && idx == len(prefixTrees)-1 {
+				// last frontier node for which we expect
+				// a zero result. Anything else is an error
+				err = errors.New("Greatest version is not the greatest in the last iteration")
+				// TODO: Implement monitoring w.r.t. terminal log entry
 			}
 			//@ fold acc(RootHashesInv(prefixRootHash), p/4)
 			//@ fold acc(PrefixTreesInv(prefixTrees), p/4)
 		}
 	}
 
-	if err == nil && !terminalLogEntryFound {
-		err = errors.New("Claimed Version is not found.")
-	}
-	if err == nil && frontiers[0] < terminalLogEntry && config.Mode == 1 {
-		entry = &MonitoringMapEntry{
-			Position: uint64(len(frontiers) - 1),
-			Version:  t,
-		}
-	}
 	return
 }
 
