@@ -261,7 +261,7 @@ func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@
 // @ 	low(utils.getContent(rootHash)) ==>
 // @ 		low(t)
 // @ decreases
-func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte, size uint64 /*@, ghost p perm @*/) (res int, err error) {
+func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte /*@, ghost p perm @*/) (res int, err error) {
 	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(t)
 	//@ unfold proofs.BinaryLadderInv(steps)
 
