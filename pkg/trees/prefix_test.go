@@ -162,10 +162,11 @@ var prefixDictVectors = []prefixDictVector{
 	},
 }
 
+// @ trusted
 func TestPrefixDictVectors(t *testing.T) {
 	for _, vector := range prefixDictVectors {
 		t.Run(vector.name, func(t *testing.T) {
-			dict, err := Dict(
+			d, err := Dict(
 				[]byte(vector.label),
 				vector.version,
 				mustDecode(t, vector.publicKey),
@@ -174,12 +175,12 @@ func TestPrefixDictVectors(t *testing.T) {
 			)
 			if err != nil {
 				t.Fatal(err)
-			} else if got, want := dict.GetRoot(), mustHexDigest(t, vector.expectedRoot); got != want {
+			} else if got, want := d.GetRoot(), mustHexDigest(t, vector.expectedRoot); got != want {
 				t.Fatalf("root = %x, want %x", got, want)
 			}
 
 			for i, version := range vector.ladderVersions {
-				got, err := dict.GetCommitment([]byte(vector.label), version)
+				got, err := d.GetCommitment([]byte(vector.label), version)
 				if err != nil {
 					t.Fatalf("GetCommitment(%d): %v", version, err)
 				}
@@ -196,6 +197,7 @@ func TestPrefixDictVectors(t *testing.T) {
 	}
 }
 
+// @ trusted
 func vectorPrefixProof(t *testing.T, vector prefixDictVector) proofs.PrefixProof {
 	t.Helper()
 
@@ -224,6 +226,7 @@ func vectorPrefixProof(t *testing.T, vector prefixDictVector) proofs.PrefixProof
 	}
 }
 
+// @ trusted
 func vectorLadder(t *testing.T, vector prefixDictVector) []proofs.BinaryLadderStep {
 	t.Helper()
 
@@ -240,6 +243,7 @@ func vectorLadder(t *testing.T, vector prefixDictVector) []proofs.BinaryLadderSt
 	return ladder
 }
 
+// @ trusted
 func mustDecode(t *testing.T, s string) []byte {
 	t.Helper()
 	if out, err := hex.DecodeString(s); err != nil {
@@ -250,6 +254,7 @@ func mustDecode(t *testing.T, s string) []byte {
 	}
 }
 
+// @ trusted
 func mustHexDigest(t *testing.T, s string) [sha256.Size]byte {
 	t.Helper()
 	raw := mustDecode(t, s)
