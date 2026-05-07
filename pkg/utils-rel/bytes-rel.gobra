@@ -4,9 +4,9 @@ import "github.com/felixlinker/keytrans-verification/pkg/utils"
 
 // ##(--hyperMode extended)
 
-// Lemma: returns a low sequence equal to getContent(data).
+// Lemma: returns a low sequence equal to getBytesContent(data).
 // As Gobra currently does not support hyper functions, this
-// lemma is used to show that getContent returns a low sequence if
+// lemma is used to show that getBytesContent returns a low sequence if
 // the content of the byte slice is low.
 ghost
 requires noPerm < p
@@ -14,14 +14,14 @@ requires acc(utils.BytesMem(s), p)
 requires low(len(s))
 requires unfolding acc(utils.BytesMem(s), p) in forall i int :: { s[i] } 0 <= i && i < len(s) ==> low(s[i])
 ensures  acc(utils.BytesMem(s), p)
-ensures  result == utils.getContent(s)
+ensures  result == utils.getBytesContent(s)
 ensures  low(result)
 decreases
-func getContentIsLow(s []byte, ghost p perm) (result seq[byte]) {
+func getBytesContentIsLow(s []byte, ghost p perm) (result seq[byte]) {
   unfold acc(utils.BytesMem(s), p)
   result = getByteContentIsLow(s, 0, p/2)
   fold acc(utils.BytesMem(s), p)
-  assert result == reveal utils.getContent(s)
+  assert result == reveal utils.getBytesContent(s)
 }
 
 ghost

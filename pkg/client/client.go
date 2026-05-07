@@ -50,7 +50,7 @@ requires acc(RootHashesInv(hashes), _)
 requires 0 <= idx && idx < len(hashes)
 decreases
 pure func GetRootHashContent(hashes []*[sha256.Size]byte, idx int) seq[byte] {
-	return unfolding acc(RootHashesInv(hashes), _) in utils.getContent(hashes[idx][:])
+	return unfolding acc(RootHashesInv(hashes), _) in utils.getBytesContent(hashes[idx][:])
 }
 @*/
 
@@ -99,7 +99,7 @@ ghost
 requires acc(s.Inv(), _)
 decreases
 pure func (s SearchRequest) LabelContent() seq[byte] {
-	return unfolding acc(s.Inv(), _) in utils.getContent(s.Label)
+	return unfolding acc(s.Inv(), _) in utils.getBytesContent(s.Label)
 }
 @*/
 
@@ -258,8 +258,8 @@ func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@
 // @ requires  0 <= t
 // @ ensures   err == nil ==> -1 <= res && res <= 1
 // @ ensures   err == nil && res == 0 &&
-// @ 	low(utils.getContent(label)) &&
-// @ 	low(utils.getContent(rootHash)) ==>
+// @ 	low(utils.getBytesContent(label)) &&
+// @ 	low(utils.getBytesContent(rootHash)) ==>
 // @ 		low(t)
 // @ decreases
 func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte /*@, ghost p perm @*/) (res int, err error) {
@@ -271,13 +271,13 @@ func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []
 
 	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
 	// as desired, these two conditions are contradictory unless `low(t)` holds, which establishes the postcondition.
-	//@ labelSeq, rootHashSeq := utils.getContent(label), utils.getContent(rootHash)
+	//@ labelSeq, rootHashSeq := utils.getBytesContent(label), utils.getBytesContent(rootHash)
 	//@ non_incl_expected :=  prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) && tStar <= t
 	//@ incl_expected 	  := !prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) &&     t  <  tStar
 
 	//@ invariant acc(prefixTree.Inv(), p/2)
-	//@ invariant acc(utils.BytesMem(rootHash), p/2) && rootHashSeq == utils.getContent(rootHash)
-	//@ invariant acc(utils.BytesMem(label), p/2) && labelSeq == utils.getContent(label)
+	//@ invariant acc(utils.BytesMem(rootHash), p/2) && rootHashSeq == utils.getBytesContent(rootHash)
+	//@ invariant acc(utils.BytesMem(label), p/2) && labelSeq == utils.getBytesContent(label)
 	//@ invariant acc(steps, 1/2)
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> 0 <= steps[i]
 	//@ invariant 0 <= idx && idx <= len(steps)

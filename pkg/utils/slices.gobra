@@ -1,0 +1,18 @@
+package utils
+
+ghost
+requires acc(BytesMem(s), _)
+decreases
+opaque
+pure func getBytesContent(s []byte) seq[byte] {
+  return unfolding acc(BytesMem(s), _) in getByteContent(s, 0)
+}
+
+ghost
+requires acc(s)
+requires 0 <= idx && idx <= len(s)
+decreases len(s) - idx
+pure func getByteContent(s []byte, idx int) seq[byte] {
+  return idx == len(s) ? seq[byte]{} : seq[byte]{s[idx]} ++ getByteContent(s, idx + 1)
+}
+

@@ -23,7 +23,7 @@ type PT interface {
 	// @ preserves acc(utils.BytesMem(rootHash), p)
 	// @ requires  0 <= version
 	// @ ensures   err == nil && res != nil ==> acc(res)
-	// @ ensures   err == nil ==> (res != nil) == GetCommitmentExists(utils.getContent(label), version, utils.getContent(rootHash))
+	// @ ensures   err == nil ==> (res != nil) == GetCommitmentExists(utils.getBytesContent(label), version, utils.getBytesContent(rootHash))
 	// @ decreases
 	GetCommitment(label []byte, version uint64, rootHash []byte /*@, ghost p perm@*/) (res []byte, err error)
 }
