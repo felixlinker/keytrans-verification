@@ -38,16 +38,16 @@ func TestPathToFrontier(t *testing.T) {
 		size uint64
 		want []uint64
 	}{
-		{n: 0, size: 14, want: []uint64{0, 1, 3, 7}},
-		{n: 5, size: 14, want: []uint64{5, 3, 7}},
-		{n: 10, size: 14, want: []uint64{10, 9, 11, 7}},
-		{n: 12, size: 14, want: []uint64{12, 13, 11, 7}},
+		{n: 0, size: 14, want: []uint64{7, 3, 1, 0}},
+		{n: 5, size: 14, want: []uint64{7, 3, 5}},
+		{n: 10, size: 14, want: []uint64{7, 11, 9, 10}},
+		{n: 12, size: 14, want: []uint64{7, 11, 13, 12}},
 	}
 
 	for _, tc := range tests {
-		got := PathToRoot(tc.n, tc.size)
+		got := PathToNode(tc.n, tc.size)
 		errF := func() {
-			t.Errorf("PathToRoot(%d, %d) = %v; want %v", tc.n, tc.size, got, tc.want)
+			t.Errorf("PathToNode(%d, %d) = %v; want %v", tc.n, tc.size, got, tc.want)
 		}
 
 		if len(got) != len(tc.want) {

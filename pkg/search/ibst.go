@@ -63,6 +63,6 @@ func pathToRoot(n uint64, min, max uint64) (r []uint64) {
 // @ ensures  acc(r) && 0 < len(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
 // @ decreases
-func PathToRoot(n uint64, size uint64) (r []uint64) {
-	return pathToRoot(n, 0, size-1)
+func PathToNode(n uint64, size uint64) (r []uint64) {
+	return utils.Reverse(pathToRoot(n, 0, size-1))
 }
