@@ -16,7 +16,7 @@ pure func max(a, b uint64) uint64 {
 ghost
 ensures 0 <= r
 ensures 1 <= n ==> PowOf2_pure(r) <= n && n < PowOf2_pure(r+1) && r < n
-ensures n == 1 ==> r == 0
+ensures n <= 1 ==> r == 0
 decreases n
 pure func Log2Floor_pure(n uint64) (r uint64) {
     return n < 2 ? 0 : 1 + Log2Floor_pure(n / 2)
@@ -36,9 +36,8 @@ pure func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 }
 @*/
 
-// @ requires  0 < base
 // @ ensures   0 <= r
-// @ ensures   PowOf2_pure(r) <= base
+// @ ensures   1 <= base ==> PowOf2_pure(r) <= base
 // @ ensures   base < PowOf2_pure(r+1)
 // @ ensures   r == Log2Floor_pure(base)
 // @ decreases base
@@ -55,11 +54,10 @@ func Log2Floor(base uint64) (r uint64) {
 
 /*@
 ghost
-requires  0 <= exp
 ensures   0 < r
 decreases exp
 pure func PowOf2_pure(exp uint64) (r uint64) {
-  return exp == 0 ? 1 : 2 * PowOf2_pure(exp - 1)
+  return exp <= 0 ? 1 : 2 * PowOf2_pure(exp - 1)
 }
 
 // Lemma: Weaker version of PowOf2_pureIncLemma
@@ -75,12 +73,14 @@ pure func PowOf2Monotonic(a uint64, b uint64) uint64 {
 }
 @*/
 
-// @ requires 0 <= exp
 // @ ensures  r == PowOf2_pure(exp)
 // @ ensures  1 <= r
 // @ decreases
 func PowOf2(exp uint64) (r uint64) {
 	r = 1
+	if exp <= 0 {
+		return
+	}
 
 	//@ invariant 0 <= i && i <= exp
 	//@ invariant r == PowOf2_pure(i)
@@ -91,9 +91,9 @@ func PowOf2(exp uint64) (r uint64) {
 	return r
 }
 
-// @ requires 1 <= size
-// @ ensures 1 <= r && r <= size
-// @ ensures r == PowOf2_pure(Log2Floor_pure(size))
+// @ requires 1 <= n
+// @ ensures 1 <= r && r <= n
+// @ ensures r == PowOf2_pure(Log2Floor_pure(n))
 // @ decreases
 func LargestSmallerPower(size uint64) (r uint64) {
 	r = PowOf2(Log2Floor(size))
