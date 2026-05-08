@@ -108,7 +108,7 @@ type SearchResponse struct {
 	Version        *uint64
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
-	Inclusion      proofs.InclusionProof
+	Inclusion      *proofs.InclusionProof
 	Opening        []byte
 	Value          proofs.UpdateValue // value associated with queried label
 }
