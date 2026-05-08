@@ -184,5 +184,10 @@ func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @
 		}
 	}
 
-	return i - 1
+	if done {
+		i = i - 1
+	} else {
+		i = 0
+	}
+	return
 }
