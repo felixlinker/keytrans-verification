@@ -116,37 +116,16 @@ func NodesToMostRecent(n uint64, size uint64) (r []uint64) {
 	} else {
 		// @ assert 2 <= i
 
-		// TODO: I tried using a combination of slicing, utils.Reverse, and append,
-		// but gobra kept running forever and raising errors. I think append is the
-		// main culprit here.
+		r = fromRoot[i-1:]
+		// @ assert forall j int :: 0 <= j && j < len(r) ==> &r[j] == &fromRoot[j+i-1]
+		// @ assert r[len(r)-1] == n
+		r = utils.Reverse(r)
+		// @ assert r[0] == n
 
-		r = make([]uint64, len(fromRoot)-i+1+len(front)-i+2)
-		// @ assert 3 <= len(r)
-
-		// Copy fromRoot[i:] into r in reverse
-		// @ invariant 0 <= j && j <= len(fromRoot) && j < len(r)
-		// @ invariant acc(r) && acc(fromRoot, p) && acc(front, p)
-		// @ invariant fromRoot[len(fromRoot)-1] == n
-		// @ invariant forall k int :: 0 <= k && k < len(fromRoot) ==> 0 <= fromRoot[k] && fromRoot[k] < size
-		// @ invariant 0 < j ==> r[0] == n
-		// @ invariant forall k int :: 0 <= k && k < len(r) ==> 0 <= r[k] && r[k] < size
-		for j := 0; j < len(fromRoot)-i+1; j++ {
-			r[j] = fromRoot[len(fromRoot)-j-1]
-		}
-
-		// @ invariant 0 <= j && i-2+j <= len(front) && len(fromRoot)-i+1+j <= len(r)
-		// @ invariant acc(r) && acc(front, p)
-		// @ invariant front[len(front)-1] == size - 1
-		// @ invariant forall k int :: 0 <= k && k < len(front) ==> 0 <= front[k] && front[k] < size
-		// @ invariant r[0] == n
-		// @ invariant forall k int :: 0 <= k && k < len(r) ==> 0 <= r[k] && r[k] < size
-		// @ invariant j == len(front)-i+2 ==> r[len(r)-1] == size - 1
-		for j := 0; j < len(front)-i+2; j++ {
-			// // @ assert i-1+1 == len(front)-1 ==> front[i-1+j] == size - 1
-			r[len(fromRoot)-i+1+j] = front[i-2+j]
-			// // @ assert i-1+1 == len(front)-1 ==> len(fromRoot)-i+j == len(r) -1 && r[len(r)-1] == size - 1
-		}
-		// @ assert acc(r) && r[0] == n && r[len(r)-1] == size - 1
+		tmp := front[i-2:]
+		// @ assert forall j int :: 0 <= j && j < len(tmp) ==> &tmp[j] == &front[j+i-2]
+		r = append( /*@ perm(1/2), @*/ r, tmp...)
+		// @ assert r[len(r)-1] == size - 1
 	}
 
 	return r
