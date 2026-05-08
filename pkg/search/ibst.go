@@ -77,8 +77,7 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 // @ ensures  acc(r) && 0 < len(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
 // @ ensures  r[0] == n
-// @ ensures  r[len(r)-1] == size - 1
-func NodesToMostRecent(n uint64, size uint64) (r []uint64) {
+func NodesToFrontier(n uint64, size uint64) (r []uint64) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
 	// @ assert front[0] == fromRoot[0]
@@ -100,19 +99,7 @@ func NodesToMostRecent(n uint64, size uint64) (r []uint64) {
 	}
 
 	if !diffFound {
-		if len(fromRoot) <= len(front) {
-			r = front[i-1:]
-			// @ assert forall j int :: 0 <= j && j < len(r) ==> &r[j] == &front[j+i-1]
-		} else {
-			r = fromRoot[i-1:]
-			// @ assert forall j int :: 0 <= j && j < len(r) ==> &r[j] == &fromRoot[j+i-1]
-			// @ assert r[len(r)-1] == n
-			// @ assert r[0] == size - 1
-			r = utils.Reverse(r)
-		}
-		// @ assert acc(r)
-		// @ assert r[0] == n
-		// @ assert r[len(r)-1] == size - 1
+		r = []uint64{n}
 	} else {
 		// @ assert 2 <= i
 
@@ -121,11 +108,6 @@ func NodesToMostRecent(n uint64, size uint64) (r []uint64) {
 		// @ assert r[len(r)-1] == n
 		r = utils.Reverse(r)
 		// @ assert r[0] == n
-
-		tmp := front[i-2:]
-		// @ assert forall j int :: 0 <= j && j < len(tmp) ==> &tmp[j] == &front[j+i-2]
-		r = append( /*@ perm(1/2), @*/ r, tmp...)
-		// @ assert r[len(r)-1] == size - 1
 	}
 
 	return r
@@ -134,18 +116,14 @@ func NodesToMostRecent(n uint64, size uint64) (r []uint64) {
 // @ requires 0 <= n && n < size
 // @ ensures  acc(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> n < r[i] && r[i] < size
-// @ ensures  n < size - 1 ==> 0 < len(r) && r[len(r)-1] == size - 1
-func YoungerNodesToMostRecent(n uint64, size uint64) (r []uint64) {
-	path := NodesToMostRecent(n, size)
+func YoungerNodesToFrontier(n uint64, size uint64) (r []uint64) {
+	path := NodesToFrontier(n, size)
 	r = make([]uint64, 0)
 	// @ invariant 0 <= i && i <= len(path)
 	// @ invariant acc(r) && acc(path, perm(1/2))
-	// @ invariant path[0] == n && path[len(path)-1] == size - 1
-	// @ invariant n < size - 1 && i == len(path) ==> 0 < len(r) && r[len(r)-1] == size - 1
 	// @ invariant forall i int :: {path[i]} 0 <= i && i < len(path) ==> 0 <= path[i] && path[i] < size
 	// @ invariant forall i int :: {r[i]} 0 <= i && i < len(r) ==> n < r[i] && r[i] < size
 	for i := 0; i < len(path); i++ {
-		// @ assert i == len(path) - 1 ==> path[i] == size - 1 && n <= path[i]
 		if n < path[i] {
 			r = append( /*@ perm(1/2), @*/ r, path[i])
 		}
