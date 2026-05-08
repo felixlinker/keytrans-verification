@@ -154,6 +154,7 @@ func YoungerNodesToMostRecent(n uint64, size uint64) (r []uint64) {
 	return r
 }
 
+// Below is effectively a partial implementation of: https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-6.1-2
 // @ requires 0 < rmw
 // @ requires noPerm < p && p < writePerm
 // @ requires 0 < len(timestamps)
