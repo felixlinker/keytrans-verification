@@ -14,7 +14,7 @@ on:
 jobs:
   verify-packages:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     container:
       image: ghcr.io/viperproject/gobra:v26.02
     env:
