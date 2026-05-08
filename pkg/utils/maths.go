@@ -95,7 +95,22 @@ func PowOf2(exp uint64) (r uint64) {
 // @ ensures 1 <= r && r <= n
 // @ ensures r == PowOf2_pure(Log2Floor_pure(n))
 // @ decreases
-func LargestSmallerPower(size uint64) (r uint64) {
-	r = PowOf2(Log2Floor(size))
-	return r
+func LargestSmallerPower(n uint64) (r uint64) {
+	return PowOf2(Log2Floor(n))
+}
+
+// @ requires 1 <= n
+// @ ensures 0 <= r && r <= n
+// @ ensures 1 <= r ==> PowOf2_pure(Log2Floor_pure(n)-1) <= r
+// @ ensures r <= PowOf2_pure(Log2Floor_pure(n))
+// @ ensures r < n
+// @ decreases
+func TrueLargestSmallerPower(n uint64) (r uint64) {
+	if n == 1 {
+		return 0
+	} else if r = PowOf2(Log2Floor(n)); r == n {
+		return PowOf2(Log2Floor(n) - 1)
+	} else {
+		return r
+	}
 }
