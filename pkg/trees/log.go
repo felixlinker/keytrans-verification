@@ -57,6 +57,19 @@ func Empty() (t *logTree) {
 	return &tree
 }
 
+// @ requires forall i int :: 0 <= i && i < len(leafs) ==> acc(&leafs[i]) && acc(leafs[i])
+// @ ensures acc(t.Inv())
+func FullTree(leafs []*[sha256.Size]byte) (t *logTree) {
+	t = Empty()
+	// @ invariant 0 <= i && i <= len(leafs)
+	// @ invariant forall j int :: i <= j && j < len(leafs) ==> acc(&leafs[j]) && acc(leafs[j])
+	// @ invariant acc(t.Inv())
+	for i := 0; i < len(leafs); i++ {
+		t.setLeaf(uint64(i), leafs[i])
+	}
+	return t
+}
+
 // @ requires 0 <= idx
 // @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
 // @ ensures acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size && idx < t.size
