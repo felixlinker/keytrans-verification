@@ -3,73 +3,205 @@ package trees
 import (
 	"crypto/sha256"
 	"errors"
+
+	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	"github.com/felixlinker/keytrans-verification/pkg/search"
+	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
-
-type LogTree interface {
-	GetSize() uint64
-	GetRoot() [sha256.Size]byte
-	GetLeaf(index uint64) ([sha256.Size]byte, error)
-	FullSubtrees() [][sha256.Size]byte
-	FrontierCommitments() []*[sha256.Size]byte
-}
-
-type logTreeLeaf struct {
-	value      [sha256.Size]byte
-	commitment *[sha256.Size]byte
-}
-
-/*@
-pred (l *logTreeLeaf) Inv() {
-	acc(l) && (l.commitment != nil ==> acc(l.commitment))
-}
-@*/
 
 type logTree struct {
 	size  uint64
-	value [sha256.Size]byte
-	leaf  *logTreeLeaf
+	value *[sha256.Size]byte
 	left  *logTree
 	right *logTree
 }
 
 /*@
 pred (t *logTree) Inv() {
-	acc(t) &&
-	(t.leaf != nil ==> acc(t.leaf.Inv())) &&
+	acc(t) && 1 <= t.size &&
+	(t.value != nil ==> acc(t.value)) &&
 	(t.left != nil ==> acc(t.left.Inv())) &&
-	(t.right != nil ==> acc(t.right.Inv()))
+	(t.right != nil ==> acc(t.right.Inv())) &&
+	(t.left == nil) == (t.right == nil)
 }
 @*/
 
+// @ preserves acc(t.Inv())
+func (t *logTree) cut() {
+	// @ unfold acc(t.Inv())
+	t.left = nil
+	t.right = nil
+	// @ fold acc(t.Inv())
+}
+
+// @ preserves acc(t.Inv())
+func (t *logTree) Prune() {
+	// @ unfold acc(t.Inv())
+	if t.left != nil && t.right != nil {
+		// @ assert t.left != nil && t.right != nil
+		t.left.cut()
+		t.right.Prune()
+	}
+	// @ fold acc(t.Inv())
+}
+
+// @ ensures acc(t.Inv())
+func Empty() (t *logTree) {
+	tree /*@@@*/ := logTree{
+		size:  1,
+		value: nil,
+		left:  nil,
+		right: nil,
+	}
+	// @ fold (&tree).Inv()
+	return &tree
+}
+
+// @ requires l != nil ==> acc(l)
+// @ requires 0 <= idx
+// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
+// @ ensures acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size && idx < t.size
+func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
+	// First, prune the tree to only keep what the server knows us to keep
+	t.Prune()
+
+	// Enlarge tree first if necessary
+	// @ invariant acc(t.Inv())
+	for /*@ unfolding acc(t.Inv()) in @*/ t.size <= idx {
+		// @ unfold acc(t.Inv())
+		newLeft := Empty()
+		// @ unfold acc(newLeft.Inv())
+		newLeft.size = t.size
+		newLeft.value = t.value
+		newLeft.left = t.left
+		newLeft.right = t.right
+		// @ fold acc(newLeft.Inv())
+
+		newRight := Empty()
+		// @ unfold acc(newRight.Inv())
+		newRight.size = t.size
+		// @ fold acc(newRight.Inv())
+
+		if t.size*2 <= idx {
+			t.size = t.size * 2
+		} else {
+			t.size = idx + 1
+		}
+		t.value = nil
+		t.left = newLeft
+		t.right = newRight
+		// @ fold acc(t.Inv())
+	}
+	// @ unfold acc(t.Inv())
+
+	// Find subtree to set leaf
+	if t.size == 1 {
+		// @ assert idx == 0 // sanity assert
+		t.value = l
+	} else {
+		var sizeLeft uint64
+		if t.left != nil && t.right != nil {
+			sizeLeft = /*@ unfolding t.left.Inv() in @*/ t.left.size
+		} else if t.left != nil || t.right != nil {
+			panic("invariant violated")
+		} else {
+			sizeLeft = utils.TrueLargestSmallerPower(t.size)
+			t.left = Empty()
+			// @ unfold t.left.Inv()
+			t.left.size = sizeLeft
+			// @ fold t.left.Inv()
+			t.right = Empty()
+			// @ unfold t.right.Inv()
+			t.right.size = t.size - sizeLeft
+			// @ fold t.right.Inv()
+		}
+
+		if idx < sizeLeft {
+			t.left.setLeaf(idx, l)
+		} else {
+			t.right.setLeaf(idx-sizeLeft, l)
+		}
+	}
+	// @ fold acc(t.Inv())
+}
+
+// @ preserves acc(t.Inv())
+// @ requires acc(value)
+// @ ensures !ok ==> acc(value)
+func (t *logTree) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
+	// @ unfold acc(t.Inv())
+	// @ defer fold acc(t.Inv())
+	if t.left != nil && t.right != nil {
+		if k := t.left.fillLeftMost(value); k {
+			return k
+		} else {
+			return t.right.fillLeftMost(value)
+		}
+	} else {
+		// @ assert t.left == nil && t.right == nil
+		if t.value == nil {
+			t.value = value
+			return true
+		} else {
+			return false
+		}
+	}
+}
+
 // @ requires noPerm < p
-// @ preserves acc(t.Inv(), p)
-func (t *logTree) GetLeaf(index uint64 /*@, ghost p perm @*/) (commitment [sha256.Size]byte, err error) {
+// @ requires acc(prf.Inv())
+// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 0 < t.size && t.size < newSize
+// @ ensures  acc(newT.Inv()) // && unfolding acc(t.Inv()) in newT.size == newSize
+func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof /*@, ghost p perm @*/) (newT *logTree) {
+	if /*@ unfolding acc(prf.Inv()) in @*/ prf == nil {
+		panic("non-nil prf")
+	}
+
+	// We expect that the inclusion proofs include:
+	// - all nodes younger on the path from the old root to the frontier
+	// - all nodes on the frontier that are below the most recent distinguished log entry or the root
+
+	// Client must have at least the respective prefix roots
+	oldFrontier := search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size)
+	consistencyPath := search.YoungerNodesToFrontier(oldFrontier[0], newSize)
+	// @ invariant 0 <= i && i <= len(consistencyPath)
+	// @ invariant acc(t.Inv()) && acc(consistencyPath, perm(1/2))
+	for i := 0; i < len(consistencyPath); i++ {
+		// TODO: Either move assume to pre-condition or improve gobra
+		// @ assume 0 <= consistencyPath[i]
+		t.setLeaf(consistencyPath[i], nil)
+	}
+
+	// @ unfold acc(prf.Inv())
+	// @ invariant acc(prf) && acc(t.Inv()) && acc(consistencyPath, perm(1/2))
+	// @ invariant 0 <= i && i <= len(prf.Elements)
+	// @ invariant forall j int :: i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
+	for i := 0; i < len(prf.Elements); i++ {
+		t.fillLeftMost(prf.Elements[i])
+	}
+
+	return t
+}
+
+// @ requires noPerm < p
+// @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
+func (t *logTree) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha256.Size]byte, err error) {
 	// @ unfold acc(t.Inv(), p)
 	// @ defer fold acc(t.Inv(), p)
 	if t.size == 1 {
-		if t.leaf == nil {
-			return commitment, errors.New("missing leaf")
-		} else {
-			// @ unfold acc(t.leaf.Inv(), p)
-			// @ defer fold acc(t.leaf.Inv(), p)
-			if t.leaf.commitment == nil {
-				return commitment, errors.New("missing commitment")
-			} else {
-				return *t.leaf.commitment, nil
-			}
-		}
+		return t.value, nil
 	} else if t.left == nil || t.right == nil {
 		// Technically, we do not need both subtrees, but we check the invariant
 		// that every node should be a leaf or have two children
-		return commitment, errors.New("missing subtree")
+		return nil, errors.New("missing subtree")
 	} else {
 		// @ unfold acc(t.left.Inv(), p)
 		if index < t.left.size {
 			// @ fold acc(t.left.Inv(), p)
-			return t.left.GetLeaf(index /*@, p @*/)
+			return t.left.GetLeafHash(index /*@, p @*/)
 		} else {
 			// @ defer fold acc(t.left.Inv(), p)
-			return t.right.GetLeaf(index - t.left.size /*@, p @*/)
+			return t.right.GetLeafHash(index - t.left.size /*@, p @*/)
 		}
 	}
 }
@@ -82,29 +214,6 @@ func (t *logTree) GetSize( /*@ ghost p perm @*/ ) uint64 {
 
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p)
-func (t *logTree) GetRoot( /*@ ghost p perm @*/ ) [sha256.Size]byte {
+func (t *logTree) GetRoot( /*@ ghost p perm @*/ ) *[sha256.Size]byte {
 	return /*@ unfolding acc(t.Inv(), p) in @*/ t.value
-}
-
-// TODO: ensure that all elements of r are non-nil, but I keep running into
-// gobra walls. Initially, I had planned to have the return type be
-// [][sha256.Size]byte
-
-// @ requires noPerm < p
-// @ preserves acc(t.Inv(), p)
-// @ ensures 0 < len(r) && acc(r)
-func (t *logTree) FullSubtrees( /*@ ghost p perm @*/ ) (r []*[sha256.Size]byte) {
-	// @ unfold acc(t.Inv(), p)
-	// @ defer fold acc(t.Inv(), p)
-	if t.left == nil || t.right == nil {
-		h /*@@@*/ := t.value
-		return []*[sha256.Size]byte{&h}
-	} else {
-		// @ unfold acc(t.left.Inv(), p)
-		// @ defer fold acc(t.left.Inv(), p)
-		rec := t.right.FullSubtrees( /*@ p @*/ )
-		h /*@@@*/ := t.left.value
-		r = []*[sha256.Size]byte{&h}
-		return append( /*@ writePerm, @*/ r, rec...)
-	}
 }

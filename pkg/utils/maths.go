@@ -102,6 +102,7 @@ func LargestSmallerPower(n uint64) (r uint64) {
 // @ requires 1 <= n
 // @ ensures 0 <= r && r <= n
 // @ ensures 1 <= r ==> PowOf2_pure(Log2Floor_pure(n)-1) <= r
+// @ ensures 2 <= n ==> 1 <= r
 // @ ensures r <= PowOf2_pure(Log2Floor_pure(n))
 // @ ensures r < n
 // @ decreases
