@@ -189,6 +189,55 @@ func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof /*@, ghost p p
 	return t
 }
 
+// @ preserves acc(t.Inv())
+// @ ensures err == nil ==> acc(content)
+func (t *logTree) hashContent() (content []byte, err error) {
+	if e := t.computeHash(); e != nil {
+		return nil, err
+	} else {
+		// @ unfold acc(t.Inv())
+		// @ assert t.value != nil
+		content := make([]byte, 1)
+		if t.size == 1 {
+			content[0] = 0x00
+		} else {
+			content[0] = 0x11
+		}
+		content = append( /*@ perm(1/2), @*/ content, (*t.value)[:]...)
+		// @ fold acc(t.Inv())
+		return content, nil
+	}
+}
+
+// @ preserves acc(t.Inv())
+// @ ensures err == nil ==> unfolding acc(t.Inv()) in t.value != nil
+func (t *logTree) computeHash() (err error) {
+	// @ unfold acc(t.Inv())
+	// @ defer fold acc(t.Inv())
+	if t.left == nil || t.right == nil {
+		if t.value == nil {
+			return errors.New("missing value for incomplete subtree or leaf")
+		} else {
+			return nil
+		}
+	} else {
+		// @ assert t.left != nil && t.right != nil // test invariant
+		if t.value == nil {
+			if leftContent, e := t.left.hashContent(); e != nil {
+				return e
+			} else if rightContent, e := t.right.hashContent(); e != nil {
+				return e
+			} else {
+				a /*@@@*/ := sha256.Sum256(append( /*@ perm(1/2), @*/ leftContent, rightContent...) /*@, perm(1/2) @*/)
+				t.value = &a
+				return nil
+			}
+		} else {
+			return nil
+		}
+	}
+}
+
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
 func (t *logTree) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha256.Size]byte, err error) {
