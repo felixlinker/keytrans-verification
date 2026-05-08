@@ -152,6 +152,29 @@ func NodesToMostRecent(n uint64, size uint64) (r []uint64) {
 	return r
 }
 
+// @ requires 0 <= n && n < size
+// @ ensures  acc(r) && 0 < len(r)
+// @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> n <= r[i] && r[i] < size
+// @ ensures  r[len(r)-1] == size - 1
+func OlderNodesToMostRecent(n uint64, size uint64) (r []uint64) {
+	path := NodesToMostRecent(n, size)
+	r = make([]uint64, 0)
+	// @ invariant 0 <= i && i <= len(path)
+	// @ invariant acc(r) && acc(path, perm(1/2))
+	// @ invariant path[0] == n && path[len(path)-1] == size - 1
+	// @ invariant 0 < i ==> 0 < len(r)
+	// @ invariant i == len(path) ==> r[len(r)-1] == size - 1
+	// @ invariant forall i int :: {path[i]} 0 <= i && i < len(path) ==> 0 <= path[i] && path[i] < size
+	// @ invariant forall i int :: {r[i]} 0 <= i && i < len(r) ==> n <= r[i] && r[i] < size
+	for i := 0; i < len(path); i++ {
+		// @ assert i == len(path) - 1 ==> path[i] == size - 1 && n <= path[i]
+		if n <= path[i] {
+			r = append( /*@ perm(1/2), @*/ r, path[i])
+		}
+	}
+	return r
+}
+
 // @ requires 0 < rmw
 // @ requires noPerm < p && p < writePerm
 // @ requires 0 < len(timestamps)
