@@ -135,7 +135,7 @@ func NodesToMostRecent(n uint64, size uint64) (r []uint64) {
 // @ ensures  acc(r) && 0 < len(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> n <= r[i] && r[i] < size
 // @ ensures  r[len(r)-1] == size - 1
-func OlderNodesToMostRecent(n uint64, size uint64) (r []uint64) {
+func YoungerNodesToMostRecent(n uint64, size uint64) (r []uint64) {
 	path := NodesToMostRecent(n, size)
 	r = make([]uint64, 0)
 	// @ invariant 0 <= i && i <= len(path)
