@@ -57,14 +57,10 @@ func Empty() (t *logTree) {
 	return &tree
 }
 
-// @ requires l != nil ==> acc(l)
 // @ requires 0 <= idx
 // @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
 // @ ensures acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size && idx < t.size
-func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
-	// First, prune the tree to only keep what the server knows us to keep
-	t.Prune()
-
+func (t *logTree) fit(idx uint64) {
 	// Enlarge tree first if necessary
 	// @ invariant acc(t.Inv())
 	for /*@ unfolding acc(t.Inv()) in @*/ t.size <= idx {
@@ -92,6 +88,16 @@ func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
 		t.right = newRight
 		// @ fold acc(t.Inv())
 	}
+}
+
+// @ requires l != nil ==> acc(l)
+// @ requires 0 <= idx
+// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
+// @ ensures acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size && idx < t.size
+func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
+	// First, prune the tree to only keep what the server knows us to keep
+	t.Prune()
+	t.fit(idx)
 	// @ unfold acc(t.Inv())
 
 	// Find subtree to set leaf
