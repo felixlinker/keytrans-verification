@@ -36,13 +36,46 @@ func (t *logTree) cut() {
 
 // @ preserves acc(t.Inv())
 func (t *logTree) Prune() {
+	t.prune(0, search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size))
+}
+
+// @ preserves acc(t.Inv())
+// @ requires 0 <= offset
+// @ requires acc(keeping)
+// @ ensures acc(r) && len(r) <= len(keeping)
+func (t *logTree) prune(offset uint64, keeping []uint64) (r []uint64) {
 	// @ unfold acc(t.Inv())
-	if t.left != nil && t.right != nil {
-		// @ assert t.left != nil && t.right != nil
-		t.left.cut()
-		t.right.Prune()
+	if t.left == nil || t.right == nil {
+		i := 0
+		// @ fold acc(t.Inv())
+		// @ invariant 0 <= i && i <= len(keeping)
+		// @ invariant acc(keeping) && acc(t.Inv())
+		for ; i < len(keeping) && keeping[i]-offset < /*@ unfolding acc(t.Inv()) in @*/ t.size; i++ {
+		}
+		// Help gobra realize the relation between keeping and its subslice
+		// @ assert forall j int :: {&keeping[i:][j]} 0 <= j && j < len(keeping[i:]) ==> &keeping[i:][j] == &keeping[i+j]
+		// @ assert acc(keeping[i:])
+		return keeping[i:]
+	} else {
+		// @ assert t.left != nil && t.right != nil // Test tree invariant
+		// Recurse if tree is unbalanced or we must preserve children
+		if t.size != utils.LargestSmallerPower(t.size) || (0 < len(keeping) && keeping[0]-offset < t.size) {
+			keeping = t.left.prune(offset, keeping)
+			// @ unfold acc(t.left.Inv())
+			keeping = t.right.prune(offset+t.left.size, keeping)
+			// @ fold acc(t.left.Inv())
+			// @ fold acc(t.Inv())
+			return keeping
+		} else {
+			// We do not modify keeping in this branch. The below assert checks that
+			// this is justified: Either, the slice is empty, or the to-be-kept items
+			// are outside this subtree.
+			// @ assert 0 == len(keeping) || t.size <= keeping[0]-offset
+			// @ fold acc(t.Inv())
+			t.cut()
+			return keeping
+		}
 	}
-	// @ fold acc(t.Inv())
 }
 
 // @ ensures acc(t.Inv())
