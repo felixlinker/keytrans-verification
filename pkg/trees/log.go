@@ -34,6 +34,8 @@ func (t *logTree) cut() {
 	// @ fold acc(t.Inv())
 }
 
+// Remove all nodes from the tree that are not on the frontier, and memorize
+// the hash values of all balanced subtrees.
 // @ preserves acc(t.Inv())
 func (t *logTree) Prune() {
 	t.prune(0, search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size))
