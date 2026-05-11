@@ -40,7 +40,6 @@ func (t *logTree) Prune() {
 }
 
 // @ preserves acc(t.Inv())
-// @ requires 0 <= offset
 // @ requires acc(keeping)
 // @ ensures acc(r) && len(r) <= len(keeping)
 func (t *logTree) prune(offset uint64, keeping []uint64) (r []uint64) {
@@ -103,43 +102,52 @@ func FullTree(leafs []*[sha256.Size]byte) (t *logTree) {
 	return t
 }
 
-// @ requires 0 <= idx
-// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
-// @ ensures acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size && idx < t.size
+// Grow the tree until it can store idx.
+// @ preserves acc(t.Inv())
 func (t *logTree) fit(idx uint64) {
-	// Enlarge tree first if necessary
 	// @ invariant acc(t.Inv())
 	for /*@ unfolding acc(t.Inv()) in @*/ t.size <= idx {
 		// @ unfold acc(t.Inv())
-		newLeft := Empty()
-		// @ unfold acc(newLeft.Inv())
-		newLeft.size = t.size
-		newLeft.value = t.value
-		newLeft.left = t.left
-		newLeft.right = t.right
-		// @ fold acc(newLeft.Inv())
+		lsp := utils.LargestSmallerPower(t.size)
+		if lsp == t.size {
+			// tree is already fully balanced; move both children into left child
 
-		newRight := Empty()
-		// @ unfold acc(newRight.Inv())
-		newRight.size = t.size
-		// @ fold acc(newRight.Inv())
+			newLeft := Empty()
+			// @ unfold acc(newLeft.Inv())
+			newLeft.size = t.size
+			newLeft.value = t.value
+			newLeft.left = t.left
+			newLeft.right = t.right
+			// @ fold acc(newLeft.Inv())
 
-		if t.size*2 <= idx {
-			t.size = t.size * 2
+			t.value = nil
+			t.left = newLeft
+			t.right = Empty()
+			// new right child contains one node; effectively, this tree now contains
+			// 2^n+1 nodes. We will grow the right child as necessary next.
+			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
+		}
+
+		// Do we need to double in size or just fit to the next index?
+		if lsp*2 <= idx {
+			t.size = lsp * 2
 		} else {
 			t.size = idx + 1
 		}
-		t.value = nil
-		t.left = newLeft
-		t.right = newRight
+
+		// Grow right subtree; left subtree will already be balanced or nil
+		if t.right != nil {
+			// set right to be full-balanced subtree
+			t.right.fit( /*@ unfolding acc(t.left.Inv()) in @*/ t.size - t.left.size - 1)
+		}
+
 		// @ fold acc(t.Inv())
 	}
 }
 
 // @ requires l != nil ==> acc(l)
 // @ requires 0 <= idx
-// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
-// @ ensures acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size && idx < t.size
+// @ preserves acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
 func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
 	// First, prune the tree to only keep what the server knows us to keep
 	t.Prune()
@@ -148,7 +156,6 @@ func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
 
 	// Find subtree to set leaf
 	if t.size == 1 {
-		// @ assert idx == 0 // sanity assert
 		t.value = l
 	} else {
 		var sizeLeft uint64
