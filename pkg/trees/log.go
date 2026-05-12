@@ -343,22 +343,26 @@ func (t *logTree) GetRoot( /*@ ghost p perm @*/ ) *[sha256.Size]byte {
 // @ preserves acc(t.Inv())
 // @ requires elems != nil && forall i int :: {elems[i]} 0 <= i && i < len(elems) ==> acc(&elems[i]) && acc(elems[i])
 // @ ensures err == nil ==> r != nil && forall i int :: {r[i]} 0 <= i && i < len(r) ==> acc(&r[i]) && acc(r[i])
-func (t *logTree) proofFromPruned(elems []*proofs.NodeValue) (r []*proofs.NodeValue, err error) {
+func (t *logTree) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (r []*proofs.NodeValue, err error) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		if t.value == nil {
 			// @ fold acc(t.Inv())
 			return nil, errors.New("tree missing hash value")
-		} else {
+		} else if cacheSize < t.index+t.size {
+			// Only include sub trees that the client cannot compute
 			v /*@@@*/ := *t.value
 			// @ fold acc(t.Inv())
 			return append( /*@ perm(1/2), @*/ elems, &v), nil
+		} else {
+			// Client can compute this subtree; do not include
+			return elems, nil
 		}
-	} else if elems, err = t.left.proofFromPruned(elems); err != nil {
+	} else if elems, err = t.left.proofFromPruned(cacheSize, elems); err != nil {
 		// @ fold acc(t.Inv())
 		return nil, err
 	} else {
-		r, err = t.right.proofFromPruned(elems)
+		r, err = t.right.proofFromPruned(cacheSize, elems)
 		// @ fold acc(t.Inv())
 		return r, err
 	}
@@ -366,8 +370,8 @@ func (t *logTree) proofFromPruned(elems []*proofs.NodeValue) (r []*proofs.NodeVa
 
 // @ preserves acc(t.Inv())
 // @ ensures err == nil ==> acc(prf.Inv())
-func (t *logTree) ProofFromPruned() (prf *proofs.InclusionProof, err error) {
-	if elems, e := t.proofFromPruned([]*proofs.NodeValue{}); e != nil {
+func (t *logTree) ProofFromPruned(cacheSize uint64) (prf *proofs.InclusionProof, err error) {
+	if elems, e := t.proofFromPruned(cacheSize, []*proofs.NodeValue{}); e != nil {
 		return nil, e
 	} else {
 		prf /*@@@*/ := proofs.InclusionProof{
