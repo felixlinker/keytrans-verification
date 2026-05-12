@@ -107,7 +107,7 @@ func FullTree(leafs []*[sha256.Size]byte) (t *logTree) {
 
 // Grow the tree until it can store idx.
 // @ preserves acc(t.Inv())
-func (t *logTree) fit(offset uint64, idx uint64) {
+func (t *logTree) fit(idx uint64) {
 	// @ invariant acc(t.Inv())
 	for /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size <= idx {
 		// @ unfold acc(t.Inv())
@@ -137,16 +137,14 @@ func (t *logTree) fit(offset uint64, idx uint64) {
 		if lsp*2 <= idx {
 			t.size = lsp * 2
 		} else {
+			// @ assume 0 <= idx
 			t.size = idx + 1
 		}
 
 		// Grow right subtree; left subtree will already be balanced or nil
 		if t.right != nil {
 			// set right to be full-balanced subtree
-			t.right.fit(
-				/*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size,
-				/*@ unfolding acc(t.left.Inv()) in @*/ t.size-t.left.size,
-			)
+			t.right.fit( /*@ unfolding acc(t.left.Inv()) in @*/ t.size - t.left.size)
 		}
 
 		// @ fold acc(t.Inv())
@@ -159,7 +157,7 @@ func (t *logTree) fit(offset uint64, idx uint64) {
 func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
 	// First, prune the tree to only keep what the server knows us to keep
 	t.Prune()
-	t.fit(0, idx)
+	t.fit(idx)
 	// @ unfold acc(t.Inv())
 
 	// Find subtree to set leaf
