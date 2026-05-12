@@ -217,21 +217,25 @@ func (t *logTree) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 	}
 }
 
+// @ requires 1 <= newSize
 // @ requires acc(prf.Inv())
-// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in t.size < newSize
+// @ requires t != nil ==> acc(t.Inv()) && unfolding acc(t.Inv()) in t.size < newSize
 // @ ensures  acc(newT.Inv()) // && unfolding acc(t.Inv()) in newT.size == newSize
 func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *logTree) {
 	if /*@ unfolding acc(prf.Inv()) in @*/ prf == nil {
 		panic("non-nil prf")
 	}
 
-	// We expect that the inclusion proofs include:
-	// - all nodes younger on the path from the old root to the frontier
-	// - all nodes on the frontier that are below the most recent distinguished log entry or the root
-
 	// Client must have at least the respective prefix roots
-	oldFrontier := search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size)
-	consistencyPath := search.YoungerNodesToFrontier(oldFrontier[0], newSize)
+	var consistencyPath []uint64
+	if t == nil {
+		t = Singleton()
+		consistencyPath = search.Frontier(newSize)
+	} else {
+		oldFrontier := search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size)
+		consistencyPath = search.YoungerNodesToFrontier(oldFrontier[0], newSize)
+	}
+
 	// @ invariant 0 <= i && i <= len(consistencyPath)
 	// @ invariant acc(t.Inv()) && acc(consistencyPath, perm(1/2))
 	for i := 0; i < len(consistencyPath); i++ {
