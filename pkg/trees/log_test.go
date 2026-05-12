@@ -111,6 +111,31 @@ func TestTreeFromProof(t *testing.T) {
 }
 
 // @ trusted
+func TestProofSize(t *testing.T) {
+	tests := []struct {
+		from      uint64
+		to        uint64
+		proofSize int
+	}{
+		{from: 1, to: 8, proofSize: 6},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("proof size from %d to %d", tc.from, tc.to), func(t *testing.T) {
+			tree := FullTree(testLeafs[:tc.to])
+			prf := logTreePrunedProof(t, tree, tc.from)
+			if prf == nil {
+				t.Fatalf("prf is nil")
+			} else if prf.Elements == nil {
+				t.Fatalf("prf.Elements is nil")
+			} else if len(prf.Elements) != tc.proofSize {
+				t.Fatalf("len(prf.Elements) = %d; expected: %d", len(prf.Elements), tc.proofSize)
+			}
+		})
+	}
+}
+
+// @ trusted
 func TestGrowTreeFromProof(t *testing.T) {
 	for oldIndex := range len(testLeafs) {
 		oldSize := uint64(oldIndex + 1)
