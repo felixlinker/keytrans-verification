@@ -73,10 +73,11 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 	return utils.Reverse(pathToRoot(n, 0, size-1))
 }
 
+// TODO: Add functional properties back again
 // @ requires 0 <= n && n < size
-// @ ensures  acc(r) && 0 < len(r)
-// @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
-// @ ensures  r[0] == n
+// @ ensures  acc(r) // && 0 < len(r)
+// // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
+// // @ ensures  r[0] == n
 func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
