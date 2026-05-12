@@ -138,17 +138,17 @@ func (t *logTree) fit(idx uint64) {
 		}
 
 		// Do we need to double in size or just fit to the next index?
-		if lsp*2 <= idx {
+		if t.index+(lsp*2) <= idx {
 			t.size = lsp * 2
 		} else {
 			// @ assume 0 <= idx
-			t.size = idx + 1
+			t.size = idx - t.index + 1
 		}
 
 		// Grow right subtree; left subtree will already be balanced or nil
 		if t.right != nil {
 			// set right to be full-balanced subtree
-			t.right.fit( /*@ unfolding acc(t.left.Inv()) in @*/ t.size - t.left.size)
+			t.right.fit( /*@ unfolding acc(t.left.Inv()) in @*/ t.index + t.size - 1)
 		}
 
 		// @ fold acc(t.Inv())
