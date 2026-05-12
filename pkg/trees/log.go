@@ -80,7 +80,7 @@ func (t *logTree) prune(offset uint64, keeping []uint64) (r []uint64) {
 }
 
 // @ ensures acc(t.Inv())
-func Empty() (t *logTree) {
+func Singleton() (t *logTree) {
 	tree /*@@@*/ := logTree{
 		size:  1,
 		value: nil,
@@ -94,7 +94,7 @@ func Empty() (t *logTree) {
 // @ requires forall i int :: 0 <= i && i < len(leafs) ==> acc(&leafs[i]) && acc(leafs[i])
 // @ ensures acc(t.Inv())
 func FullTree(leafs []*[sha256.Size]byte) (t *logTree) {
-	t = Empty()
+	t = Singleton()
 	// @ invariant 0 <= i && i <= len(leafs)
 	// @ invariant forall j int :: i <= j && j < len(leafs) ==> acc(&leafs[j]) && acc(leafs[j])
 	// @ invariant acc(t.Inv())
@@ -114,7 +114,7 @@ func (t *logTree) fit(idx uint64) {
 		if lsp == t.size {
 			// tree is already fully balanced; move both children into left child
 
-			newLeft := Empty()
+			newLeft := Singleton()
 			// @ unfold acc(newLeft.Inv())
 			newLeft.size = t.size
 			newLeft.value = t.value
@@ -124,7 +124,7 @@ func (t *logTree) fit(idx uint64) {
 
 			t.value = nil
 			t.left = newLeft
-			t.right = Empty()
+			t.right = Singleton()
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
 			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
@@ -167,11 +167,11 @@ func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
 			panic("invariant violated")
 		} else {
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
-			t.left = Empty()
+			t.left = Singleton()
 			// @ unfold t.left.Inv()
 			t.left.size = sizeLeft
 			// @ fold t.left.Inv()
-			t.right = Empty()
+			t.right = Singleton()
 			// @ unfold t.right.Inv()
 			t.right.size = t.size - sizeLeft
 			// @ fold t.right.Inv()
