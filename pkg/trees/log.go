@@ -10,6 +10,7 @@ import (
 )
 
 type logTree struct {
+	index uint64
 	size  uint64
 	value *[sha256.Size]byte
 	left  *logTree
@@ -38,20 +39,20 @@ func (t *logTree) cut() {
 // the hash values of all balanced subtrees.
 // @ preserves acc(t.Inv())
 func (t *logTree) Prune() {
-	t.prune(0, search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size))
+	t.prune(search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size))
 }
 
 // @ preserves acc(t.Inv())
 // @ requires acc(keeping)
 // @ ensures acc(r) && len(r) <= len(keeping)
-func (t *logTree) prune(offset uint64, keeping []uint64) (r []uint64) {
+func (t *logTree) prune(keeping []uint64) (r []uint64) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		i := 0
 		// @ fold acc(t.Inv())
 		// @ invariant 0 <= i && i <= len(keeping)
 		// @ invariant acc(keeping) && acc(t.Inv())
-		for ; i < len(keeping) && keeping[i]-offset < /*@ unfolding acc(t.Inv()) in @*/ t.size; i++ {
+		for ; i < len(keeping) && keeping[i] < /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size; i++ {
 		}
 		// Help gobra realize the relation between keeping and its subslice
 		// @ assert forall j int :: {&keeping[i:][j]} 0 <= j && j < len(keeping[i:]) ==> &keeping[i:][j] == &keeping[i+j]
@@ -60,10 +61,10 @@ func (t *logTree) prune(offset uint64, keeping []uint64) (r []uint64) {
 	} else {
 		// @ assert t.left != nil && t.right != nil // Test tree invariant
 		// Recurse if tree is unbalanced or we must preserve children
-		if t.size != utils.LargestSmallerPower(t.size) || (0 < len(keeping) && keeping[0]-offset < t.size) {
-			keeping = t.left.prune(offset, keeping)
+		if t.size != utils.LargestSmallerPower(t.size) || (0 < len(keeping) && keeping[0] < t.index+t.size) {
+			keeping = t.left.prune(keeping)
 			// @ unfold acc(t.left.Inv())
-			keeping = t.right.prune(offset+t.left.size, keeping)
+			keeping = t.right.prune(keeping)
 			// @ fold acc(t.left.Inv())
 			// @ fold acc(t.Inv())
 			return keeping
@@ -71,7 +72,7 @@ func (t *logTree) prune(offset uint64, keeping []uint64) (r []uint64) {
 			// We do not modify keeping in this branch. The below assert checks that
 			// this is justified: Either, the slice is empty, or the to-be-kept items
 			// are outside this subtree.
-			// @ assert 0 == len(keeping) || t.size <= keeping[0]-offset
+			// @ assert 0 == len(keeping) || t.index+t.size <= keeping[0]
 			// @ fold acc(t.Inv())
 			t.cut()
 			return keeping
@@ -106,9 +107,9 @@ func FullTree(leafs []*[sha256.Size]byte) (t *logTree) {
 
 // Grow the tree until it can store idx.
 // @ preserves acc(t.Inv())
-func (t *logTree) fit(idx uint64) {
+func (t *logTree) fit(offset uint64, idx uint64) {
 	// @ invariant acc(t.Inv())
-	for /*@ unfolding acc(t.Inv()) in @*/ t.size <= idx {
+	for /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size <= idx {
 		// @ unfold acc(t.Inv())
 		lsp := utils.LargestSmallerPower(t.size)
 		if lsp == t.size {
@@ -116,12 +117,14 @@ func (t *logTree) fit(idx uint64) {
 
 			newLeft := Singleton()
 			// @ unfold acc(newLeft.Inv())
+			newLeft.index = t.index
 			newLeft.size = t.size
 			newLeft.value = t.value
 			newLeft.left = t.left
 			newLeft.right = t.right
 			// @ fold acc(newLeft.Inv())
 
+			t.index = t.size - 1
 			t.value = nil
 			t.left = newLeft
 			t.right = Singleton()
@@ -140,7 +143,10 @@ func (t *logTree) fit(idx uint64) {
 		// Grow right subtree; left subtree will already be balanced or nil
 		if t.right != nil {
 			// set right to be full-balanced subtree
-			t.right.fit( /*@ unfolding acc(t.left.Inv()) in @*/ t.size - t.left.size - 1)
+			t.right.fit(
+				/*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size,
+				/*@ unfolding acc(t.left.Inv()) in @*/ t.size-t.left.size,
+			)
 		}
 
 		// @ fold acc(t.Inv())
@@ -153,7 +159,7 @@ func (t *logTree) fit(idx uint64) {
 func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
 	// First, prune the tree to only keep what the server knows us to keep
 	t.Prune()
-	t.fit(idx)
+	t.fit(0, idx)
 	// @ unfold acc(t.Inv())
 
 	// Find subtree to set leaf
@@ -161,26 +167,28 @@ func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
 		t.value = l
 	} else {
 		var sizeLeft uint64
-		if t.left != nil && t.right != nil {
-			sizeLeft = /*@ unfolding t.left.Inv() in @*/ t.left.size
-		} else if t.left != nil || t.right != nil {
-			panic("invariant violated")
-		} else {
+		if t.left == nil || t.right == nil {
+			// test invariant; justifies initializing both trees
+			// @ assert t.left == nil && t.right == nil
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
 			t.left = Singleton()
 			// @ unfold t.left.Inv()
+			t.left.index = t.index
 			t.left.size = sizeLeft
-			// @ fold t.left.Inv()
+
 			t.right = Singleton()
 			// @ unfold t.right.Inv()
+			t.right.index = t.left.index + t.left.size
 			t.right.size = t.size - sizeLeft
+
+			// @ fold t.left.Inv()
 			// @ fold t.right.Inv()
 		}
 
-		if idx < sizeLeft {
+		if idx < /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size {
 			t.left.setLeaf(idx, l)
 		} else {
-			t.right.setLeaf(idx-sizeLeft, l)
+			t.right.setLeaf(idx, l)
 		}
 	}
 	// @ fold acc(t.Inv())
