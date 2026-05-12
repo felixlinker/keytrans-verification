@@ -18,7 +18,7 @@ type Log struct {
 }
 
 /*@
-pred (t *logTree) Inv() {
+pred (t *Log) Inv() {
 	acc(t) && 1 <= t.size &&
 	(t.value != nil ==> acc(t.value)) &&
 	(t.left != nil ==> acc(t.left.Inv())) &&
