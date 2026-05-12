@@ -98,10 +98,8 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 		}
 	}
 
-	r = fromRoot[i-1:]
-	// @ assert forall j int :: {r[j]} 0 <= j && j < len(r) ==> &r[j] == &fromRoot[j+i-1]
-	// @ assert r[len(r)-1] == n
-	r = utils.Reverse(r)
+	// @ assert forall j int :: {&fromRoot[i-1:][j]} 0 <= j && j < len(fromRoot[i-1:]) ==> &fromRoot[i-1:][j] == &fromRoot[i-1+j]
+	r = utils.Reverse(fromRoot[i-1:])
 	// @ assert r[0] == n
 
 	if diffFound {
