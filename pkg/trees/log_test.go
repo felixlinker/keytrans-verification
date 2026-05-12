@@ -97,7 +97,7 @@ func TestTreeFromProof(t *testing.T) {
 			func(t *testing.T) {
 				serverTree := FullTree(testLeafs[:size])
 				prf := logTreePrunedProof(t, serverTree, 0)
-				var clientTree *logTree
+				var clientTree *Log
 				var err error
 				if clientTree, err = clientTree.Grow(size, prf); err != nil {
 					t.Fatalf("could not grow tree: %v", err)
@@ -146,7 +146,7 @@ func TestGrowTreeFromProof(t *testing.T) {
 				func(t *testing.T) {
 					serverTree := FullTree(testLeafs[:oldSize])
 					prf := logTreePrunedProof(t, serverTree, 0)
-					var clientTree *logTree
+					var clientTree *Log
 					var err error
 					if clientTree, err = clientTree.Grow(oldSize, prf); err != nil {
 						t.Fatalf("could not grow tree: %v", err)
@@ -168,7 +168,7 @@ func TestGrowTreeFromProof(t *testing.T) {
 }
 
 // @ trusted
-func logTreePrunedProof(t *testing.T, tree *logTree, cacheSize uint64) *proofs.InclusionProof {
+func logTreePrunedProof(t *testing.T, tree *Log, cacheSize uint64) *proofs.InclusionProof {
 	t.Helper()
 
 	tree.Prune(cacheSize)
@@ -182,7 +182,7 @@ func logTreePrunedProof(t *testing.T, tree *logTree, cacheSize uint64) *proofs.I
 }
 
 // @ trusted
-func assertSize(t *testing.T, tree *logTree, expected uint64) {
+func assertSize(t *testing.T, tree *Log, expected uint64) {
 	t.Helper()
 
 	if tree == nil {
@@ -208,7 +208,7 @@ func assertSize(t *testing.T, tree *logTree, expected uint64) {
 }
 
 // @ trusted
-func assertContains(t *testing.T, tree *logTree, want []*[sha256.Size]byte) {
+func assertContains(t *testing.T, tree *Log, want []*[sha256.Size]byte) {
 	t.Helper()
 
 	for i, wantHash := range want {
@@ -223,7 +223,7 @@ func assertContains(t *testing.T, tree *logTree, want []*[sha256.Size]byte) {
 }
 
 // @ trusted
-func assertContainsFrontier(t *testing.T, tree *logTree) {
+func assertContainsFrontier(t *testing.T, tree *Log) {
 	t.Helper()
 
 	frontier := search.Frontier(tree.size)
@@ -239,7 +239,7 @@ func assertContainsFrontier(t *testing.T, tree *logTree) {
 }
 
 // @ trusted
-func assertEqualRootHashes(t *testing.T, left *logTree, right *logTree) {
+func assertEqualRootHashes(t *testing.T, left *Log, right *Log) {
 	lr := left.GetRoot()
 	rr := right.GetRoot()
 	if !bytes.Equal((*lr)[:], (*rr)[:]) {
