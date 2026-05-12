@@ -209,11 +209,10 @@ func (t *logTree) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 	}
 }
 
-// @ requires noPerm < p
 // @ requires acc(prf.Inv())
 // @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in 0 < t.size && t.size < newSize
 // @ ensures  acc(newT.Inv()) // && unfolding acc(t.Inv()) in newT.size == newSize
-func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof /*@, ghost p perm @*/) (newT *logTree) {
+func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *logTree) {
 	if /*@ unfolding acc(prf.Inv()) in @*/ prf == nil {
 		panic("non-nil prf")
 	}
