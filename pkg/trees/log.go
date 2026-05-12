@@ -159,8 +159,6 @@ func (t *logTree) fit(idx uint64) {
 // @ requires 0 <= idx
 // @ preserves acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
 func (t *logTree) setLeaf(idx uint64, l *[sha256.Size]byte) {
-	// First, prune the tree to only keep what the server knows us to keep
-	t.Prune()
 	t.fit(idx)
 	// @ unfold acc(t.Inv())
 
