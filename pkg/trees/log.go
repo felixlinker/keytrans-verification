@@ -360,6 +360,7 @@ func (t *logTree) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (
 			return append( /*@ perm(1/2), @*/ elems, &v), nil
 		} else {
 			// Client can compute this subtree; do not include
+			// @ fold acc(t.Inv())
 			return elems, nil
 		}
 	} else if elems, err = t.left.proofFromPruned(cacheSize, elems); err != nil {
