@@ -230,8 +230,8 @@ func (t *logTree) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 // @ requires 1 <= newSize
 // @ requires acc(prf.Inv())
 // @ requires t != nil ==> acc(t.Inv()) && unfolding acc(t.Inv()) in t.size < newSize
-// @ ensures  acc(newT.Inv()) // && unfolding acc(t.Inv()) in newT.size == newSize
-func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *logTree) {
+// @ ensures  err == nil ==> acc(newT.Inv()) // && unfolding acc(t.Inv()) in newT.size == newSize
+func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *logTree, err error) {
 	if /*@ unfolding acc(prf.Inv()) in @*/ prf == nil {
 		panic("non-nil prf")
 	}
@@ -259,11 +259,16 @@ func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *logTre
 	// @ invariant 0 <= i && i <= len(prf.Elements)
 	// @ invariant forall j int :: i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
 	for i := 0; i < len(prf.Elements); i++ {
-		t.fillLeftMost(prf.Elements[i])
+		if ok := t.fillLeftMost(prf.Elements[i]); !ok {
+			return nil, errors.New("could not insert proof element")
+		}
 	}
 
-	t.computeHash()
-	return t
+	if err = t.computeHash(); err != nil {
+		return nil, err
+	} else {
+		return t, nil
+	}
 }
 
 // @ preserves acc(t.Inv())

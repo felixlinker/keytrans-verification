@@ -98,7 +98,10 @@ func TestTreeFromProof(t *testing.T) {
 				serverTree := FullTree(testLeafs[:size])
 				prf := logTreePrunedProof(t, serverTree, 0)
 				var clientTree *logTree
-				clientTree = clientTree.Grow(size, prf)
+				var err error
+				if clientTree, err = clientTree.Grow(size, prf); err != nil {
+					t.Fatalf("could not grow tree: %v", err)
+				}
 				assertSize(t, clientTree, size)
 				assertContainsFrontier(t, clientTree)
 				assertEqualRootHashes(t, serverTree, clientTree)
@@ -119,11 +122,16 @@ func TestGrowTreeFromProof(t *testing.T) {
 					serverTree := FullTree(testLeafs[:oldSize])
 					prf := logTreePrunedProof(t, serverTree, 0)
 					var clientTree *logTree
-					clientTree = clientTree.Grow(oldSize, prf)
+					var err error
+					if clientTree, err = clientTree.Grow(oldSize, prf); err != nil {
+						t.Fatalf("could not grow tree: %v", err)
+					}
 
 					serverTree = FullTree(testLeafs[:newSize])
 					prf = logTreePrunedProof(t, serverTree, clientTree.size)
-					clientTree = clientTree.Grow(newSize, prf)
+					if clientTree, err = clientTree.Grow(newSize, prf); err != nil {
+						t.Fatalf("could not grow tree: %v", err)
+					}
 
 					assertSize(t, clientTree, newSize)
 					assertContainsFrontier(t, clientTree)
