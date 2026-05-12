@@ -252,6 +252,7 @@ func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *logTre
 		t.fillLeftMost(prf.Elements[i])
 	}
 
+	t.computeHash()
 	return t
 }
 
