@@ -98,24 +98,18 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 		}
 	}
 
-	if !diffFound {
-		r = []uint64{n}
-	} else {
-		// @ assert 2 <= i
-
-		r = fromRoot[i-1:]
-		// @ assert forall j int :: 0 <= j && j < len(r) ==> &r[j] == &fromRoot[j+i-1]
-		// @ assert r[len(r)-1] == n
-		r = utils.Reverse(r)
-		// @ assert r[0] == n
-	}
+	r = fromRoot[i-1:]
+	// @ assert forall j int :: {r[j]} 0 <= j && j < len(r) ==> &r[j] == &fromRoot[j+i-1]
+	// @ assert r[len(r)-1] == n
+	r = utils.Reverse(r)
+	// @ assert r[0] == n
 
 	if diffFound {
-		// @ assert forall j int :: {&front[i-2:][j]} 0 <= j && j < len(front[i-2:]) ==> &front[i-2:][j] == &front[i-2+j]
+		// @ assert forall j int :: {front[i-2:][j]} 0 <= j && j < len(front[i-2:]) ==> &front[i-2:][j] == &front[i-2+j]
 		r = append( /*@ perm(1/2), @*/ r, front[i-2:]...)
 	} else {
-		// @ assert forall j int :: {&front[i-1:][j]} 0 <= j && j < len(front[i-1:]) ==> &front[i-1:][j] == &front[i-1+j]
-		r = append( /*@ perm(1/2), @*/ r, front[i-1:]...)
+		// @ assert forall j int :: {front[i:][j]} 0 <= j && j < len(front[i:]) ==> &front[i:][j] == &front[i+j]
+		r = append( /*@ perm(1/2), @*/ r, front[i:]...)
 	}
 
 	return r

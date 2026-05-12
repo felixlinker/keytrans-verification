@@ -71,6 +71,8 @@ func TestPathToMostRecent(t *testing.T) {
 		size uint64
 		want []uint64
 	}{
+		{n: 0, size: 4, want: []uint64{0, 1, 3}},
+		{n: 0, size: 8, want: []uint64{0, 1, 3, 7}},
 		{n: 0, size: 9, want: []uint64{0, 1, 3, 7, 8}},
 		{n: 0, size: 14, want: []uint64{0, 1, 3, 7, 11, 13}},
 		{n: 5, size: 14, want: []uint64{5, 3, 7, 11, 13}},
