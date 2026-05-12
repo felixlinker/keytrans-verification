@@ -338,3 +338,41 @@ func (t *logTree) GetSize( /*@ ghost p perm @*/ ) uint64 {
 func (t *logTree) GetRoot( /*@ ghost p perm @*/ ) *[sha256.Size]byte {
 	return /*@ unfolding acc(t.Inv(), p) in @*/ t.value
 }
+
+// @ preserves acc(t.Inv())
+// @ requires elems != nil && forall i int :: {elems[i]} 0 <= i && i < len(elems) ==> acc(&elems[i]) && acc(elems[i])
+// @ ensures err == nil ==> r != nil && forall i int :: {r[i]} 0 <= i && i < len(r) ==> acc(&r[i]) && acc(r[i])
+func (t *logTree) proofFromPruned(elems []*proofs.NodeValue) (r []*proofs.NodeValue, err error) {
+	// @ unfold acc(t.Inv())
+	if t.left == nil || t.right == nil {
+		if t.value == nil {
+			// @ fold acc(t.Inv())
+			return nil, errors.New("tree missing hash value")
+		} else {
+			v /*@@@*/ := *t.value
+			// @ fold acc(t.Inv())
+			return append( /*@ perm(1/2), @*/ elems, &v), nil
+		}
+	} else if elems, err = t.left.proofFromPruned(elems); err != nil {
+		// @ fold acc(t.Inv())
+		return nil, err
+	} else {
+		r, err = t.right.proofFromPruned(elems)
+		// @ fold acc(t.Inv())
+		return r, err
+	}
+}
+
+// @ preserves acc(t.Inv())
+// @ ensures err == nil ==> acc(prf.Inv())
+func (t *logTree) ProofFromPruned() (prf *proofs.InclusionProof, err error) {
+	if elems, e := t.proofFromPruned([]*proofs.NodeValue{}); e != nil {
+		return nil, e
+	} else {
+		prf /*@@@*/ := proofs.InclusionProof{
+			Elements: elems,
+		}
+		// @ fold acc(prf.Inv())
+		return &prf, nil
+	}
+}
