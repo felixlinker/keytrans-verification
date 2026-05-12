@@ -113,8 +113,9 @@ func (t *logTree) fit(idx uint64) {
 	for /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size <= idx {
 		// @ unfold acc(t.Inv())
 		lsp := utils.LargestSmallerPower(t.size)
-		if lsp == t.size {
-			// tree is already fully balanced; move both children into left child
+		if lsp == t.size && (t.value != nil || (t.left != nil && t.right != nil)) {
+			// Tree is already fully balanced; move both children into left child if
+			// they exist.
 
 			newLeft := Singleton()
 			// @ unfold acc(newLeft.Inv())
@@ -130,13 +131,15 @@ func (t *logTree) fit(idx uint64) {
 			// @ fold acc(newRight.Inv())
 			// @ fold acc(newLeft.Inv())
 
-			t.value = nil
 			t.left = newLeft
 			t.right = newRight
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
 			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
 		}
+
+		// Clear hash value; must be done in any case
+		t.value = nil
 
 		// Do we need to double in size or just fit to the next index?
 		if t.index+(lsp*2) <= idx {
