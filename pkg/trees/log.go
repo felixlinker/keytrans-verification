@@ -122,12 +122,16 @@ func (t *logTree) fit(idx uint64) {
 			newLeft.value = t.value
 			newLeft.left = t.left
 			newLeft.right = t.right
+
+			newRight := Singleton()
+			// @ unfold acc(newRight.Inv())
+			newRight.index = newLeft.index + newLeft.size
+			// @ fold acc(newRight.Inv())
 			// @ fold acc(newLeft.Inv())
 
-			t.index = t.size - 1
 			t.value = nil
 			t.left = newLeft
-			t.right = Singleton()
+			t.right = newRight
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
 			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
