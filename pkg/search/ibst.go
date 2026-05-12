@@ -77,7 +77,7 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 // @ ensures  acc(r) && 0 < len(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
 // @ ensures  r[0] == n
-func NodesToFrontier(n uint64, size uint64) (r []uint64) {
+func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
 	// @ assert front[0] == fromRoot[0]
@@ -110,14 +110,22 @@ func NodesToFrontier(n uint64, size uint64) (r []uint64) {
 		// @ assert r[0] == n
 	}
 
+	if diffFound {
+		// @ assert forall j int :: {&front[i-2:][j]} 0 <= j && j < len(front[i-2:]) ==> &front[i-2:][j] == &front[i-2+j]
+		r = append( /*@ perm(1/2), @*/ r, front[i-2:]...)
+	} else {
+		// @ assert forall j int :: {&front[i-1:][j]} 0 <= j && j < len(front[i-1:]) ==> &front[i-1:][j] == &front[i-1+j]
+		r = append( /*@ perm(1/2), @*/ r, front[i-1:]...)
+	}
+
 	return r
 }
 
 // @ requires 0 <= n && n < size
 // @ ensures  acc(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> n < r[i] && r[i] < size
-func YoungerNodesToFrontier(n uint64, size uint64) (r []uint64) {
-	path := NodesToFrontier(n, size)
+func YoungerToMostRecent(n uint64, size uint64) (r []uint64) {
+	path := PathToMostRecent(n, size)
 	r = make([]uint64, 0)
 	// @ invariant 0 <= i && i <= len(path)
 	// @ invariant acc(r) && acc(path, perm(1/2))

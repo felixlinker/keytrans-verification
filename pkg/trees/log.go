@@ -237,7 +237,7 @@ func (t *logTree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *logTre
 		consistencyPath = search.Frontier(newSize)
 	} else {
 		oldFrontier := search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size)
-		consistencyPath = search.YoungerNodesToFrontier(oldFrontier[0], newSize)
+		consistencyPath = search.YoungerToMostRecent(oldFrontier[0], newSize)
 	}
 
 	// @ invariant 0 <= i && i <= len(consistencyPath)
