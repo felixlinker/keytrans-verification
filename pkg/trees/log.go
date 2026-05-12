@@ -102,6 +102,7 @@ func FullTree(leafs []*[sha256.Size]byte) (t *logTree) {
 	for i := 0; i < len(leafs); i++ {
 		t.setLeaf(uint64(i), leafs[i])
 	}
+	t.computeHash()
 	return t
 }
 
