@@ -129,7 +129,6 @@ pred (s SearchResponse) Inv() {
 
 // @ requires  noPerm < p
 // @ preserves st.Inv()
-// @ preserves acc(config, p)
 // @ preserves acc(query.Inv(), p)
 // @ requires  acc(resp.Inv(), p)
 // @ requires  unfolding acc(resp.Inv(), p) in 0 < len(resp.Search.Prefix_proofs)
@@ -140,7 +139,7 @@ pred (s SearchResponse) Inv() {
 // @	low(query.LabelContent()) &&
 // @ 	(unfolding acc(resp.Inv(), p) in low(resp.Full_tree_head.Tree_head.Tree_size) && low(len(resp.Search.Prefix_proofs))) ==>
 // @		unfolding acc(resp.Inv(), p) in resp.Version != nil && low(*resp.Version)
-func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
+func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	// we use `err` to skip later phases instead of returning early, which is not yet supported by Gobra's hypermode.
 
 	// Phase 1: UpdateView
@@ -174,7 +173,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	if err == nil {
 		monitoringMap := make([]*MonitoringMapEntry, 0)
 		var entry *MonitoringMapEntry
-		entry, err = VerifyLatestKey(trees, rootHashes, query, resp, config /*@, p/2 @*/)
+		entry, err = VerifyLatestKey(trees, rootHashes, query, resp /*@, p/2 @*/)
 		if err == nil && entry != nil {
 			monitoringMap = append( /*@ perm(1/2), @*/ monitoringMap, entry)
 		}
@@ -326,7 +325,6 @@ type MonitoringMapEntry struct {
 // @ preserves acc(query.Inv(), p)
 // @ requires  acc(resp.Inv(), p)
 // @ requires  unfolding acc(resp.Inv(), p) in resp.Version != nil
-// @ preserves acc(config, p)
 // @ ensures   acc(resp.Inv(), p)
 // @ ensures   err == nil && entry != nil ==> acc(entry)
 // hyper-postcondition:
@@ -336,7 +334,7 @@ type MonitoringMapEntry struct {
 // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
+func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
 	t := /*@ unfolding acc(resp.Inv(), p) in @*/ *resp.Version // claimed greatest version
 
 	// we use `err` to skip loop iterations instead of
