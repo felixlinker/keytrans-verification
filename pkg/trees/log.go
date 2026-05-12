@@ -38,8 +38,14 @@ func (t *logTree) cut() {
 // Remove all nodes from the tree that are not on the frontier, and memorize
 // the hash values of all balanced subtrees.
 // @ preserves acc(t.Inv())
-func (t *logTree) Prune() {
-	t.prune(search.Frontier( /*@ unfolding acc(t.Inv()) in @*/ t.size))
+func (t *logTree) Prune(oldSize uint64) {
+	var keep []uint64
+	if oldSize == 0 {
+		keep = search.Frontier(t.size)
+	} else {
+		keep = search.YoungerToMostRecent(oldSize-1 /*@ unfolding acc(t.Inv()) in @*/, t.size)
+	}
+	t.prune(keep)
 }
 
 // @ preserves acc(t.Inv())

@@ -81,7 +81,7 @@ func TestPrune(t *testing.T) {
 			fmt.Sprintf("size %d", size),
 			func(t *testing.T) {
 				tree := FullTree(testLeafs[:size])
-				tree.Prune()
+				tree.Prune(0)
 				assertContainsFrontier(t, tree)
 			},
 		)
@@ -138,7 +138,7 @@ func TestGrowTreeFromProof(t *testing.T) {
 func logTreePrunedProof(t *testing.T, tree *logTree, cacheSize uint64) *proofs.InclusionProof {
 	t.Helper()
 
-	tree.Prune()
+	tree.Prune(cacheSize)
 	prf, err := tree.ProofFromPruned(cacheSize)
 	if err != nil {
 		t.Fatalf("ProofFromPruned(cacheSize=%d): %v", cacheSize, err)
