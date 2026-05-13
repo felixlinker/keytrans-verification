@@ -10,11 +10,6 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
-type PrefixTree interface {
-	GetRoot() [sha256.Size]byte
-	GetCommitment(label []byte, version uint64) (*[sha256.Size]byte, error)
-}
-
 type prefixLeaf struct {
 	value      [sha256.Size]byte
 	vrfOutput  []byte
@@ -41,12 +36,12 @@ func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf)
 	// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
 	input := []byte{0x02}
 	input = append( /*@ p, @*/ input, pl.Vrf_output...)
-	input = append( /*@ p, @*/ input, utils.FromDigest(pl.Commitment)...)
+	input = append( /*@ p, @*/ input, utils.FromDigest(*pl.Commitment)...)
 	value := sha256.Sum256(input /*@, perm(1/2) @*/)
-	c /*@@@*/ := pl.Commitment
+	c /*@@@*/ := *pl.Commitment
 	// @ assert c[0] == pl.Commitment[0]
 	// The above assert is required so that gobra realizes the assert below.
-	// @ assert &c != &pl.Commitment
+	// @ assert &c != pl.Commitment
 	// @ assert acc(&c)
 	l_ /*@@@*/ := prefixLeaf{
 		value: value,
@@ -132,17 +127,17 @@ func (t *prefixTree) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 }
 
 // @ requires noPerm < p
-// @ requires acc(elements, p)
+// @ requires acc(proofs.NodeValuesInv(elements), p)
 // @ preserves acc(t.Inv())
-// @ ensures err == nil ==> acc(es, p)
-func (t *prefixTree) fill(elements []proofs.NodeValue /*@, ghost p perm @*/) (es []proofs.NodeValue, err error) {
+// @ ensures err == nil ==> acc(proofs.NodeValuesInv(es), p)
+func (t *prefixTree) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []*proofs.NodeValue, err error) {
 	// @ unfold acc(t.Inv())
 	// @ defer fold acc(t.Inv())
 	if t.leaf != nil {
 		return elements, nil
 	}
 
-	var esL []proofs.NodeValue
+	var esL []*proofs.NodeValue
 	if t.left != nil {
 		if esL, err = t.left.fill(elements /*@, p @*/); err != nil {
 			return nil, err
@@ -150,9 +145,11 @@ func (t *prefixTree) fill(elements []proofs.NodeValue /*@, ghost p perm @*/) (es
 	} else if len(elements) == 0 {
 		return nil, errors.New("too few elements")
 	} else {
-		t.left = nodeValueLeaf(elements[0])
+		// @ unfold acc(proofs.NodeValuesInv(elements), p)
+		t.left = nodeValueLeaf(*elements[0])
 		esL = elements[1:]
 		// @ assert forall i int :: {&esL[i]} 0 <= i && i < len(esL) ==> &esL[i] == &elements[i+1]
+		// @ fold acc(proofs.NodeValuesInv(esL), p)
 	}
 
 	if t.right != nil {
@@ -162,9 +159,11 @@ func (t *prefixTree) fill(elements []proofs.NodeValue /*@, ghost p perm @*/) (es
 	} else if len(esL) == 0 {
 		return nil, errors.New("too few elements")
 	} else {
-		t.right = nodeValueLeaf(esL[0])
+		// @ unfold acc(proofs.NodeValuesInv(esL), p)
+		t.right = nodeValueLeaf(*esL[0])
 		es = esL[1:]
 		// @ assert forall i int :: {&es[i]} 0 <= i && i < len(es) ==> &es[i] == &esL[i+1]
+		// @ fold acc(proofs.NodeValuesInv(es), p)
 	}
 
 	return es, nil
@@ -247,7 +246,7 @@ func (t *prefixTree) search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.
 }
 
 type prefixDict struct {
-	root       [sha256.Size]byte
+	root       *[sha256.Size]byte
 	tree       *prefixTree
 	label      []byte
 	vrfOutputs map[uint64][]byte
@@ -261,109 +260,154 @@ pred VOInv(outs map[uint64][]byte) {
 // Permissions to fields of prefixDict are intentionally wildcards because
 // we only require read operations after construction. Exception is for label
 // because that will be passed to stdlib which preserves exact permissions.
-pred (d prefixDict) Inv() {
-	acc(d.tree.Inv()) && acc(d.label) && acc(VOInv(d.vrfOutputs))
+pred (d *prefixDict) Inv() {
+	acc(d) && acc(d.root) && acc(d.tree.Inv()) && acc(d.label) && acc(VOInv(d.vrfOutputs))
 }
 @*/
 
-// @ requires 0 <= version
 // @ requires noPerm < p
-// @ requires acc(label, p) && acc(prf.Inv(), p)
-// @ preserves acc(pk, p) && acc(proofs.BinaryLadderStepsInv(fullLadder), p)
-// @ ensures err == nil ==> acc(d.Inv(), p)
-func Dict(label []byte, version uint64, pk []byte, prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep /*@, ghost p perm @*/) (d prefixDict, err error) {
-	// @ ghost var idx int
+// @ requires 0 <= version
+// @ preserves acc(label, p) && acc(pk, p) && acc(proofs.BinaryLadderStepsInv(fullLadder), p)
+// @ ensures err == nil ==> acc(VOInv(vrfOutputs))
+func verifyVRFOutputs(label []byte, version uint64, pk []byte, fullLadder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (vrfOutputs map[uint64][]byte, err error) {
 	steps /*@, idx @*/ := proofs.FullBinaryLadderSteps(version /*@, version @*/)
-	if len(steps) != len(fullLadder) || len(steps) != len(prf.Results) {
-		return prefixDict{}, errors.New("not enough ladder steps or prefix search results")
+
+	if len(steps) != len(fullLadder) {
+		return nil, errors.New("wrong number of binary ladder steps")
 	}
 
-	tree := &prefixTree{}
-	// @ fold tree.Inv()
-	vrfOutputs := make(map[uint64][]byte, len(steps))
+	vrfOutputs = make(map[uint64][]byte, len(steps))
 	// @ fold acc(VOInv(vrfOutputs))
+	// @ unfold acc(proofs.BinaryLadderInv(steps))
 
-	// @ unfold acc(prf.Inv(), p)
-	// @ unfold proofs.BinaryLadderInv(steps)
-
-	// @ invariant tree.Inv()
 	// @ invariant 0 <= i && i <= len(fullLadder)
-	// @ invariant len(steps) == len(fullLadder) && len(fullLadder) == len(prf.Results)
-	// @ invariant acc(label, p) && acc(pk, p) && acc(steps) && acc(proofs.PrefixSearchResultsInv(prf.Results), p) && acc(prf.Elements, p) && acc(VOInv(vrfOutputs))
+	// @ invariant acc(label, p) && acc(pk, p) && acc(steps) && acc(VOInv(vrfOutputs))
+	// @ invariant len(steps) == len(fullLadder)
 	// @ invariant acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 	for i := 0; i < len(fullLadder); i++ {
 		// @ unfold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 		// @ unfold acc((&fullLadder[i]).Inv(), p)
-		// @ unfold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
-		// @ unfold acc((&prf.Results[i]).Inv(), p)
 		ladderVersion := steps[i]
 		leafData := fullLadder[i]
-		result := prf.Results[i]
-		// TODO: Should verify `result.result_type`, but I skip this for now as it seems to
-		// be redundant information
 
-		// TODO: Use server public key
 		if searchKey, ok := crypto.VRF_verify(pk, label, ladderVersion, leafData.Proof /*@, p @*/); !ok {
 			// @ fold acc((&fullLadder[i]).Inv(), p)
-			// @ fold acc((&prf.Results[i]).Inv(), p)
 			// @ fold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
-			// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
-			return prefixDict{}, errors.New("VRF verification failed")
+			return nil, errors.New("VRF verification failed")
 		} else {
 			// @ unfold acc(VOInv(vrfOutputs))
 			// Copy searchKey so that we retain full access to the map
 			vrfOutputs[ladderVersion] = append( /*@ perm(1), @*/ []byte{}, searchKey...)
-			searchKeyBits := utils.Bits(searchKey /*@, perm(1) @*/)
 			// @ fold acc(VOInv(vrfOutputs))
-			var toInsert *prefixLeaf
-			if ladderVersion <= version {
-				l /*@@@*/ := proofs.PrefixLeaf{Vrf_output: searchKey, Commitment: leafData.Commitment}
-				// @ fold acc((&l).Inv(), p)
-				toInsert = commitmentLeaf(&l /*@, p @*/)
-			} else if result.Leaf == nil {
-				// @ fold acc((&fullLadder[i]).Inv(), p)
-				// @ fold acc((&prf.Results[i]).Inv(), p)
-				// @ fold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
-				// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
-				return prefixDict{}, errors.New("no search result leaf for non-inclusion proof provided")
-			} else {
-				toInsert = commitmentLeaf(result.Leaf /*@, p @*/)
-			}
-			// TODO: Express as invariant or enhance gobra
-			// @ assume 0 <= result.Depth && result.Depth <= 255
-			tree.setLeaf(searchKeyBits, int(result.Depth), toInsert)
 		}
 		// @ fold acc((&fullLadder[i]).Inv(), p)
-		// @ fold acc((&prf.Results[i]).Inv(), p)
 		// @ fold acc(proofs.BinaryLadderStepsInv(fullLadder), p)
-		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
 	}
 
-	remaining, err := tree.fill(prf.Elements /*@, p @*/)
-	if len(remaining) > 0 {
-		return d, errors.New("too many elements provided")
-	} else if err != nil {
-		return d, err
-	} else if root, err := tree.value( /*@ perm(1/2) @*/ ); err != nil {
-		return d, err
+	return vrfOutputs, nil
+}
+
+// @ requires noPerm < p
+// @ requires 0 <= version
+// @ requires acc(prf.Inv(), p)
+// @ preserves acc(VOInv(vrfOutputs), p)
+// @ ensures err == nil ==> acc(tree.Inv())
+func buildTree(version uint64, prf *proofs.PrefixProof, vrfOutputs map[uint64][]byte /*@, ghost p perm @*/) (tree *prefixTree, err error) {
+	// @ ghost var idx int
+	steps /*@, idx @*/ := proofs.FullBinaryLadderSteps(version /*@, version @*/)
+	// @ unfold acc(proofs.BinaryLadderInv(steps))
+	if len(steps) != len( /*@ unfolding acc(prf.Inv(), p) in @*/ prf.Results) {
+		return nil, errors.New("not enough ladder steps or prefix search results")
+	}
+
+	tree = &prefixTree{}
+	// @ fold acc(tree.Inv())
+
+	// @ invariant acc(tree.Inv())
+	// @ invariant acc(steps) && acc(prf.Inv(), p) && acc(VOInv(vrfOutputs), p)
+	// @ invariant len(steps) == len(unfolding acc(prf.Inv(), p) in prf.Results)
+	// @ invariant 0 <= i && i <= len(steps)
+	for i := 0; i < len(steps); i++ {
+		// @ unfold acc(prf.Inv(), p)
+		// @ unfold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
+		// @ unfold acc(prf.Results[i].Inv(), p)
+		ladderVersion := steps[i]
+		result := prf.Results[i]
+		// TODO: Should verify `result.result_type`, but I skip this for now as it seems to
+		// be redundant information
+
+		var searchKey []byte
+		if ladderVersion <= version {
+			// @ unfold acc(VOInv(vrfOutputs), p)
+			if k, ok := vrfOutputs[ladderVersion]; !ok {
+				// @ fold acc(VOInv(vrfOutputs), p)
+				// @ fold acc(prf.Results[i].Inv(), p)
+				// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
+				// @ fold acc(prf.Inv(), p)
+				return nil, errors.New("missing vrf output")
+			} else {
+				copy(searchKey, k /*@, p @*/)
+			}
+			// @ fold acc(VOInv(vrfOutputs), p)
+		} else {
+			// @ unfold acc(result.Leaf.Inv(), p)
+			copy(searchKey, result.Leaf.Vrf_output /*@, p @*/)
+			// @ fold acc(result.Leaf.Inv(), p)
+		}
+		searchKeyBits := utils.Bits(searchKey /*@, perm(1/2) @*/)
+
+		// @ unfold acc(result.Leaf.Inv(), p)
+		commitment /*@@@*/ := *result.Leaf.Commitment // Copy commitment
+		// @ fold acc(result.Leaf.Inv(), p)
+		l /*@@@*/ := proofs.PrefixLeaf{Vrf_output: searchKey, Commitment: &commitment}
+		// @ fold acc((&l).Inv(), p)
+		// @ assume 0 <= result.Depth && result.Depth <= 255 // help gobra with uint
+		// @ assume int(result.Depth) <= len(searchKeyBits) // TODO: make invariant
+		tree.setLeaf(searchKeyBits, int(result.Depth), commitmentLeaf(&l /*@, p @*/))
+
+		// @ fold acc(prf.Results[i].Inv(), p)
+		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
+		// @ fold acc(prf.Inv(), p)
+	}
+
+	// @ unfold acc(prf.Inv(), p)
+	if remaining, err := tree.fill(prf.Elements /*@, p @*/); err != nil {
+		return nil, err
+	} else if len(remaining) > 0 {
+		return nil, errors.New("too many elements provided")
 	} else {
-		// @ unfold tree.Inv()
-		d = prefixDict{
-			label:      label,
+		return tree, nil
+	}
+}
+
+// @ requires 0 <= version
+// @ requires noPerm < p
+// @ requires acc(prf.Inv(), p)
+// @ preserves acc(label, p) && acc(pk, p) && acc(proofs.BinaryLadderStepsInv(fullLadder), p)
+// @ ensures err == nil ==> acc(d.Inv())
+func Dict(label []byte, version uint64, pk []byte, prf *proofs.PrefixProof, fullLadder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (d *prefixDict, err error) {
+	if vrfOutputs, e := verifyVRFOutputs(label, version, pk, fullLadder /*@, p @*/); e != nil {
+		return nil, e
+	} else if tree, e := buildTree(version, prf, vrfOutputs /*@, p @*/); e != nil {
+		return nil, e
+	} else if root /*@@@*/, err := tree.value( /*@ perm(1/2) @*/ ); err != nil {
+		return nil, err
+	} else {
+		d /*@@@*/ := prefixDict{
 			vrfOutputs: vrfOutputs,
 			tree:       tree,
-			root:       root,
+			root:       &root,
 		}
-		// @ fold tree.Inv()
-		// @ fold acc(d.Inv(), p)
-		return d, nil
+		copy(d.label, label /*@, p @*/)
+		// @ fold acc((&d).Inv())
+		return &d, nil
 	}
 }
 
 // @ requires noPerm < p
 // @ preserves acc(d.Inv(), p)
-func (d prefixDict) GetRoot( /*@ ghost p perm @*/ ) [sha256.Size]byte {
-	return d.root
+func (d *prefixDict) GetRoot( /*@ ghost p perm @*/ ) [sha256.Size]byte {
+	return /*@ unfolding acc(d.Inv(), p) in @*/ *d.root
 }
 
 // @ requires noPerm < p
@@ -371,7 +415,7 @@ func (d prefixDict) GetRoot( /*@ ghost p perm @*/ ) [sha256.Size]byte {
 // @ preserves acc(label, p)
 // @ ensures acc(d.Inv(), p/2)
 // @ ensures r != nil ==> acc(r, p/2)
-func (d prefixDict) GetCommitment(label []byte, version uint64 /*@, ghost p perm @*/) (r *[sha256.Size]byte, err error) {
+func (d *prefixDict) GetCommitment(label []byte, version uint64 /*@, ghost p perm @*/) (r *[sha256.Size]byte, err error) {
 	// @ unfold acc(d.Inv(), p)
 	// @ unfold acc(VOInv(d.vrfOutputs), p)
 	r = nil
