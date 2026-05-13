@@ -50,7 +50,7 @@ requires acc(RootHashesInv(hashes), _)
 requires 0 <= idx && idx < len(hashes)
 decreases
 pure func GetRootHashContent(hashes []*[sha256.Size]byte, idx int) seq[byte] {
-	return unfolding acc(RootHashesInv(hashes), _) in utils.getContent(hashes[idx][:])
+	return unfolding acc(RootHashesInv(hashes), _) in utils.getBytesContent(hashes[idx][:])
 }
 @*/
 
@@ -99,7 +99,7 @@ ghost
 requires acc(s.Inv(), _)
 decreases
 pure func (s SearchRequest) LabelContent() seq[byte] {
-	return unfolding acc(s.Inv(), _) in utils.getContent(s.Label)
+	return unfolding acc(s.Inv(), _) in utils.getBytesContent(s.Label)
 }
 @*/
 
@@ -108,7 +108,7 @@ type SearchResponse struct {
 	Version        *uint64
 	Binary_ladder  []proofs.BinaryLadderStep
 	Search         proofs.CombinedTreeProof
-	Inclusion      proofs.InclusionProof
+	Inclusion      *proofs.InclusionProof
 	Opening        []byte
 	Value          proofs.UpdateValue // value associated with queried label
 }
@@ -129,7 +129,6 @@ pred (s SearchResponse) Inv() {
 
 // @ requires  noPerm < p
 // @ preserves st.Inv()
-// @ preserves acc(config, p)
 // @ preserves acc(query.Inv(), p)
 // @ requires  acc(resp.Inv(), p)
 // @ requires  unfolding acc(resp.Inv(), p) in 0 < len(resp.Search.Prefix_proofs)
@@ -140,7 +139,7 @@ pred (s SearchResponse) Inv() {
 // @	low(query.LabelContent()) &&
 // @ 	(unfolding acc(resp.Inv(), p) in low(resp.Full_tree_head.Tree_head.Tree_size) && low(len(resp.Search.Prefix_proofs))) ==>
 // @		unfolding acc(resp.Inv(), p) in resp.Version != nil && low(*resp.Version)
-func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
+func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (res *proofs.UpdateValue, err error) {
 	// we use `err` to skip later phases instead of returning early, which is not yet supported by Gobra's hypermode.
 
 	// Phase 1: UpdateView
@@ -174,7 +173,7 @@ func (st *UserState) VerifyLatest(query SearchRequest, resp SearchResponse, conf
 	if err == nil {
 		monitoringMap := make([]*MonitoringMapEntry, 0)
 		var entry *MonitoringMapEntry
-		entry, err = VerifyLatestKey(trees, rootHashes, query, resp, config /*@, p/2 @*/)
+		entry, err = VerifyLatestKey(trees, rootHashes, query, resp /*@, p/2 @*/)
 		if err == nil && entry != nil {
 			monitoringMap = append( /*@ perm(1/2), @*/ monitoringMap, entry)
 		}
@@ -258,8 +257,8 @@ func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@
 // @ requires  0 <= t
 // @ ensures   err == nil ==> -1 <= res && res <= 1
 // @ ensures   err == nil && res == 0 &&
-// @ 	low(utils.getContent(label)) &&
-// @ 	low(utils.getContent(rootHash)) ==>
+// @ 	low(utils.getBytesContent(label)) &&
+// @ 	low(utils.getBytesContent(rootHash)) ==>
 // @ 		low(t)
 // @ decreases
 func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte /*@, ghost p perm @*/) (res int, err error) {
@@ -271,13 +270,13 @@ func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []
 
 	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
 	// as desired, these two conditions are contradictory unless `low(t)` holds, which establishes the postcondition.
-	//@ labelSeq, rootHashSeq := utils.getContent(label), utils.getContent(rootHash)
+	//@ labelSeq, rootHashSeq := utils.getBytesContent(label), utils.getBytesContent(rootHash)
 	//@ non_incl_expected :=  prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) && tStar <= t
 	//@ incl_expected 	  := !prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) &&     t  <  tStar
 
 	//@ invariant acc(prefixTree.Inv(), p/2)
-	//@ invariant acc(utils.BytesMem(rootHash), p/2) && rootHashSeq == utils.getContent(rootHash)
-	//@ invariant acc(utils.BytesMem(label), p/2) && labelSeq == utils.getContent(label)
+	//@ invariant acc(utils.BytesMem(rootHash), p/2) && rootHashSeq == utils.getBytesContent(rootHash)
+	//@ invariant acc(utils.BytesMem(label), p/2) && labelSeq == utils.getBytesContent(label)
 	//@ invariant acc(steps, 1/2)
 	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> 0 <= steps[i]
 	//@ invariant 0 <= idx && idx <= len(steps)
@@ -326,7 +325,6 @@ type MonitoringMapEntry struct {
 // @ preserves acc(query.Inv(), p)
 // @ requires  acc(resp.Inv(), p)
 // @ requires  unfolding acc(resp.Inv(), p) in resp.Version != nil
-// @ preserves acc(config, p)
 // @ ensures   acc(resp.Inv(), p)
 // @ ensures   err == nil && entry != nil ==> acc(entry)
 // hyper-postcondition:
@@ -336,7 +334,7 @@ type MonitoringMapEntry struct {
 // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse, config *Configuration /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
+func VerifyLatestKey(prefixTrees []prefixtree.PT, prefixRootHash []*[sha256.Size]byte, query SearchRequest, resp SearchResponse /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
 	t := /*@ unfolding acc(resp.Inv(), p) in @*/ *resp.Version // claimed greatest version
 
 	// we use `err` to skip loop iterations instead of
