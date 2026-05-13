@@ -76,7 +76,7 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 // @ requires 0 <= n && n < size
 // @ ensures  forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && 0 <= r[i] && r[i] < size
 // @ ensures  0 < len(r) && r[0] == n
-func PathToMostRecent(n uint64, size uint64) (r []uint64) {
+func PathToMostRecent(n uint64, size uint64) (r []uint64, k int) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
 	// @ assert front[0] == fromRoot[0]
@@ -104,6 +104,7 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	// @ assert forall j int :: { &fromRootSuffix[j] } 0 <= j && j < len(fromRootSuffix) ==> &fromRootSuffix[j] == &fromRoot[i-1+j]
 	r = utils.Reverse(fromRootSuffix)
 	// @ assert r[0] == n
+	k = len(r) // index where frontier elements start in r
 
 	tmp := r // workaround for Gobra issue #1029
 
@@ -130,18 +131,22 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 // @ requires 0 <= n && n < size
 // @ ensures  acc(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> n < r[i] && r[i] < size
-func YoungerToMostRecent(n uint64, size uint64) (r []uint64) {
-	path := PathToMostRecent(n, size)
+func YoungerToMostRecent(n uint64, size uint64) (r []uint64, k int) {
+	path, j := PathToMostRecent(n, size)
 	r = make([]uint64, 0)
+	k = j
 	// @ invariant 0 <= i && i <= len(path)
 	// @ invariant forall i int :: { &path[i] } 0 <= i && i < len(path) ==> acc(&path[i], 1/2) && 0 <= path[i] && path[i] < size
 	// @ invariant forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && n < r[i] && r[i] < size
 	for i := 0; i < len(path); i++ {
 		if n < path[i] {
 			r = append( /*@ perm(1/2), @*/ r, path[i])
+		} else if i <= k {
+			// We're dropping an element that occurs before k, i.e., decrement k
+			k--
 		}
 	}
-	return r
+	return r, k
 }
 
 // Below is effectively a partial implementation of: https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-6.1-2

@@ -47,7 +47,7 @@ func (t *Log) Prune(oldSize uint64) {
 	} else {
 		// @ assume 0 <= oldSize // property from uint64
 		// @ assert 1 <= oldSize
-		keep = search.YoungerToMostRecent(oldSize-1, t.size)
+		keep, _ = search.YoungerToMostRecent(oldSize-1, t.size)
 	}
 	// @ fold acc(t.Inv())
 	t.prune(keep)
@@ -247,7 +247,7 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 		t = Singleton()
 		consistencyPath = search.Frontier(newSize)
 	} else {
-		consistencyPath = search.YoungerToMostRecent( /*@ unfolding acc(t.Inv()) in @*/ t.size-1, newSize)
+		consistencyPath, _ = search.YoungerToMostRecent( /*@ unfolding acc(t.Inv()) in @*/ t.size-1, newSize)
 	}
 
 	// @ invariant 0 <= i && i <= len(consistencyPath)
