@@ -36,6 +36,7 @@ jobs:
             --hyperMode off \
             --recursive \
             --include "." ".verification" \
+            --checkConsistency \
             --includePackages ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
@@ -53,6 +54,7 @@ jobs:
             --hyperMode extended \
             --recursive \
             --include "." ".verification" \
+            --checkConsistency \
             --excludePackages ${{ env.EXCLUDE_PKGS }} ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
