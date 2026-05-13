@@ -143,7 +143,7 @@ func ToTreeRecursive(prefix []bool, steps []*proofs.CompleteBinaryLadderStep, co
 		} else if int(step.Result.Depth) == len(prefix) {
 			// We are at the right depth to insert the search result. Insert it based
 			// on the type of result.
-			resultType := step.Result.Result_type
+			resultType := 0
 			if resultType == proofs.Inclusion {
 				// TODO: Copy leaf
 				tree = &PrefixTree{Leaf: &step.Step}
