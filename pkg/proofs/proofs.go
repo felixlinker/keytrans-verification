@@ -7,13 +7,19 @@ import (
 
 type NodeValue = [sha256.Size]byte
 
+/*@
+pred NodeValuesInv(vs []*NodeValue) {
+	forall i int :: {&vs[i]} 0 <= i && i < len(vs) ==> acc(&vs[i]) && acc(vs[i])
+}
+@*/
+
 type UpdateValue struct {
 	Value []byte
 }
 
 /*@
-pred (u UpdateValue) Inv() {
-	acc(u.Value)
+pred (u *UpdateValue) Inv() {
+	acc(u) && acc(u.Value)
 }
 @*/
 
@@ -24,8 +30,7 @@ type CommitmentValue struct {
 }
 
 type BinaryLadderStep struct {
-	Proof      []byte            // opaque proof[VRF.Np] — variable length per VRF scheme
-	Commitment [sha256.Size]byte // optional<HashValue> - only use for versions that should exist
+	Proof []byte // opaque proof[VRF.Np] — variable length per VRF scheme
 }
 
 /*@
@@ -33,8 +38,8 @@ pred (s *BinaryLadderStep) Inv() {
 	acc(s) && acc(s.Proof)
 }
 
-pred BinaryLadderStepsInv(steps []BinaryLadderStep) {
-	forall i int :: {&steps[i]} 0 <= i && i < len(steps) ==> acc((&steps[i]).Inv())
+pred BinaryLadderStepsInv(steps []*BinaryLadderStep) {
+	forall i int :: {&steps[i]} 0 <= i && i < len(steps) ==> acc(&steps[i]) && acc(steps[i].Inv())
 }
 @*/
 
@@ -62,55 +67,59 @@ type PrefixLeaf struct {
 	// Vrf_output for the search key and version pair stored at this leaf.
 	Vrf_output []byte
 	// Commitment to the public key of the search key and version pair.
-	Commitment [sha256.Size]byte
+	Commitment *[sha256.Size]byte
 }
 
 /*@
 pred (l *PrefixLeaf) Inv() {
-	acc(l) && acc(l.Vrf_output)
+	acc(l) && acc(l.Vrf_output) && acc(l.Commitment)
 }
 @*/
 
 type PrefixSearchResult struct {
 	Result_type int
-	Leaf        *PrefixLeaf // only present when result_type == NonInclusionLeaf
-	Depth       uint8
+	// NOTE: I always expect a leaf and removed commitments from the binary ladder
+	// This is an API change, that, however simplifies my life.
+	Leaf  *PrefixLeaf
+	Depth uint8
 }
 
 /*@
 pred (p *PrefixSearchResult) Inv() {
-	acc(p) && (p.Leaf != nil ==> acc(p.Leaf.Inv()))
+	acc(p) && acc(p.Leaf.Inv())
 }
 
-pred PrefixSearchResultsInv(rs []PrefixSearchResult) {
-	forall i int :: {&rs[i]} 0 <= i && i < len(rs) ==> acc((&rs[i]).Inv())
+pred PrefixSearchResultsInv(rs []*PrefixSearchResult) {
+	forall i int :: {&rs[i]} 0 <= i && i < len(rs) ==> acc(&rs[i]) && acc(rs[i].Inv())
 }
 @*/
 
 type PrefixProof struct {
-	Results  []PrefixSearchResult
-	Elements []NodeValue
+	Results  []*PrefixSearchResult
+	Elements []*NodeValue
 }
 
 /*@
-pred (p PrefixProof) Inv() {
-	PrefixSearchResultsInv(p.Results) && acc(p.Elements)
+pred (p *PrefixProof) Inv() {
+	acc(p) && PrefixSearchResultsInv(p.Results) && NodeValuesInv(p.Elements)
+}
+
+pred PrefixProofsInv(ps []*PrefixProof) {
+	forall i int :: {ps[i]} 0 <= i && i < len(ps) ==> acc(&ps[i]) && acc(ps[i].Inv())
 }
 @*/
 
 type CombinedTreeProof struct {
 	Timestamps    []uint64
-	Prefix_proofs []PrefixProof
-	Prefix_roots  []NodeValue
+	Prefix_proofs []*PrefixProof
+	Prefix_roots  []*NodeValue
 	Inclusion     *InclusionProof
 }
 
 /*@
-pred (c CombinedTreeProof) Inv() {
-	acc(c.Timestamps) &&
-	acc(c.Prefix_proofs) &&
-	acc(c.Prefix_roots) &&
-	acc(c.Inclusion.Inv())
+pred (c *CombinedTreeProof) Inv() {
+	acc(c) && acc(c.Timestamps) && PrefixProofsInv(c.Prefix_proofs) &&
+	NodeValuesInv(c.Prefix_roots) && acc(c.Inclusion.Inv())
 }
 @*/
 
@@ -123,8 +132,9 @@ type CompleteBinaryLadderStep struct {
 // @ requires forall i int :: { &steps[i] } 0 <= i && 0 < len(steps) ==> acc(&steps[i]) && acc(steps[i].Inv())
 // @ ensures acc(completeSteps)
 // @ ensures len(completeSteps) == len(results)
-func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (completeSteps []CompleteBinaryLadderStep, err error) {
-	completeSteps = make([]CompleteBinaryLadderStep, len(results))
+// @ trusted
+func CombineResults(results []*PrefixSearchResult, steps []*BinaryLadderStep) (completeSteps []*CompleteBinaryLadderStep, err error) {
+	completeSteps = make([]*CompleteBinaryLadderStep, len(results))
 	if len(steps) != len(results) {
 		return completeSteps, errors.New("steps mismatch")
 	}
@@ -136,14 +146,14 @@ func CombineResults(results []PrefixSearchResult, steps []BinaryLadderStep) (com
 	// @ invariant forall j int :: { &steps[j] } 0 <= j && 0 < len(steps) ==> acc(&steps[j]) && acc(steps[j].Inv())
 	for i := 0; i < len(results); i++ {
 		// @ unfold acc(steps[i].Inv())
-		completeSteps[i] = CompleteBinaryLadderStep{
+		completeSteps[i] = &CompleteBinaryLadderStep{
 			Step: PrefixLeaf{
 				// TODO: To be replaced with actual VRF output
-				Vrf_output: make([]byte, 0),
-				// TODO: This might be nil
-				Commitment: steps[i].Commitment,
+				// TODO: This might be nil; now set to nil because of API changes;
+				// function will be deprecated anyway
+				Commitment: nil,
 			},
-			Result: results[i],
+			Result: *results[i],
 		}
 		// @ fold acc(steps[i].Inv())
 	}

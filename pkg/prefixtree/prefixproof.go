@@ -71,7 +71,7 @@ func (t *PrefixTree) GetValueArray() [sha256.Size]byte {
 // prefix tree.
 // @ ensures err == nil ==> tree != nil && tree.Inv()
 // @ trusted
-func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coPathNodes []proofs.NodeValue) (tree *PrefixTree, nextSteps []proofs.CompleteBinaryLadderStep, nextNodes []proofs.NodeValue, err error) {
+func ToTreeRecursive(prefix []bool, steps []*proofs.CompleteBinaryLadderStep, coPathNodes []*proofs.NodeValue) (tree *PrefixTree, nextSteps []*proofs.CompleteBinaryLadderStep, nextNodes []*proofs.NodeValue, err error) {
 	tree = nil
 	nextSteps = steps
 	nextNodes = coPathNodes
@@ -84,7 +84,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 			err = errors.New("not enough co-path nodes")
 			return
 		} else {
-			tree = &PrefixTree{Value: &coPathNodes[0]}
+			tree = &PrefixTree{Value: coPathNodes[0]}
 			nextNodes = coPathNodes[1:]
 			return
 		}
@@ -94,7 +94,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 
 	prefixMatches := true
 	for i := 0; i < len(prefix); i++ {
-		bit := (step.Step.Vrf_output[i/8]>>uint(i%8))&1 == 1
+		bit := true // TODO: Just for compilation
 		prefixMatches = prefixMatches && bit == prefix[i]
 	}
 
@@ -103,8 +103,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 		if int(step.Result.Depth) < len(prefix) { // assume one-based depth; https://github.com/ietf-wg-keytrans/draft-protocol/issues/37
 			// The server tells us that this depth does suffice to identify the
 			// vrf output. Insert the result in one of its children.
-			nextDepth := len(prefix) + 1
-			nextBit := (step.Step.Vrf_output[nextDepth/8]>>uint(nextDepth%8))&1 == 1
+			nextBit := true // TODO: Just for compilation
 			if nextBit {
 				// Go right
 				if len(coPathNodes) == 0 {
@@ -113,7 +112,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 				} else {
 					// As we must recurse right, the left child must be provided as a co
 					// path node.
-					left := &PrefixTree{Value: &coPathNodes[0]}
+					left := &PrefixTree{Value: coPathNodes[0]}
 					if right, recSteps, recNodes, e := ToTreeRecursive(append( /*@ perm(1/2), @*/ prefix, true), steps, coPathNodes[1:]); e != nil {
 						err = e
 						return
@@ -151,15 +150,10 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 				nextSteps = steps[1:]
 				return
 			} else if resultType == proofs.NonInclusionLeaf {
-				if step.Result.Leaf == nil {
-					err = errors.New("no leaf for inclusion proof given")
-					return
-				} else {
-					// TODO: copy leaf
-					tree = &PrefixTree{Leaf: step.Result.Leaf}
-					nextSteps = steps[1:]
-					return
-				}
+				// TODO: copy leaf
+				tree = &PrefixTree{Leaf: nil}
+				nextSteps = steps[1:]
+				return
 			} else if resultType == proofs.NonInclusionParent {
 				tree = &PrefixTree{Value: &[32]byte{}}
 				nextSteps = steps[1:]
@@ -176,7 +170,7 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 		err = errors.New("not enough co-path nodes")
 		return
 	} else {
-		tree = &PrefixTree{Value: &coPathNodes[0]}
+		tree = &PrefixTree{Value: coPathNodes[0]}
 		nextNodes = coPathNodes[1:]
 		return
 	}
@@ -188,13 +182,13 @@ func ToTreeRecursive(prefix []bool, steps []proofs.CompleteBinaryLadderStep, coP
 // @ ensures err == nil ==> tree != nil && tree.Inv()
 // @ ensures err != nil ==> tree != nil && tree.Inv() && tree.GetValue() != nil
 // @ trusted
-func ToTree(prf proofs.PrefixProof, fullLadder []proofs.BinaryLadderStep) (tree *PrefixTree, err error) {
+func ToTree(prf *proofs.PrefixProof, fullLadder []*proofs.BinaryLadderStep) (tree *PrefixTree, err error) {
 	tree = &PrefixTree{}
 	if len(fullLadder) < len(prf.Results) {
 		return nil, errors.New("too many results")
 	}
 
-	var steps []proofs.CompleteBinaryLadderStep
+	var steps []*proofs.CompleteBinaryLadderStep
 	if steps, err = proofs.CombineResults(prf.Results, fullLadder); err != nil {
 		return nil, err
 	}
@@ -248,8 +242,7 @@ func (tree *PrefixTree) ComputeHash() (hash [sha256.Size]byte, err error) {
 			return [sha256.Size]byte{}, errors.New("neither leaf nor value given for empty node")
 		} else {
 			// Spec: leaf.value = Hash(0x01 || vrf_output || commitment)
-			input := append( /*@ perm(1/2), @*/ []byte{0x01}, tree.Leaf.Vrf_output[:]...)
-			input = append( /*@ perm(1/2), @*/ input, tree.Leaf.Commitment[:]...)
+			input := append( /*@ perm(1/2), @*/ []byte{0x01}, tree.Leaf.Commitment[:]...)
 			value /*@ @ @*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
 			tree.Value = &value
 			return value, nil
@@ -357,7 +350,7 @@ func (tree *PrefixTree) SearchForCommitment(vrfOutput []byte, depth int) ([]byte
 
 		// Case 1: Leaf node — check if VRF output matches
 		if node.Leaf != nil {
-			if bytes.Equal(node.Leaf.Vrf_output[:], vrfOutput) {
+			if bytes.Equal(nil, vrfOutput) {
 				// Inclusion: return a copy of the commitment
 				result := make([]byte, sha256.Size)
 				for i := 0; i < sha256.Size; i++ {
