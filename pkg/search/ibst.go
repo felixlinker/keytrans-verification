@@ -96,8 +96,7 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 		}
 	}
 
-	// TODO: why does this hold?
-	// @ assert diffFound ==> 2 <= i
+	// @ assert diffFound ==> 2 <= i // as `i != 1`` due to `front[0] == fromRoot[0]`
 
 	// note that the following assert stmt leads to an invalid trigger (see Gobra issue #1030)
 	// assert forall j int :: { &fromRoot[i-1:][j] } 0 <= j && j < len(fromRoot[i-1:]) ==> &fromRoot[i-1:][j] == &fromRoot[i-1+j]
