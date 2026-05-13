@@ -73,11 +73,9 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 	return utils.Reverse(pathToRoot(n, 0, size-1))
 }
 
-// TODO: Add functional properties back again
 // @ requires 0 <= n && n < size
-// @ ensures  acc(r) // && 0 < len(r)
-// // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
-// // @ ensures  r[0] == n
+// @ ensures  forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && 0 <= r[i] && r[i] < size
+// @ ensures  0 < len(r) && r[0] == n
 func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
@@ -87,11 +85,10 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 
 	i := 0
 	diffFound := false
-	// @ ghost p := perm(1/2)
 	// @ invariant 0 <= i && i <= len(front) && i <= len(fromRoot)
-	// @ invariant acc(front, p) && acc(fromRoot, p)
-	// @ invariant !diffFound ==> (forall j int :: 0 <= j && j < i ==> front[j] == fromRoot[j])
-	// @ invariant diffFound ==> (forall j int :: 0 <= j && j < i - 1 ==> front[j] == fromRoot[j])
+	// @ invariant acc(front, 1/2) && acc(fromRoot, 1/2)
+	// @ invariant !diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i ==> front[j] == fromRoot[j])
+	// @ invariant diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i - 1 ==> front[j] == fromRoot[j])
 	// @ invariant diffFound ==> 0 < i && front[i-1] != fromRoot[i-1]
 	for ; !diffFound && i < len(front) && i < len(fromRoot); i++ {
 		if front[i] != fromRoot[i] {
@@ -99,19 +96,36 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 		}
 	}
 
-	// @ assert forall j int :: {&fromRoot[i-1:][j]} 0 <= j && j < len(fromRoot[i-1:]) ==> &fromRoot[i-1:][j] == &fromRoot[i-1+j]
-	r = utils.Reverse(fromRoot[i-1:])
+	// TODO: why does this hold?
+	// @ assert diffFound ==> 2 <= i
+
+	// note that the following assert stmt leads to an invalid trigger (see Gobra issue #1030)
+	// assert forall j int :: { &fromRoot[i-1:][j] } 0 <= j && j < len(fromRoot[i-1:]) ==> &fromRoot[i-1:][j] == &fromRoot[i-1+j]
+	fromRootSuffix := fromRoot[i-1:]
+	// @ assert forall j int :: { &fromRootSuffix[j] } 0 <= j && j < len(fromRootSuffix) ==> &fromRootSuffix[j] == &fromRoot[i-1+j]
+	r = utils.Reverse(fromRootSuffix)
 	// @ assert r[0] == n
 
-	if diffFound {
-		// @ assert forall j int :: {front[i-2:][j]} 0 <= j && j < len(front[i-2:]) ==> &front[i-2:][j] == &front[i-2+j]
-		r = append( /*@ perm(1/2), @*/ r, front[i-2:]...)
-	} else {
-		// @ assert forall j int :: {front[i:][j]} 0 <= j && j < len(front[i:]) ==> &front[i:][j] == &front[i+j]
-		r = append( /*@ perm(1/2), @*/ r, front[i:]...)
-	}
+	tmp := r // workaround for Gobra issue #1029
 
-	return r
+	// @ requires  forall i int :: { &front[i] } 0 <= i && i < len(front) ==> acc(&front[i]) && 0 <= front[i] && front[i] < size
+	// @ requires  0 <= i && i <= len(front)
+	// @ requires  diffFound ==> 2 <= i
+	// @ preserves forall i int :: { &tmp[i] } 0 <= i && i < len(tmp) ==> acc(&tmp[i]) && 0 <= tmp[i] && tmp[i] < size
+	// @ preserves 0 < len(tmp) && tmp[0] == n
+	// @ outline (
+	if diffFound {
+		subFront := front[i-2:]
+		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i-2+j]
+		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+	} else {
+		subFront := front[i:]
+		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i+j]
+		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+	}
+	// @ )
+	r = tmp // workaround for Gobra issue #1029
+	return
 }
 
 // @ requires 0 <= n && n < size
@@ -121,9 +135,8 @@ func YoungerToMostRecent(n uint64, size uint64) (r []uint64) {
 	path := PathToMostRecent(n, size)
 	r = make([]uint64, 0)
 	// @ invariant 0 <= i && i <= len(path)
-	// @ invariant acc(r) && acc(path, perm(1/2))
-	// @ invariant forall i int :: {path[i]} 0 <= i && i < len(path) ==> 0 <= path[i] && path[i] < size
-	// @ invariant forall i int :: {r[i]} 0 <= i && i < len(r) ==> n < r[i] && r[i] < size
+	// @ invariant forall i int :: { &path[i] } 0 <= i && i < len(path) ==> acc(&path[i], 1/2) && 0 <= path[i] && path[i] < size
+	// @ invariant forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && n < r[i] && r[i] < size
 	for i := 0; i < len(path); i++ {
 		if n < path[i] {
 			r = append( /*@ perm(1/2), @*/ r, path[i])
