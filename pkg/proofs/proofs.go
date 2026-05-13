@@ -77,7 +77,8 @@ pred (l *PrefixLeaf) Inv() {
 @*/
 
 type PrefixSearchResult struct {
-	Result_type int
+	// NOTE: Real API also provides a result type, but this is not needed for
+	// reconstruction, thus, dropped.
 	// NOTE: I always expect a leaf and removed commitments from the binary ladder
 	// This is an API change, that, however simplifies my life.
 	Leaf  *PrefixLeaf
