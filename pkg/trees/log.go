@@ -68,7 +68,7 @@ func (t *Log) prune(keeping []uint64) (r []uint64) {
 		// Help gobra realize the relation between keeping and its subslice
 		// @ assert forall j int :: {&keeping[i:][j]} 0 <= j && j < len(keeping[i:]) ==> &keeping[i:][j] == &keeping[i+j]
 		// @ assert acc(keeping[i:])
-		return keeping[i:]
+		r = keeping[i:]
 	} else {
 		// @ assert t.left != nil && t.right != nil // Test tree invariant
 		// Recurse if tree is unbalanced or we must preserve children
@@ -78,7 +78,7 @@ func (t *Log) prune(keeping []uint64) (r []uint64) {
 			keeping = t.right.prune(keeping)
 			// @ fold acc(t.left.Inv())
 			// @ fold acc(t.Inv())
-			return keeping
+			r = keeping
 		} else {
 			// We do not modify keeping in this branch. The below assert checks that
 			// this is justified: Either, the slice is empty, or the to-be-kept items
@@ -86,9 +86,10 @@ func (t *Log) prune(keeping []uint64) (r []uint64) {
 			// @ assert 0 == len(keeping) || t.index+t.size <= keeping[0]
 			// @ fold acc(t.Inv())
 			t.cut()
-			return keeping
+			r = keeping
 		}
 	}
+	return
 }
 
 // @ ensures acc(t.Inv())
@@ -217,19 +218,20 @@ func (t *Log) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 	// @ defer fold acc(t.Inv())
 	if t.left != nil && t.right != nil {
 		if k := t.left.fillLeftMost(value); k {
-			return k
+			ok = k
 		} else {
-			return t.right.fillLeftMost(value)
+			ok = t.right.fillLeftMost(value)
 		}
 	} else {
 		// @ assert t.left == nil && t.right == nil
 		if t.value == nil {
 			t.value = value
-			return true
+			ok = true
 		} else {
-			return false
+			ok = false
 		}
 	}
+	return
 }
 
 // @ requires 1 <= newSize
@@ -243,48 +245,52 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 
 	// Client must have at least the respective prefix roots
 	var consistencyPath []uint64
-	if t == nil {
-		t = Singleton()
-		consistencyPath = search.Frontier(newSize)
-	} else if newSize < /*@ unfolding acc(t.Inv()) in @*/ t.size {
-		return nil, errors.New("new size smaller than old size")
-	} else if newSize == /*@ unfolding acc(t.Inv()) in @*/ t.size {
+	oldSize := t.GetSize( /*@ perm(1/2) @*/ )
+	if newSize == oldSize {
 		// Nothing to do
-		return t, nil
+		newT = t
+		err = nil
+	} else if newSize < oldSize {
+		err = errors.New("new size smaller than old size")
 	} else {
-		consistencyPath = search.YoungerToMostRecent( /*@ unfolding acc(t.Inv()) in @*/ t.size-1, newSize)
-	}
+		if t == nil {
+			t = Singleton()
+			consistencyPath = search.Frontier(newSize)
+		} else {
+			consistencyPath = search.YoungerToMostRecent(oldSize-1, newSize)
+		}
 
-	// @ invariant 0 <= i && i <= len(consistencyPath)
-	// @ invariant acc(t.Inv()) && acc(consistencyPath, perm(1/2))
-	for i := 0; i < len(consistencyPath); i++ {
-		// TODO: Either move assume to pre-condition or improve gobra
-		// @ assume 0 <= consistencyPath[i]
-		t.setLeaf(consistencyPath[i], nil)
-	}
+		// @ invariant 0 <= i && i <= len(consistencyPath)
+		// @ invariant acc(t.Inv()) && acc(consistencyPath, perm(1/2))
+		for i := 0; i < len(consistencyPath); i++ {
+			// TODO: Either move assume to pre-condition or improve gobra
+			// @ assume 0 <= consistencyPath[i]
+			t.setLeaf(consistencyPath[i], nil)
+		}
 
-	// @ unfold acc(prf.Inv())
-	// @ invariant acc(prf) && acc(t.Inv()) && acc(consistencyPath, perm(1/2))
-	// @ invariant 0 <= i && i <= len(prf.Elements)
-	// @ invariant forall j int :: i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
-	for i := 0; i < len(prf.Elements); i++ {
-		if ok := t.fillLeftMost(prf.Elements[i]); !ok {
-			return nil, errors.New("could not insert proof element")
+		// @ unfold acc(prf.Inv())
+		// @ invariant acc(prf) && acc(t.Inv()) && acc(consistencyPath, perm(1/2))
+		// @ invariant 0 <= i && i <= len(prf.Elements)
+		// @ invariant forall j int :: i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
+		for i := 0; i < len(prf.Elements); i++ {
+			if ok := t.fillLeftMost(prf.Elements[i]); !ok {
+				return nil, errors.New("could not insert proof element")
+			}
+		}
+
+		err = t.computeHash()
+		if err == nil {
+			newT = t
 		}
 	}
-
-	if err = t.computeHash(); err != nil {
-		return nil, err
-	} else {
-		return t, nil
-	}
+	return
 }
 
 // @ preserves acc(t.Inv())
 // @ ensures err == nil ==> acc(content)
 func (t *Log) hashContent() (content []byte, err error) {
 	if e := t.computeHash(); e != nil {
-		return nil, err
+		err = e
 	} else {
 		// @ unfold acc(t.Inv())
 		// @ assert t.value != nil
@@ -296,8 +302,8 @@ func (t *Log) hashContent() (content []byte, err error) {
 		}
 		content = append( /*@ perm(1/2), @*/ content, (*t.value)[:]...)
 		// @ fold acc(t.Inv())
-		return content, nil
 	}
+	return
 }
 
 // @ preserves acc(t.Inv())
@@ -307,26 +313,22 @@ func (t *Log) computeHash() (err error) {
 	// @ defer fold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		if t.value == nil {
-			return errors.New("missing value for incomplete subtree or leaf")
-		} else {
-			return nil
-		}
+			err = errors.New("missing value for incomplete subtree or leaf")
+		} // else all good
 	} else {
 		// @ assert t.left != nil && t.right != nil // test invariant
 		if t.value == nil {
 			if leftContent, e := t.left.hashContent(); e != nil {
-				return e
+				err = e
 			} else if rightContent, e := t.right.hashContent(); e != nil {
-				return e
+				err = e
 			} else {
 				a /*@@@*/ := sha256.Sum256(append( /*@ perm(1/2), @*/ leftContent, rightContent...) /*@, perm(1/2) @*/)
 				t.value = &a
-				return nil
 			}
-		} else {
-			return nil
-		}
+		} // else all good
 	}
+	return
 }
 
 // @ requires noPerm < p
@@ -340,21 +342,22 @@ func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha2
 		if t.value != nil {
 			c = *t.value
 		}
-		return &c, nil
+		commitment = &c
 	} else if t.left == nil || t.right == nil {
 		// Technically, we do not need both subtrees, but we check the invariant
 		// that every node should be a leaf or have two children
-		return nil, errors.New("missing subtree")
+		err = errors.New("missing subtree")
 	} else {
 		// @ unfold acc(t.left.Inv(), p)
 		if index < t.left.size {
 			// @ fold acc(t.left.Inv(), p)
-			return t.left.GetLeafHash(index /*@, p @*/)
+			commitment, err = t.left.GetLeafHash(index /*@, p @*/)
 		} else {
-			// @ defer fold acc(t.left.Inv(), p)
-			return t.right.GetLeafHash(index - t.left.size /*@, p @*/)
+			commitment, err = t.right.GetLeafHash(index - t.left.size /*@, p @*/)
+			// @ fold acc(t.left.Inv(), p)
 		}
 	}
+	return
 }
 
 // @ requires noPerm < p
@@ -363,10 +366,11 @@ func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha2
 // @ ensures (t != nil) == (1 <= r)
 func (t *Log) GetSize( /*@ ghost p perm @*/ ) (r uint64) {
 	if t == nil {
-		return 0
+		r = 0
 	} else {
-		return /*@ unfolding acc(t.Inv(), p) in @*/ t.size
+		r = /*@ unfolding acc(t.Inv(), p) in @*/ t.size
 	}
+	return
 }
 
 // @ requires noPerm < p
@@ -382,38 +386,34 @@ func (t *Log) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (r []
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		if t.value == nil {
-			// @ fold acc(t.Inv())
-			return nil, errors.New("tree missing hash value")
+			err = errors.New("tree missing hash value")
 		} else if cacheSize < t.index+t.size {
 			// Only include sub trees that the client cannot compute
 			v /*@@@*/ := *t.value
-			// @ fold acc(t.Inv())
-			return append( /*@ perm(1/2), @*/ elems, &v), nil
+			r = append( /*@ perm(1/2), @*/ elems, &v)
 		} else {
 			// Client can compute this subtree; do not include
-			// @ fold acc(t.Inv())
-			return elems, nil
+			r = elems
 		}
 	} else if elems, err = t.left.proofFromPruned(cacheSize, elems); err != nil {
-		// @ fold acc(t.Inv())
-		return nil, err
 	} else {
 		r, err = t.right.proofFromPruned(cacheSize, elems)
-		// @ fold acc(t.Inv())
-		return r, err
 	}
+	// @ fold acc(t.Inv())
+	return
 }
 
 // @ preserves acc(t.Inv())
 // @ ensures err == nil ==> acc(prf.Inv())
 func (t *Log) ProofFromPruned(cacheSize uint64) (prf *proofs.InclusionProof, err error) {
 	if elems, e := t.proofFromPruned(cacheSize, []*proofs.NodeValue{}); e != nil {
-		return nil, e
+		err = e
 	} else {
-		prf /*@@@*/ := proofs.InclusionProof{
+		incPrf /*@@@*/ := proofs.InclusionProof{
 			Elements: elems,
 		}
-		// @ fold acc(prf.Inv())
-		return &prf, nil
+		// @ fold acc(incPrf.Inv())
+		prf = &incPrf
 	}
+	return
 }
