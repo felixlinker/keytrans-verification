@@ -3,7 +3,6 @@ package client
 type DeploymentMode uint8
 
 const (
-	DeploymentModeReserved         DeploymentMode = 0
 	DeploymentContractMonitoring   DeploymentMode = 1
 	DeploymentThirdPartyManagement DeploymentMode = 2
 	DeploymentThirdPartyAuditing   DeploymentMode = 3
@@ -12,9 +11,9 @@ const (
 type Configuration struct {
 	Mode                       DeploymentMode
 	ReasonableMonitoringWindow uint64
+	SignaturePublicKey         []byte
 	/*
 		Ciphersuite                uint16
-		SignaturePublicKey         []byte
 		VrfPublicKey               []byte
 		LeafPublickey              []byte //Only for Contact monitoring or ThirdParty
 		MaxAuditorLag              uint64 //Only for ThirdParty
@@ -28,4 +27,8 @@ type Configuration struct {
 	*/
 }
 
-//
+/*@
+pred (c *Configuration) Inv() {
+	acc(c) && acc(c.SignaturePublicKey) && 0 < c.ReasonableMonitoringWindow
+}
+@*/
