@@ -234,7 +234,7 @@ func (t *Log) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 
 // @ requires 1 <= newSize
 // @ requires acc(prf.Inv())
-// @ requires t != nil ==> acc(t.Inv()) && unfolding acc(t.Inv()) in t.size < newSize
+// @ requires t != nil ==> acc(t.Inv())
 // @ ensures  err == nil ==> acc(newT.Inv()) // && unfolding acc(t.Inv()) in newT.size == newSize
 func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err error) {
 	if /*@ unfolding acc(prf.Inv()) in @*/ prf == nil {
@@ -246,6 +246,11 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 	if t == nil {
 		t = Singleton()
 		consistencyPath = search.Frontier(newSize)
+	} else if newSize < /*@ unfolding acc(t.Inv()) in @*/ t.size {
+		return nil, errors.New("new size smaller than old size")
+	} else if newSize == /*@ unfolding acc(t.Inv()) in @*/ t.size {
+		// Nothing to do
+		return t, nil
 	} else {
 		consistencyPath = search.YoungerToMostRecent( /*@ unfolding acc(t.Inv()) in @*/ t.size-1, newSize)
 	}
