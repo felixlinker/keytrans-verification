@@ -136,24 +136,26 @@ func (ls *Lookups) CheckPrefixTree(t *Prefix /*@, ghost p perm @*/) (r *[sha256.
 		if searchKey, ok := mapGet(ls.vrfOutputs, lookup /*@, p @*/); !ok {
 			err = errors.New("vrfOutputs incomplete")
 		} else {
-			if lookup <= ls.version {
-				if cExpected, ok := mapGet(ls.commitments, lookup /*@, p @*/); !ok {
-					err = errors.New("commitments incomplete")
-				} else if c, ok := t.Search(searchKey /*@, tp @*/); !ok {
-					err = errors.New("failed expected prefix tree lookup")
-				} else if c == nil {
-					r = nil
-					done = true
-					// r == nil && err == nil means that the prefix tree has a greatest
-					// version smaller than the expected one, which can be consistent with
-					// a greatest version lookup.
-				} else if !bytes.Equal(cExpected, utils.FromDigest(*c) /*@, p, p @*/) {
-					err = errors.New("failed expected prefix tree lookup")
-				} else if lookup == ls.version {
-					r = c
-				}
-			} else if c, ok := t.Search(searchKey /*@, tp @*/); c != nil || !ok {
+			if c, ok := t.Search(searchKey /*@, tp @*/); !ok {
 				err = errors.New("failed expected prefix tree lookup")
+			} else {
+				if lookup <= ls.version {
+					if c == nil {
+						r = nil
+						done = true
+						// r == nil && err == nil means that the prefix tree has a greatest
+						// version smaller than the expected one, which can be consistent with
+						// a greatest version lookup.
+					} else if cExpected, ok := mapGet(ls.commitments, lookup /*@, p @*/); !ok {
+						err = errors.New("commitments incomplete")
+					} else if !bytes.Equal(cExpected, utils.FromDigest(*c) /*@, p, p @*/) {
+						err = errors.New("failed expected prefix tree lookup")
+					} else if lookup == ls.version {
+						r = c
+					}
+				} else if c != nil {
+					err = errors.New("inclusion but expected non-inclusion")
+				}
 			}
 		}
 		// @ tp = tp/2
