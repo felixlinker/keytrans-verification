@@ -1,8 +1,11 @@
 package proofs
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
+
+	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
 type NodeValue = [sha256.Size]byte
@@ -23,10 +26,15 @@ pred (u *UpdateValue) Inv() {
 }
 @*/
 
-type CommitmentValue struct {
-	Opening []byte
-	Label   []byte      // pseudonym; max length 2^8-1 bytes
-	Update  UpdateValue // value associated with label, e.g., public key
+// @ requires noPerm < p
+// @ preserves acc(v.Inv(), p)
+func (v *UpdateValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
+	// @ unfold acc(v.Inv(), p)
+	buf := bytes.NewBuffer(nil)
+	buf.Write(utils.Uint32(uint32(len(v.Value))))
+	buf.Write(v.Value)
+	// @ fold acc(v.Inv(), p)
+	return buf.Bytes()
 }
 
 type BinaryLadderStep struct {

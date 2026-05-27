@@ -1,0 +1,11 @@
+package hash
+
+type Hash interface {
+  requires noPerm < p
+  preserves acc(bs, p)
+  Write(bs []byte, ghost p perm) (n int, err error)
+
+  requires b != nil ==> noPerm < p && acc(b, p)
+  ensures acc(r)
+  Sum(b []byte, ghost p perm) (r []byte)
+}
