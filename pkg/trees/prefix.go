@@ -27,31 +27,31 @@ pred (l *prefixLeaf) Inv() {
 // @ preserves pl != nil ==> acc(pl.Inv(), p)
 // @ ensures pl != nil ==> l != nil && acc(l.Inv())
 func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf) {
-	if pl == nil {
-		return nil
-	}
-	// @ unfold acc(pl.Inv(), p)
+	if pl != nil {
+		// @ unfold acc(pl.Inv(), p)
 
-	// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
-	input := []byte{0x02}
-	input = append( /*@ p, @*/ input, pl.Vrf_output...)
-	input = append( /*@ p, @*/ input, utils.FromDigest(*pl.Commitment)...)
-	value := sha256.Sum256(input /*@, perm(1/2) @*/)
-	c /*@@@*/ := *pl.Commitment
-	// @ assert c[0] == pl.Commitment[0]
-	// The above assert is required so that gobra realizes the assert below.
-	// @ assert &c != pl.Commitment
-	// @ assert acc(&c)
-	l_ /*@@@*/ := prefixLeaf{
-		value: value,
-		// TODO: Could not use pl.Vrf_output[:], so opted for append.
-		// Folding pl.Inv() failed on using [:]
-		vrfOutput:  append( /*@ p, @*/ []byte{}, pl.Vrf_output...),
-		commitment: &c,
+		// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
+		input := []byte{0x02}
+		input = append( /*@ p, @*/ input, pl.Vrf_output...)
+		input = append( /*@ p, @*/ input, utils.FromDigest(*pl.Commitment)...)
+		value := sha256.Sum256(input /*@, perm(1/2) @*/)
+		c /*@@@*/ := *pl.Commitment
+		// @ assert c[0] == pl.Commitment[0]
+		// The above assert is required so that gobra realizes the assert below.
+		// @ assert &c != pl.Commitment
+		// @ assert acc(&c)
+		l_ /*@@@*/ := prefixLeaf{
+			value: value,
+			// TODO: Could not use pl.Vrf_output[:], so opted for append.
+			// Folding pl.Inv() failed on using [:]
+			vrfOutput:  append( /*@ p, @*/ []byte{}, pl.Vrf_output...),
+			commitment: &c,
+		}
+		// @ fold acc(l_.Inv())
+		// @ fold acc(pl.Inv(), p)
+		l = &l_
 	}
-	// @ fold acc(l_.Inv())
-	// @ fold acc(pl.Inv(), p)
-	return &l_
+	return
 }
 
 type Prefix struct {
@@ -139,39 +139,36 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 	// @ unfold acc(t.Inv())
 	// @ defer fold acc(t.Inv())
 	if t.leaf != nil {
-		return elements, nil
-	}
-
-	var esL []*proofs.NodeValue
-	if t.left != nil {
-		if esL, err = t.left.fill(elements /*@, p @*/); err != nil {
-			return nil, err
-		}
-	} else if len(elements) == 0 {
-		return nil, errors.New("too few elements")
+		es = elements
 	} else {
-		// @ unfold acc(proofs.NodeValuesInv(elements), p)
-		t.left = nodeValueLeaf(*elements[0])
-		esL = elements[1:]
-		// @ assert forall i int :: {&esL[i]} 0 <= i && i < len(esL) ==> &esL[i] == &elements[i+1]
-		// @ fold acc(proofs.NodeValuesInv(esL), p)
-	}
-
-	if t.right != nil {
-		if es, err = t.right.fill(esL /*@, p @*/); err != nil {
-			return nil, err
+		var esL []*proofs.NodeValue
+		if t.left != nil {
+			esL, err = t.left.fill(elements /*@, p @*/)
+		} else if len(elements) == 0 {
+			err = errors.New("too few elements")
+		} else {
+			// @ unfold acc(proofs.NodeValuesInv(elements), p)
+			t.left = nodeValueLeaf(*elements[0])
+			esL = elements[1:]
+			// @ assert forall i int :: {&esL[i]} 0 <= i && i < len(esL) ==> &esL[i] == &elements[i+1]
+			// @ fold acc(proofs.NodeValuesInv(esL), p)
 		}
-	} else if len(esL) == 0 {
-		return nil, errors.New("too few elements")
-	} else {
-		// @ unfold acc(proofs.NodeValuesInv(esL), p)
-		t.right = nodeValueLeaf(*esL[0])
-		es = esL[1:]
-		// @ assert forall i int :: {&es[i]} 0 <= i && i < len(es) ==> &es[i] == &esL[i+1]
-		// @ fold acc(proofs.NodeValuesInv(es), p)
-	}
 
-	return es, nil
+		if err == nil {
+			if t.right != nil {
+				es, err = t.right.fill(esL /*@, p @*/)
+			} else if len(esL) == 0 {
+				err = errors.New("too few elements")
+			} else {
+				// @ unfold acc(proofs.NodeValuesInv(esL), p)
+				t.right = nodeValueLeaf(*esL[0])
+				es = esL[1:]
+				// @ assert forall i int :: {&es[i]} 0 <= i && i < len(es) ==> &es[i] == &esL[i+1]
+				// @ fold acc(proofs.NodeValuesInv(es), p)
+			}
+		}
+	}
+	return
 }
 
 // @ requires noPerm < p && acc(t.Inv(), p)
@@ -183,12 +180,13 @@ func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) 
 		// @ unfold acc(t.leaf.Inv(), p)
 		r = t.leaf.value
 		// @ fold acc(t.leaf.Inv(), p)
+		// @ fold acc(t.Inv(), p)
 	} else if t.left == nil || t.right == nil {
-		return r, errors.New("incomplete tree")
+		err = errors.New("incomplete tree")
 	} else if left, errL := t.left.Value( /*@ p @*/ ); errL != nil {
-		return r, errL
+		err = errL
 	} else if right, errR := t.right.Value( /*@ p @*/ ); errR != nil {
-		return r, errR
+		err = errR
 	} else {
 		input := make([]byte, 1+sha256.Size+sha256.Size)
 		input[0] = 0x03
@@ -199,10 +197,10 @@ func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) 
 			input[1+sha256.Size+i] = right[i]
 		}
 		r = sha256.Sum256(input /*@, perm(1/2) @*/)
+		// @ fold acc(t.Inv(), p)
 	}
 
-	// @ fold acc(t.Inv(), p)
-	return r, nil
+	return
 }
 
 // @ requires noPerm < p
@@ -214,22 +212,26 @@ func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf,
 	// @ unfold acc(t.Inv(), p)
 	// @ defer fold acc(t.Inv(), p/2)
 	if t.leaf != nil || len(searchKey) == 0 {
-		return t.leaf, t.leaf != nil
+		l = t.leaf
+		ok = t.leaf != nil
 	} else {
 		rec := searchKey[1:]
 		// @ assert forall i int :: {&rec[i]} 0 <= i && i < len(rec) ==> &rec[i] == &searchKey[i+1]
 		if searchKey[0] {
 			if t.right == nil {
-				return nil, false
+				ok = false
+			} else {
+				l, ok = t.right.getLeaf(rec /*@, p @*/)
 			}
-			return t.right.getLeaf(rec /*@, p @*/)
 		} else {
 			if t.left == nil {
-				return nil, false
+				ok = false
+			} else {
+				l, ok = t.left.getLeaf(rec /*@, p @*/)
 			}
-			return t.left.getLeaf(rec /*@, p @*/)
 		}
 	}
+	return
 }
 
 // @ requires noPerm < p
@@ -240,19 +242,21 @@ func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf,
 func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size]byte, ok bool) {
 	// TODO: Cannot return r == nil && ok
 	if leaf, ok := t.getLeaf(utils.Bits(searchKey /*@, p @*/) /*@, p @*/); !ok {
-		return nil, false
+		ok = false
 	} else {
 		// @ unfold acc(leaf.Inv(), p/2)
 		if leaf.vrfOutput == nil {
-			return nil, false
+			ok = false
 		} else if leaf.commitment == nil {
-			return nil, false
+			ok = false
 		} else {
 			c /*@@@*/ := *leaf.commitment
-			return &c, bytes.Equal(leaf.vrfOutput, searchKey /*@, p/2, p @*/)
+			r = &c
+			ok = bytes.Equal(leaf.vrfOutput, searchKey /*@, p/2, p @*/)
 		}
 		// @ fold acc(leaf.Inv(), p/2)
 	}
+	return
 }
 
 // @ requires noPerm < p
@@ -294,11 +298,10 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 	}
 
 	// @ unfold acc(prf.Inv(), p)
-	if remaining, err := tree.fill(prf.Elements /*@, p @*/); err != nil {
-		return nil, err
+	if remaining, e := tree.fill(prf.Elements /*@, p @*/); e != nil {
+		err = e
 	} else if len(remaining) > 0 {
-		return nil, errors.New("too many elements provided")
-	} else {
-		return tree, nil
-	}
+		err = errors.New("too many elements provided")
+	} // else all good
+	return
 }
