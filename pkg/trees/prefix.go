@@ -60,9 +60,6 @@ type Prefix struct {
 	right *Prefix
 }
 
-// The invariant intentionally only provides read access to the leaf as we will
-// typically create the leaf from a read-only data-structure. This simplifies
-// memory safety proofs.
 /*@
 pred (t *Prefix) Inv() {
 	acc(t) &&
@@ -148,7 +145,9 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 			err = errors.New("too few elements")
 		} else {
 			// @ unfold acc(proofs.NodeValuesInv(elements), p)
-			t.left = nodeValueLeaf(*elements[0])
+			if !utils.AllZero(*elements[0]) {
+				t.left = nodeValueLeaf(*elements[0])
+			}
 			esL = elements[1:]
 			// @ assert forall i int :: {&esL[i]} 0 <= i && i < len(esL) ==> &esL[i] == &elements[i+1]
 			// @ fold acc(proofs.NodeValuesInv(esL), p)
@@ -161,7 +160,9 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 				err = errors.New("too few elements")
 			} else {
 				// @ unfold acc(proofs.NodeValuesInv(esL), p)
-				t.right = nodeValueLeaf(*esL[0])
+				if !utils.AllZero(*esL[0]) {
+					t.right = nodeValueLeaf(*esL[0])
+				}
 				es = esL[1:]
 				// @ assert forall i int :: {&es[i]} 0 <= i && i < len(es) ==> &es[i] == &esL[i+1]
 				// @ fold acc(proofs.NodeValuesInv(es), p)
@@ -171,35 +172,35 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 	return
 }
 
-// @ requires noPerm < p && acc(t.Inv(), p)
-// @ ensures err == nil ==> acc(t.Inv(), p)
+// @ requires noPerm < p
+// @ preserves t != nil  ==> acc(t.Inv(), p)
 func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) {
 	r = [sha256.Size]byte{}
-	// @ unfold acc(t.Inv(), p)
-	if t.leaf != nil {
-		// @ unfold acc(t.leaf.Inv(), p)
-		r = t.leaf.value
-		// @ fold acc(t.leaf.Inv(), p)
-		// @ fold acc(t.Inv(), p)
-	} else if t.left == nil || t.right == nil {
-		err = errors.New("incomplete tree")
-	} else if left, errL := t.left.Value( /*@ p @*/ ); errL != nil {
-		err = errL
-	} else if right, errR := t.right.Value( /*@ p @*/ ); errR != nil {
-		err = errR
-	} else {
-		input := make([]byte, 1+sha256.Size+sha256.Size)
-		input[0] = 0x03
-		// @ invariant 0 <= i && i <= sha256.Size
-		// @ invariant acc(input)
-		for i := 0; i < sha256.Size; i++ {
-			input[1+i] = left[i]
-			input[1+sha256.Size+i] = right[i]
+	if t != nil {
+		// @ unfold acc(t.Inv(), p)
+		if t.leaf != nil {
+			// @ unfold acc(t.leaf.Inv(), p)
+			r = t.leaf.value
+			// @ fold acc(t.leaf.Inv(), p)
+		} else if t.left == nil && t.right == nil {
+			err = errors.New("incomplete tree")
+		} else if left, errL := t.left.Value( /*@ p @*/ ); errL != nil {
+			err = errL
+		} else if right, errR := t.right.Value( /*@ p @*/ ); errR != nil {
+			err = errR
+		} else {
+			input := make([]byte, 1+sha256.Size+sha256.Size)
+			input[0] = 0x03
+			// @ invariant 0 <= i && i <= sha256.Size
+			// @ invariant acc(input)
+			for i := 0; i < sha256.Size; i++ {
+				input[1+i] = left[i]
+				input[1+sha256.Size+i] = right[i]
+			}
+			r = sha256.Sum256(input /*@, perm(1/2) @*/)
 		}
-		r = sha256.Sum256(input /*@, perm(1/2) @*/)
 		// @ fold acc(t.Inv(), p)
 	}
-
 	return
 }
 
@@ -207,7 +208,7 @@ func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) 
 // @ preserves acc(searchKey, p)
 // @ requires acc(t.Inv(), p)
 // @ ensures acc(t.Inv(), p/2)
-// @ ensures ok ==> acc(l.Inv(), p/2)
+// @ ensures l != nil ==> acc(l.Inv(), p/2)
 func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
 	// @ unfold acc(t.Inv(), p)
 	// @ defer fold acc(t.Inv(), p/2)
@@ -219,13 +220,15 @@ func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf,
 		// @ assert forall i int :: {&rec[i]} 0 <= i && i < len(rec) ==> &rec[i] == &searchKey[i+1]
 		if searchKey[0] {
 			if t.right == nil {
-				ok = false
+				l = nil
+				ok = true
 			} else {
 				l, ok = t.right.getLeaf(rec /*@, p @*/)
 			}
 		} else {
 			if t.left == nil {
-				ok = false
+				l = nil
+				ok = true
 			} else {
 				l, ok = t.left.getLeaf(rec /*@, p @*/)
 			}
@@ -241,8 +244,10 @@ func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf,
 // @ ensures r != nil ==> acc(r, p/2)
 func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size]byte, ok bool) {
 	// TODO: Cannot return r == nil && ok
-	if leaf, ok := t.getLeaf(utils.Bits(searchKey /*@, p @*/) /*@, p @*/); !ok {
+	if leaf, leafOk := t.getLeaf(utils.Bits(searchKey /*@, p @*/) /*@, p @*/); !leafOk {
 		ok = false
+	} else if leaf == nil {
+		ok = true
 	} else {
 		// @ unfold acc(leaf.Inv(), p/2)
 		if leaf.vrfOutput == nil {
