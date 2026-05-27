@@ -81,7 +81,7 @@ func TestPathToMostRecent(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		got, _ := PathToMostRecent(tc.n, tc.size)
+		got := PathToMostRecent(tc.n, tc.size)
 		errF := func() {
 			t.Errorf("NodesToMostRecent(%d, %d) = %v; want %v", tc.n, tc.size, got, tc.want)
 		}
