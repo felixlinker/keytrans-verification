@@ -38,12 +38,13 @@ func (v *UpdateValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 }
 
 type BinaryLadderStep struct {
-	Proof []byte // opaque proof[VRF.Np] — variable length per VRF scheme
+	Proof      []byte             // opaque proof[VRF.Np] — variable length per VRF scheme
+	Commitment *[sha256.Size]byte // optional<HashValue> - only use for versions that should exist
 }
 
 /*@
 pred (s *BinaryLadderStep) Inv() {
-	acc(s) && acc(s.Proof)
+	acc(s) && acc(s.Proof) && (s.Commitment != nil ==> acc(s.Commitment))
 }
 
 pred BinaryLadderStepsInv(steps []*BinaryLadderStep) {

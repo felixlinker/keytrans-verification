@@ -331,11 +331,16 @@ func (t *Log) computeHash() (err error) {
 
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
+// @ ensures commitment != nil ==> acc(commitment)
 func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha256.Size]byte, err error) {
 	// @ unfold acc(t.Inv(), p)
 	// @ defer fold acc(t.Inv(), p)
 	if t.size == 1 {
-		return t.value, nil
+		var c /*@@@*/ [sha256.Size]byte
+		if t.value != nil {
+			c = *t.value
+		}
+		return &c, nil
 	} else if t.left == nil || t.right == nil {
 		// Technically, we do not need both subtrees, but we check the invariant
 		// that every node should be a leaf or have two children
@@ -353,9 +358,15 @@ func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha2
 }
 
 // @ requires noPerm < p
-// @ preserves acc(t.Inv(), p)
-func (t *Log) GetSize( /*@ ghost p perm @*/ ) uint64 {
-	return /*@ unfolding acc(t.Inv(), p) in @*/ t.size
+// @ preserves t != nil ==> acc(t.Inv(), p)
+// @ ensures 0 <= r
+// @ ensures (t != nil) == (1 <= r)
+func (t *Log) GetSize( /*@ ghost p perm @*/ ) (r uint64) {
+	if t == nil {
+		return 0
+	} else {
+		return /*@ unfolding acc(t.Inv(), p) in @*/ t.size
+	}
 }
 
 // @ requires noPerm < p
