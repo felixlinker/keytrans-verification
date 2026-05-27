@@ -165,6 +165,8 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 					err = e
 				} else if c == nil {
 					err = errors.New("no commitment for frontier node")
+					// TODO: Probably, checking for equality below is wrong and there is
+					// more included in the hash than the prefix tree root
 				} else if !bytes.Equal(utils.FromDigest(v), utils.FromDigest(*c) /*@, perm(1/2), perm(1/2) @*/) {
 					err = errors.New("log tree commitment does not match prefix tree root hash")
 				} else {
