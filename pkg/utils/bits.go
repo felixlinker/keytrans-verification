@@ -10,12 +10,14 @@ func byteBit(b byte, i int) bool {
 /*@
 ghost
 requires 0 <= i && i <= j && j <= 8
+ensures len(r) == j-i
 decreases j-i
 pure func byteBits_Rec(b byte, i int, j int) (r seq[bool]) {
 	return i == j ? seq[bool]{} : seq[bool]{ byteBit(b, i) } ++ byteBits_Rec(b, i + 1, j)
 }
 
 ghost
+ensures len(r) == 8
 decreases
 pure func ByteBits_Pure(b byte) (r seq[bool]) {
 	return byteBits_Rec(b, 0, 8)
@@ -27,8 +29,8 @@ requires 0 <= i && i <= len(bs)
 ensures len(r) == len(bs)-i
 ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[i+j]
 decreases len(bs)-i
-pure func BitsSeq_Rec(bs []bool, i int) (r seq[bool]) {
-	return len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ BitsSeq_Rec(bs, i+1))
+pure func byteBitsSeq_Rec(bs []bool, i int) (r seq[bool]) {
+	return len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ byteBitsSeq_Rec(bs, i+1))
 }
 
 ghost
@@ -37,7 +39,7 @@ ensures len(bs) == len(r)
 ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[j]
 decreases
 pure func BitsSeq(bs []bool) (r seq[bool]) {
-	return BitsSeq_Rec(bs, 0)
+	return byteBitsSeq_Rec(bs, 0)
 }
 @*/
 
@@ -61,17 +63,42 @@ func ByteBits(b byte) (r []bool) {
 	return r
 }
 
+/*@
+ghost
+requires acc(bs, _)
+requires 0 <= i && i <= len(bs)
+decreases len(bs)-i
+pure func bitsPure_Rec(bs []byte, i int) (r seq[bool]) {
+	return len(bs) == i ? seq[bool]{} : ByteBits_Pure(bs[i]) ++ bitsPure_Rec(bs, i+1)
+}
+
+ghost
+requires acc(bs, _)
+decreases
+pure func Bits_Pure(bs []byte) (r seq[bool]) {
+	return bitsPure_Rec(bs, 0)
+}
+@*/
+
 // @ requires noPerm < p
 // @ preserves acc(bytes, p)
 // @ ensures acc(r)
 // @ ensures len(r) == len(bytes)*8
+// @ ensures BitsSeq(r) == Bits_Pure(bytes)
 func Bits(bytes []byte /*@, ghost p perm @*/) (r []bool) {
 	r = make([]bool, 0, len(bytes)*8)
+	// @ ghost rseq := seq[bool]{}
+
 	// @ invariant 0 <= i && i <= len(bytes)
-	// @ invariant len(r) == i*8
+	// @ invariant len(r) == (len(bytes)-i)*8
+	// @ invariant len(rseq) == (len(bytes)-i)*8
 	// @ invariant acc(bytes, p) && acc(r)
-	for i := 0; i < len(bytes); i++ {
-		r = append( /*@ perm(1), @*/ r, ByteBits(bytes[i])...)
+	// @ invariant rseq == bitsPure_Rec(bytes, i)
+	// @ invariant forall j int :: 0 <= j && j < len(r) ==> r[j] == rseq[j]
+	for i := len(bytes); 0 < i; i-- {
+		r = append( /*@ perm(1/2), @*/ ByteBits(bytes[i-1]), r...)
+		// @ rseq = ByteBits_Pure(bytes[i-1]) ++ rseq
 	}
+	// @ assert rseq == Bits_Pure(bytes)
 	return r
 }
