@@ -188,8 +188,12 @@ pure func (t *Prefix) IncludedPrefixes(p perm) (r seq[seq[bool]]) {
 		(unfolding acc(t.Inv(), p) in (t.leaf != nil ?
 			// A leaf proves the *inclusion* of every suffix
 			seq[seq[bool]]{ seq[bool]{} } :
-			(	let left := utils.PrependAll(t.left.IncludedPrefixes(p), false) in
-				let right := utils.PrependAll(t.right.IncludedPrefixes(p), true) in
+			// TODO: For the termination measure to work, I must check that
+			// t.left/right are not nil. This is not ideal as the function already
+			// generalizes to t being nil, but I don't know how to express the
+			// termination measure accordingly.
+			(	let left := (t.left == nil ? seq[seq[bool]]{} : utils.PrependAll(t.left.IncludedPrefixes(p), false)) in
+				let right := (t.right == nil ? seq[seq[bool]]{} : utils.PrependAll(t.right.IncludedPrefixes(p), true)) in
 				left ++ right))))
 }
 @*/
