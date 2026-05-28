@@ -5,20 +5,3 @@ import "crypto/sha256"
 func AllZero(bs [sha256.Size]byte) bool {
 	return bs == [sha256.Size]byte{}
 }
-
-/*@
-// wrapper predicate to "hide" the quantified permissions
-pred BytesMem(s []byte) {
-  acc(s)
-}
-
-ghost
-requires acc(BytesMem(s1), _) && acc(BytesMem(s2), _)
-decreases
-pure func BytesEqual(s1, s2 []byte) bool {
-	return unfolding acc(BytesMem(s1), _) in
-    unfolding acc(BytesMem(s2), _) in
-    len(s1) == len(s2) &&
-		forall i int :: {s1[i], s2[i]} 0 <= i && i < len(s1) ==> s1[i] == s2[i]
-}
-@*/
