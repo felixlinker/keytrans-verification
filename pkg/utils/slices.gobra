@@ -34,3 +34,10 @@ decreases len(s) - idx
 pure func getUint64Content(s []uint64, idx int) (r seq[uint64]) {
   return idx == len(s) ? seq[uint64]{} : seq[uint64]{s[idx]} ++ getUint64Content(s, idx + 1)
 }
+
+ghost
+ensures len(r) == len(s)
+decreases len(s)
+pure func PrependAll(s seq[seq[bool]], h bool) (r seq[seq[bool]]) {
+  return len(s) == 0 ? s : (seq[seq[bool]]{ seq[bool]{h} ++ s[0] } ++ PrependAll(s[1:], h))
+}

@@ -172,6 +172,28 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 	return
 }
 
+// TODO: Write a function that recursively collects a pure map of elements in
+// the prefix tree, and proof that value establishes that elements contained in
+// both executions must map to the same value if the hash matches.
+
+/*@
+ghost
+requires noPerm < p
+requires t != nil ==> acc(t.Inv(), p)
+decreases acc(t.Inv(), p)
+pure func (t *Prefix) IncludedPrefixes(p perm) (r seq[seq[bool]]) {
+	return (t == nil ?
+		// The empty leaf proves inclusion of no prefix
+		seq[seq[bool]]{} :
+		(unfolding acc(t.Inv(), p) in (t.leaf != nil ?
+			// A leaf proves the *inclusion* of every suffix
+			seq[seq[bool]]{ seq[bool]{} } :
+			(	let left := utils.PrependAll(t.left.IncludedPrefixes(p), false) in
+				let right := utils.PrependAll(t.right.IncludedPrefixes(p), true) in
+				left ++ right))))
+}
+@*/
+
 // @ requires noPerm < p
 // @ preserves t != nil  ==> acc(t.Inv(), p)
 func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) {
