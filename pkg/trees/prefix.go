@@ -11,14 +11,14 @@ import (
 
 type prefixLeaf struct {
 	value      [sha256.Size]byte
-	vrfOutput  []byte
+	searchKey  []byte
 	commitment *[sha256.Size]byte
 }
 
 /*@
 pred (l *prefixLeaf) Inv() {
 	acc(l) &&
-	(l.vrfOutput != nil ==> acc(l.vrfOutput)) &&
+	(l.searchKey != nil ==> acc(l.searchKey)) &&
 	(l.commitment != nil ==> acc(l.commitment))
 }
 @*/
@@ -44,7 +44,7 @@ func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf)
 			value: value,
 			// TODO: Could not use pl.Vrf_output[:], so opted for append.
 			// Folding pl.Inv() failed on using [:]
-			vrfOutput:  append( /*@ p, @*/ []byte{}, pl.Vrf_output...),
+			searchKey:  append( /*@ p, @*/ []byte{}, pl.Vrf_output...),
 			commitment: &c,
 		}
 		// @ fold acc(l_.Inv())
@@ -86,7 +86,7 @@ func mkTree() (t *Prefix) {
 func nodeValueLeaf(nodeValue proofs.NodeValue) (t *Prefix) {
 	l /*@@@*/ := prefixLeaf{
 		value:      nodeValue,
-		vrfOutput:  nil,
+		searchKey:  nil,
 		commitment: nil,
 	}
 	// @ fold l.Inv()
@@ -276,14 +276,14 @@ func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size
 		ok = true
 	} else {
 		// @ unfold acc(leaf.Inv(), p/2)
-		if leaf.vrfOutput == nil {
+		if leaf.searchKey == nil {
 			ok = false
 		} else if leaf.commitment == nil {
 			ok = false
 		} else {
 			c /*@@@*/ := *leaf.commitment
 			r = &c
-			ok = bytes.Equal(leaf.vrfOutput, searchKey /*@, p/2, p @*/)
+			ok = bytes.Equal(leaf.searchKey, searchKey /*@, p/2, p @*/)
 		}
 		// @ fold acc(leaf.Inv(), p/2)
 	}
