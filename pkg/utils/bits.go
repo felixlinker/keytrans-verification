@@ -102,3 +102,29 @@ func Bits(bytes []byte /*@, ghost p perm @*/) (r []bool) {
 	// @ assert rseq == Bits_Pure(bytes)
 	return r
 }
+
+/*@
+pred BitsSliceInv(s [][]bool) {
+	forall i int :: 0 <= i && i < len(s) ==> acc(&s[i]) && acc(s[i])
+}
+@*/
+
+// @ requires noPerm < p
+// @ preserves acc(s, p)
+// @ requires 0 <= start && start < len(s)
+// @ ensures BitsSliceInv(r)
+func FlippedTails(s []bool, start int /*@, ghost p perm @*/) (r [][]bool) {
+	r = make([][]bool, 0)
+	// @ fold BitsSliceInv(r)
+	// @ invariant start <= i && i <= len(s)
+	// @ invariant acc(s, p) && BitsSliceInv(r) && len(r) == i-start
+	for i := start; i < len(s); i++ {
+		tmp /*@@@*/ := make([]bool, 0, i+1)
+		copy(tmp, s[:i+1] /*@, p/2 @*/)
+		tmp[i] = !tmp[i]
+		// @ unfold BitsSliceInv(r)
+		r = append( /*@ p/2, @*/ r, tmp)
+		// @ fold BitsSliceInv(r)
+	}
+	return
+}
