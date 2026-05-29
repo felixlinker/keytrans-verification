@@ -5,15 +5,15 @@ requires acc(BytesMem(s), _)
 decreases
 opaque
 pure func GetBytesContent(s []byte) seq[byte] {
-  return unfolding acc(BytesMem(s), _) in getByteContent(s, 0)
+  return unfolding acc(BytesMem(s), _) in getBytesContent_Rec(s, 0)
 }
 
 ghost
 requires acc(s)
 requires 0 <= idx && idx <= len(s)
 decreases len(s) - idx
-pure func getByteContent(s []byte, idx int) seq[byte] {
-  return idx == len(s) ? seq[byte]{} : seq[byte]{s[idx]} ++ getByteContent(s, idx + 1)
+pure func getBytesContent_Rec(s []byte, idx int) seq[byte] {
+  return idx == len(s) ? seq[byte]{} : seq[byte]{s[idx]} ++ getBytesContent_Rec(s, idx + 1)
 }
 
 ghost
@@ -22,7 +22,7 @@ decreases
 ensures len(s) == len(r) && forall i int :: 0 <= i && i < len(r) ==> r[i] == s[i]
 opaque
 pure func GetUint64sContent(s []uint64) (r seq[uint64]) {
-  return getUint64Content(s, 0)
+  return getUint64sContent_Rec(s, 0)
 }
 
 ghost
@@ -31,8 +31,27 @@ requires 0 <= idx && idx <= len(s)
 ensures len(r) == len(s) - idx
 ensures forall i int :: 0 <= i && i < len(r) ==> r[i] == s[idx+i]
 decreases len(s) - idx
-pure func getUint64Content(s []uint64, idx int) (r seq[uint64]) {
-  return idx == len(s) ? seq[uint64]{} : seq[uint64]{s[idx]} ++ getUint64Content(s, idx + 1)
+pure func getUint64sContent_Rec(s []uint64, idx int) (r seq[uint64]) {
+  return idx == len(s) ? seq[uint64]{} : seq[uint64]{s[idx]} ++ getUint64sContent_Rec(s, idx + 1)
+}
+
+ghost
+requires acc(bs, _)
+requires 0 <= i && i <= len(bs)
+ensures len(r) == len(bs)-i
+ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[i+j]
+decreases len(bs)-i
+pure func getBitsContent_Rec(bs []bool, i int) (r seq[bool]) {
+	return len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ getBitsContent_Rec(bs, i+1))
+}
+
+ghost
+requires acc(bs, _)
+ensures len(bs) == len(r)
+ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[j]
+decreases
+pure func GetBitsContent(bs []bool) (r seq[bool]) {
+	return getBitsContent_Rec(bs, 0)
 }
 
 ghost

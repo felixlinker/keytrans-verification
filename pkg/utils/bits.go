@@ -22,30 +22,11 @@ decreases
 pure func ByteBits_Pure(b byte) (r seq[bool]) {
 	return byteBits_Rec(b, 0, 8)
 }
-
-ghost
-requires acc(bs, _)
-requires 0 <= i && i <= len(bs)
-ensures len(r) == len(bs)-i
-ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[i+j]
-decreases len(bs)-i
-pure func byteBitsSeq_Rec(bs []bool, i int) (r seq[bool]) {
-	return len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ byteBitsSeq_Rec(bs, i+1))
-}
-
-ghost
-requires acc(bs, _)
-ensures len(bs) == len(r)
-ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[j]
-decreases
-pure func BitsSeq(bs []bool) (r seq[bool]) {
-	return byteBitsSeq_Rec(bs, 0)
-}
 @*/
 
 // @ ensures acc(r)
 // @ ensures len(r) == 8
-// @ ensures BitsSeq(r) == ByteBits_Pure(b)
+// @ ensures GetBitsContent(r) == ByteBits_Pure(b)
 func ByteBits(b byte) (r []bool) {
 	r = []bool{}
 	// @ ghost rseq := seq[bool]{}
@@ -84,7 +65,7 @@ pure func Bits_Pure(bs []byte) (r seq[bool]) {
 // @ preserves acc(bytes, p)
 // @ ensures acc(r)
 // @ ensures len(r) == len(bytes)*8
-// @ ensures BitsSeq(r) == Bits_Pure(bytes)
+// @ ensures GetBitsContent(r) == Bits_Pure(bytes)
 func Bits(bytes []byte /*@, ghost p perm @*/) (r []bool) {
 	r = make([]bool, 0, len(bytes)*8)
 	// @ ghost rseq := seq[bool]{}

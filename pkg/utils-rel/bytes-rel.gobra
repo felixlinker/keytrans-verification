@@ -31,7 +31,7 @@ requires 0 <= idx && idx <= len(data)
 requires low(len(data)) && low(idx)
 requires forall i int :: { data[i] } 0 <= i && i < len(data) ==> low(data[i])
 ensures  acc(data, p)
-ensures  result == utils.getByteContent(data, idx)
+ensures  result == utils.getBytesContent_Rec(data, idx)
 ensures  low(result)
 decreases len(data) - idx
 func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) {
