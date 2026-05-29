@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math/rand"
+	"slices"
 	"testing"
 )
 
@@ -20,25 +21,10 @@ var byteBitsTests = []struct {
 }
 
 // @ trusted
-func equalBools(a []bool, b []bool) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
-// @ trusted
 func TestByteBits(t *testing.T) {
 	for _, tc := range byteBitsTests {
 		got := ByteBits(tc.b)
-		if !equalBools(got, tc.want) {
+		if !slices.Equal(got, tc.want) {
 			t.Errorf("ByteBits(%08b) = %v; want %v", tc.b, got, tc.want)
 		}
 	}
@@ -59,7 +45,7 @@ func TestBits(t *testing.T) {
 			}
 
 			got := Bits(bytes)
-			if !equalBools(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("Bits(%v) = %v; want %v", bytes, got, want)
 			}
 		})
