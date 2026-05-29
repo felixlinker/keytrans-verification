@@ -19,6 +19,7 @@ var byteBitsTests = []struct {
 	{b: 0x3c, want: []bool{false, false, true, true, true, true, false, false}},
 }
 
+// @ trusted
 func equalBools(a []bool, b []bool) bool {
 	if len(a) != len(b) {
 		return false
@@ -33,6 +34,7 @@ func equalBools(a []bool, b []bool) bool {
 	return true
 }
 
+// @ trusted
 func TestByteBits(t *testing.T) {
 	for _, tc := range byteBitsTests {
 		got := ByteBits(tc.b)
@@ -42,6 +44,7 @@ func TestByteBits(t *testing.T) {
 	}
 }
 
+// @ trusted
 func TestBits(t *testing.T) {
 	for run := 0; run < 5; run++ {
 		t.Run(fmt.Sprintf("run%d", run), func(t *testing.T) {

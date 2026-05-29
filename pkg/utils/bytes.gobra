@@ -9,24 +9,8 @@ ghost
 requires acc(BytesMem(s1), _) && acc(BytesMem(s2), _)
 decreases
 pure func BytesEqual(s1, s2 []byte) bool {
-	return unfolding acc(BytesMem(s1), _) in 
+	return unfolding acc(BytesMem(s1), _) in
     unfolding acc(BytesMem(s2), _) in
     len(s1) == len(s2) &&
 		forall i int :: {s1[i], s2[i]} 0 <= i && i < len(s1) ==> s1[i] == s2[i]
-}
-
-ghost
-requires acc(BytesMem(s), _)
-decreases
-opaque
-pure func getContent(s []byte) seq[byte] {
-  return unfolding acc(BytesMem(s), _) in getByteContent(s, 0)
-}
-
-ghost
-requires acc(s)
-requires 0 <= idx && idx <= len(s)
-decreases len(s) - idx
-pure func getByteContent(s []byte, idx int) seq[byte] {
-  return idx == len(s) ? seq[byte]{} : seq[byte]{s[idx]} ++ getByteContent(s, idx + 1)
 }

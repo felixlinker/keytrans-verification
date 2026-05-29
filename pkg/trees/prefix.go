@@ -107,7 +107,7 @@ func nodeValueLeaf(nodeValue proofs.NodeValue) (t *prefixTree) {
 // @ requires leaf != nil ==> acc(leaf.Inv())
 // @ preserves acc(steps)
 // @ ensures acc(t.Inv())
-func (t *prefixTree) insertLeaf(steps []bool, depth int, leaf *prefixLeaf) {
+func (t *prefixTree) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 	// @ unfold t.Inv()
 	if depth == 0 {
 		t.leaf = leaf
@@ -120,12 +120,12 @@ func (t *prefixTree) insertLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 			if t.right == nil {
 				t.right = mkTree()
 			}
-			t.right.insertLeaf(stepsRec, depth-1, leaf)
+			t.right.setLeaf(stepsRec, depth-1, leaf)
 		} else {
 			if t.left == nil {
 				t.left = mkTree()
 			}
-			t.left.insertLeaf(stepsRec, depth-1, leaf)
+			t.left.setLeaf(stepsRec, depth-1, leaf)
 		}
 	}
 	// @ fold t.Inv()
@@ -331,7 +331,7 @@ func Dict(label []byte, version uint64, pk []byte, prf proofs.PrefixProof, fullL
 			}
 			// TODO: Express as invariant or enhance gobra
 			// @ assume 0 <= result.Depth && result.Depth <= 255
-			tree.insertLeaf(searchKeyBits, int(result.Depth), toInsert)
+			tree.setLeaf(searchKeyBits, int(result.Depth), toInsert)
 		}
 		// @ fold acc((&fullLadder[i]).Inv(), p)
 		// @ fold acc((&prf.Results[i]).Inv(), p)

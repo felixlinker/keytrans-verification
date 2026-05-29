@@ -10,7 +10,7 @@ import (
 
 type UserState struct {
 	Size                uint64 // 0 means no tree
-	Full_subtrees       []proofs.NodeValue
+	Full_subtrees       []*proofs.NodeValue
 	Frontier_timestamps []uint64
 }
 
@@ -85,7 +85,7 @@ func (st *UserState) UpdateView(newHead FullTreeHead, prf proofs.CombinedTreePro
 		copy(timestamps, prf.Timestamps /*@, p/2 @*/)
 		st.Frontier_timestamps = timestamps
 		//TODO: This is rather for subtree implementation. We don't need it I think.
-		subtrees := make([]proofs.NodeValue, len(prf.Inclusion.Elements))
+		subtrees := make([]*proofs.NodeValue, len(prf.Inclusion.Elements))
 		copy(subtrees, prf.Inclusion.Elements)
 		st.Full_subtrees = subtrees
 	} else {
@@ -129,7 +129,7 @@ func (st *UserState) UpdateView(newHead FullTreeHead, prf proofs.CombinedTreePro
 		return errors.New("incorrect number of timestamps provided")
 	}
 
-	newSubtrees := make([]proofs.NodeValue, len(prf.Inclusion.Elements))
+	newSubtrees := make([]*proofs.NodeValue, len(prf.Inclusion.Elements))
 	copy(newSubtrees, prf.Inclusion.Elements)
 	st.Full_subtrees = newSubtrees
 

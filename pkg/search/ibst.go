@@ -10,11 +10,12 @@ import (
 // @ ensures   acc(r)
 // @ ensures   0 < len(r) && uint64(len(r)) <= size
 // @ ensures   forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i] && r[i] <= size
+// @ ensures   r[0] == utils.PowOf2_pure(utils.Log2Floor_pure(size))
 // @ ensures   r[len(r) - 1] == size
 // @ ensures   low(size) ==> low(len(r)) && forall i int :: { r[i] } 0 <= i && i < len(r) ==> low(r[i])
 // @ decreases size
 func frontier(size uint64) (r []uint64) {
-	i_root := utils.PowOf2(utils.Log2Floor(size))
+	i_root := utils.LargestSmallerPower(size)
 	// @ assert 0 < i_root && i_root <= size
 	r = []uint64{i_root}
 
@@ -30,6 +31,7 @@ func frontier(size uint64) (r []uint64) {
 // @ ensures  acc(r)
 // @ ensures  0 < len(r) && uint64(len(r)) <= size
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
+// @ ensures  r[0] == utils.PowOf2_pure(utils.Log2Floor_pure(size)) - 1
 // @ ensures  r[len(r) - 1] == size - 1
 // @ ensures  low(size) ==> low(len(r)) && forall i int :: { r[i] } 0 <= i && i < len(r) ==> low(r[i])
 // @ decreases
@@ -39,12 +41,14 @@ func Frontier(size uint64) (r []uint64) {
 
 // @ requires  min <= n && n <= max
 // @ ensures   acc(r) && 0 < len(r)
+// @ ensures  r[0] == n
+// @ ensures  r[len(r) - 1] == utils.PowOf2_pure(utils.Log2Floor_pure(max+1-min)) + min - 1
 // @ ensures   forall i int :: { r[i] } 0 <= i && i < len(r) ==> min <= r[i] && r[i] <= max
 // @ decreases max - min
 // note that this function operates on tree nodes starting at 0
 // size = 3: nodes 0, 1, 2 with min=0 and max=2
 func pathToRoot(n uint64, min, max uint64) (r []uint64) {
-	i_root := utils.PowOf2(utils.Log2Floor(max+1-min)) + min - 1
+	i_root := utils.LargestSmallerPower(max+1-min) + min - 1
 	// @ assert min <= i_root && i_root <= max
 	var p []uint64
 	if i_root == n {
@@ -61,8 +65,125 @@ func pathToRoot(n uint64, min, max uint64) (r []uint64) {
 
 // @ requires 0 <= n && n < size
 // @ ensures  acc(r) && 0 < len(r)
+// @ ensures  r[0] == utils.PowOf2_pure(utils.Log2Floor_pure(size)) - 1
+// @ ensures  r[len(r)-1] == n
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
 // @ decreases
 func PathToNode(n uint64, size uint64) (r []uint64) {
 	return utils.Reverse(pathToRoot(n, 0, size-1))
+}
+
+// @ requires 0 <= n && n < size
+// @ ensures  forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && 0 <= r[i] && r[i] < size
+// @ ensures  0 < len(r) && r[0] == n
+func PathToMostRecent(n uint64, size uint64) (r []uint64, k int) {
+	front := Frontier(size)
+	fromRoot := PathToNode(n, size)
+	// @ assert front[0] == fromRoot[0]
+	// @ assert front[len(front)-1] == size - 1
+	// @ assert fromRoot[len(fromRoot)-1] == n
+
+	i := 0
+	diffFound := false
+	// @ invariant 0 <= i && i <= len(front) && i <= len(fromRoot)
+	// @ invariant acc(front, 1/2) && acc(fromRoot, 1/2)
+	// @ invariant !diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i ==> front[j] == fromRoot[j])
+	// @ invariant diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i - 1 ==> front[j] == fromRoot[j])
+	// @ invariant diffFound ==> 0 < i && front[i-1] != fromRoot[i-1]
+	for ; !diffFound && i < len(front) && i < len(fromRoot); i++ {
+		if front[i] != fromRoot[i] {
+			diffFound = true
+		}
+	}
+
+	// @ assert diffFound ==> 2 <= i // as `i != 1`` due to `front[0] == fromRoot[0]`
+
+	// note that the following assert stmt leads to an invalid trigger (see Gobra issue #1030)
+	// assert forall j int :: { &fromRoot[i-1:][j] } 0 <= j && j < len(fromRoot[i-1:]) ==> &fromRoot[i-1:][j] == &fromRoot[i-1+j]
+	fromRootSuffix := fromRoot[i-1:]
+	// @ assert forall j int :: { &fromRootSuffix[j] } 0 <= j && j < len(fromRootSuffix) ==> &fromRootSuffix[j] == &fromRoot[i-1+j]
+	r = utils.Reverse(fromRootSuffix)
+	// @ assert r[0] == n
+	k = len(r) // index where frontier elements start in r
+
+	tmp := r // workaround for Gobra issue #1029
+
+	// @ requires  forall i int :: { &front[i] } 0 <= i && i < len(front) ==> acc(&front[i]) && 0 <= front[i] && front[i] < size
+	// @ requires  0 <= i && i <= len(front)
+	// @ requires  diffFound ==> 2 <= i
+	// @ preserves forall i int :: { &tmp[i] } 0 <= i && i < len(tmp) ==> acc(&tmp[i]) && 0 <= tmp[i] && tmp[i] < size
+	// @ preserves 0 < len(tmp) && tmp[0] == n
+	// @ outline (
+	if diffFound {
+		subFront := front[i-2:]
+		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i-2+j]
+		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+	} else {
+		subFront := front[i:]
+		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i+j]
+		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+	}
+	// @ )
+	r = tmp // workaround for Gobra issue #1029
+	return
+}
+
+// @ requires 0 <= n && n < size
+// @ ensures  acc(r)
+// @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> n < r[i] && r[i] < size
+func YoungerToMostRecent(n uint64, size uint64) (r []uint64, k int) {
+	path, j := PathToMostRecent(n, size)
+	r = make([]uint64, 0)
+	k = j
+	// @ invariant 0 <= i && i <= len(path)
+	// @ invariant forall i int :: { &path[i] } 0 <= i && i < len(path) ==> acc(&path[i], 1/2) && 0 <= path[i] && path[i] < size
+	// @ invariant forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && n < r[i] && r[i] < size
+	for i := 0; i < len(path); i++ {
+		if n < path[i] {
+			r = append( /*@ perm(1/2), @*/ r, path[i])
+		} else if i <= k {
+			// We're dropping an element that occurs before k, i.e., decrement k
+			k--
+		}
+	}
+	return r, k
+}
+
+// Below is effectively a partial implementation of: https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-6.1-2
+// @ requires 0 < rmw
+// @ requires noPerm < p && p < writePerm
+// @ requires 0 < len(timestamps)
+// @ requires acc(timestamps, p) &&
+// @   forall i int :: 0 <= i && i < len(timestamps) ==> 0 <= timestamps[i] &&
+// @   forall i, j int :: 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] < timestamps[j]
+// @ ensures acc(timestamps, p)
+// @ ensures 0 <= i && i < len(timestamps)
+// @ ensures low(utils.getUint64sContent(timestamps)) && low(rmw) ==> low(i)
+func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @*/) (i int) {
+	var t uint64 = 0 // left timestamp in recursive algorithm from spec
+	// @ ghost pureTimestamps := utils.getUint64sContent(timestamps)
+	rightMost := timestamps[len(timestamps)-1] // right timestamp in recursive algorithm from spec
+	i = 0
+	done := false
+	// @ invariant 0 <= t && t <= rightMost
+	// @ invariant 0 <= i && i <= len(timestamps)
+	// @ invariant acc(timestamps, p) && p < writePerm
+	// @ invariant forall j int :: 0 <= j && j < len(timestamps) ==> 0 <= timestamps[j] && timestamps[j] <= rightMost && timestamps[j] == pureTimestamps[j]
+	// @ invariant done ==> 0 < i
+	// @ invariant low(pureTimestamps) && low(rmw) ==> low(rightMost) && low(done) && low(t) && low(i)
+	for ; !done && i < len(timestamps); i++ {
+		if rightMost-t < rmw {
+			done = true
+		} else {
+			t = timestamps[i]
+			// @ assert t == pureTimestamps[i]
+		}
+	}
+
+	if done {
+		i = i - 1
+	} else {
+		i = 0
+	}
+	return
 }

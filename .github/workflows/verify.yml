@@ -14,7 +14,7 @@ on:
 jobs:
   verify-packages:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     container:
       image: ghcr.io/viperproject/gobra:v26.02
     env:
@@ -36,6 +36,7 @@ jobs:
             --hyperMode off \
             --recursive \
             --include "." ".verification" \
+            --checkConsistency \
             --includePackages ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
@@ -53,6 +54,7 @@ jobs:
             --hyperMode extended \
             --recursive \
             --include "." ".verification" \
+            --checkConsistency \
             --excludePackages ${{ env.EXCLUDE_PKGS }} ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics

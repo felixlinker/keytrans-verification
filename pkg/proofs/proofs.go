@@ -39,12 +39,13 @@ pred BinaryLadderStepsInv(steps []BinaryLadderStep) {
 @*/
 
 type InclusionProof struct {
-	Elements []NodeValue // HashValue elements — log-tree inclusion/consistency batch proof
+	Elements []*NodeValue // HashValue elements — log-tree inclusion/consistency batch proof
 }
 
 /*@
-pred (i InclusionProof) Inv() {
-	acc(i.Elements)
+pred (i *InclusionProof) Inv() {
+	acc(i) && i.Elements != nil &&
+	(forall j int :: 0 <= j && j < len(i.Elements) ==> acc(&i.Elements[j]) && acc(i.Elements[j]))
 }
 @*/
 
@@ -101,7 +102,7 @@ type CombinedTreeProof struct {
 	Timestamps    []uint64
 	Prefix_proofs []PrefixProof
 	Prefix_roots  []NodeValue
-	Inclusion     InclusionProof
+	Inclusion     *InclusionProof
 }
 
 /*@
@@ -109,7 +110,7 @@ pred (c CombinedTreeProof) Inv() {
 	acc(c.Timestamps) &&
 	acc(c.Prefix_proofs) &&
 	acc(c.Prefix_roots) &&
-	c.Inclusion.Inv()
+	acc(c.Inclusion.Inv())
 }
 @*/
 
