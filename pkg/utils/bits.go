@@ -4,7 +4,7 @@ package utils
 // @ decreases
 // @ pure
 func byteBit(b byte, i int) bool {
-	return (b>>i)&0x80 > 0
+	return (b<<i)&0x80 > 0
 }
 
 /*@
@@ -111,7 +111,7 @@ pred BitsSliceInv(s [][]bool) {
 
 // @ requires noPerm < p
 // @ preserves acc(s, p)
-// @ requires 0 <= start && start < len(s)
+// @ requires 0 <= start && start <= len(s)
 // @ ensures BitsSliceInv(r)
 func FlippedTails(s []bool, start int /*@, ghost p perm @*/) (r [][]bool) {
 	r = make([][]bool, 0)
@@ -119,7 +119,7 @@ func FlippedTails(s []bool, start int /*@, ghost p perm @*/) (r [][]bool) {
 	// @ invariant start <= i && i <= len(s)
 	// @ invariant acc(s, p) && BitsSliceInv(r) && len(r) == i-start
 	for i := start; i < len(s); i++ {
-		tmp /*@@@*/ := make([]bool, 0, i+1)
+		tmp /*@@@*/ := make([]bool, i+1)
 		copy(tmp, s[:i+1] /*@, p/2 @*/)
 		tmp[i] = !tmp[i]
 		// @ unfold BitsSliceInv(r)
