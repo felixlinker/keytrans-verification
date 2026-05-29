@@ -150,11 +150,11 @@ func YoungerToMostRecent(n uint64, size uint64) (r []uint64) {
 // @ requires 0 < len(timestamps)
 // @ preserves acc(utils.Monotonic(timestamps), p)
 // @ ensures 0 <= i && i < len(timestamps)
-// @ ensures unfolding acc(utils.Monotonic(timestamps), p) in low(utils.getUint64sContent(timestamps)) && low(rmw) ==> low(i)
+// @ ensures unfolding acc(utils.Monotonic(timestamps), p) in low(utils.GetUint64sContent(timestamps)) && low(rmw) ==> low(i)
 func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @*/) (i int) {
 	var t uint64 = 0 // left timestamp in recursive algorithm from spec
 	// @ unfold acc(utils.Monotonic(timestamps), p)
-	// @ ghost pureTimestamps := utils.getUint64sContent(timestamps)
+	// @ ghost pureTimestamps := utils.GetUint64sContent(timestamps)
 	rightMost := timestamps[len(timestamps)-1] // right timestamp in recursive algorithm from spec
 	// @ assume 0 <= rightMost // TODO: Gobra limitation
 	// @ fold acc(utils.Monotonic(timestamps), p)

@@ -4,7 +4,7 @@ ghost
 requires acc(BytesMem(s), _)
 decreases
 opaque
-pure func getBytesContent(s []byte) seq[byte] {
+pure func GetBytesContent(s []byte) seq[byte] {
   return unfolding acc(BytesMem(s), _) in getByteContent(s, 0)
 }
 
@@ -21,7 +21,7 @@ requires acc(s, _)
 decreases
 ensures len(s) == len(r) && forall i int :: 0 <= i && i < len(r) ==> r[i] == s[i]
 opaque
-pure func getUint64sContent(s []uint64) (r seq[uint64]) {
+pure func GetUint64sContent(s []uint64) (r seq[uint64]) {
   return getUint64Content(s, 0)
 }
 
