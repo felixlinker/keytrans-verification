@@ -10,6 +10,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
 type Lookups struct {
 	label       []byte
 	version     uint64

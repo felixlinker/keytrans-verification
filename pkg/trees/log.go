@@ -9,6 +9,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
 type Log struct {
 	index uint64
 	size  uint64
