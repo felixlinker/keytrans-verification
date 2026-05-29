@@ -108,7 +108,7 @@ pred BitsSliceInv(s [][]bool) {
 func FlippedTails(s []bool, start int /*@, ghost p perm @*/) (r [][]bool) {
 	r = make([][]bool, 0)
 	// @ fold BitsSliceInv(r)
-	// @ invariant start <= i && i <= len(s)
+	// @ invariant start <= i
 	// @ invariant acc(s, p) && BitsSliceInv(r) && len(r) == i-start
 	for i := start; i < len(s); i++ {
 		tmp /*@@@*/ := make([]bool, i+1)
