@@ -29,7 +29,7 @@ pure func ByteBits_Pure(b byte) (r seq[bool]) {
 // @ ensures GetBitsContent(r) == ByteBits_Pure(b)
 func ByteBits(b byte) (r []bool) {
 	r = []bool{}
-	// @ ghost rseq := seq[bool]{}
+	// @ rseq := seq[bool]{}
 
 	// @ invariant 0 <= i && i <= 8
 	// @ invariant len(r) == 8-i && len(rseq) == 8-i
@@ -68,7 +68,7 @@ pure func Bits_Pure(bs []byte) (r seq[bool]) {
 // @ ensures GetBitsContent(r) == Bits_Pure(bytes)
 func Bits(bytes []byte /*@, ghost p perm @*/) (r []bool) {
 	r = make([]bool, 0, len(bytes)*8)
-	// @ ghost rseq := seq[bool]{}
+	// @ rseq := seq[bool]{}
 
 	// @ invariant 0 <= i && i <= len(bytes)
 	// @ invariant len(r) == (len(bytes)-i)*8
