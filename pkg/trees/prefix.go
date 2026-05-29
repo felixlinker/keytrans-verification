@@ -9,6 +9,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
 type prefixLeaf struct {
 	value      [sha256.Size]byte
 	searchKey  []byte
@@ -216,10 +218,19 @@ pure func (t *Prefix) NotIncludedPrefixes(depth int) (r seq[seq[bool]]) {
 				let right := utils.PrependAll(t.right == nil ? seq[seq[bool]]{ seq[bool]{} } : t.right.NotIncludedPrefixes(depth+1), true) in
 				left ++ right))))
 }
+
+pred NoPrefixMatches(prefixes seq[seq[bool]], values seq[seq[bool]]) {
+	forall i, j int :: 0 <= i && i < len(prefixes) && 0 <= j && j < len(values) ==>
+		(len(values[j]) < len(prefixes[i]) || prefixes[i] != values[j][:len(prefixes[i])])
+}
 @*/
 
 // @ requires noPerm < p
-// @ preserves t != nil  ==> acc(t.Inv(), p)
+// @ preserves t != nil ==> acc(t.Inv(), p)
+// @ requires low(t.Included())
+// // @ ensures low(r) && err == nil ==>
+// // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
+// // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
 func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) {
 	r = [sha256.Size]byte{}
 	if t != nil {
