@@ -104,6 +104,17 @@ func Bits(bytes []byte /*@, ghost p perm @*/) (r []bool) {
 }
 
 /*@
+ghost
+requires 0 <= start && start <= len(s )
+decreases len(s) - start
+pure func FlippedTailsPure(s seq[bool], start int) (r seq[seq[bool]]) {
+	return start >= len(s) ?
+		seq[seq[bool]]{} :
+		(seq[seq[bool]]{ s[:start] ++ seq[bool]{ !s[start] } }) ++ FlippedTailsPure(s, start+1)
+}
+@*/
+
+/*@
 pred BitsSliceInv(s [][]bool) {
 	forall i int :: 0 <= i && i < len(s) ==> acc(&s[i]) && acc(s[i])
 }
