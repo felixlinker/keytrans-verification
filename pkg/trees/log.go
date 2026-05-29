@@ -272,15 +272,16 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 		// @ invariant acc(prf) && acc(t.Inv()) && acc(consistencyPath, perm(1/2))
 		// @ invariant 0 <= i && i <= len(prf.Elements)
 		// @ invariant forall j int :: i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
-		for i := 0; i < len(prf.Elements); i++ {
+		for i := 0; i < len(prf.Elements) && err == nil; i++ {
 			if ok := t.fillLeftMost(prf.Elements[i]); !ok {
-				return nil, errors.New("could not insert proof element")
+				err = errors.New("could not insert proof element")
 			}
 		}
 
-		err = t.computeHash()
 		if err == nil {
-			newT = t
+			if err = t.computeHash(); err == nil {
+				newT = t
+			}
 		}
 	}
 	return
