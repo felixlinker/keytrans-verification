@@ -178,23 +178,42 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 
 /*@
 ghost
-requires noPerm < p
-requires t != nil ==> acc(t.Inv(), p)
-decreases acc(t.Inv(), p)
-pure func (t *Prefix) Included(p perm) (r seq[seq[bool]]) {
+requires t != nil ==> acc(t.Inv(), _)
+decreases t.Inv()
+pure func (t *Prefix) Included() (r seq[seq[bool]]) {
 	return (t == nil ?
 		// The empty leaf proves inclusion of no prefix
 		seq[seq[bool]]{} :
-		(unfolding acc(t.Inv(), p) in (t.leaf != nil ?
-			(unfolding acc(t.leaf.Inv(), p) in t.leaf.searchKey != nil ?
+		(unfolding t.Inv() in (t.leaf != nil ?
+			(unfolding t.leaf.Inv() in t.leaf.searchKey != nil ?
 				seq[seq[bool]]{ utils.Bits_Pure(t.leaf.searchKey) } :
 				seq[seq[bool]]{}) :
 			// TODO: For the termination measure to work, I must check that
 			// t.left/right are not nil. This is not ideal as the function already
 			// generalizes to t being nil, but I don't know how to express the
 			// termination measure accordingly.
-			(	let left := (t.left == nil ? seq[seq[bool]]{} : utils.PrependAll(t.left.Included(p), false)) in
-				let right := (t.right == nil ? seq[seq[bool]]{} : utils.PrependAll(t.right.Included(p), true)) in
+			(	let left := (t.left == nil ? seq[seq[bool]]{} : t.left.Included()) in
+				let right := (t.right == nil ? seq[seq[bool]]{} : t.right.Included()) in
+				left ++ right))))
+}
+
+ghost
+requires t != nil ==> acc(t.Inv(), _)
+requires 0 <= depth
+decreases t.Inv()
+pure func (t *Prefix) NotIncludedPrefixes(depth int) (r seq[seq[bool]]) {
+	return (t == nil ?
+		// The empty leaf proves non-inclusion of every suffix
+		seq[seq[bool]]{ seq[bool]{} } :
+		(unfolding t.Inv() in (t.leaf != nil ?
+			// A leaf proves the non-inclusion of no suffix
+			(unfolding t.leaf.Inv() in (t.leaf.searchKey != nil ?
+				// No search key proves the non-inclusion of nothing; we are only given a hash
+				seq[seq[bool]]{} :
+				// A search key proves the non-inclusion of every intermediate infix with the last bit respectively flipped
+				utils.FlippedTailsPure(utils.Bits_Pure(t.leaf.searchKey), depth))) :
+			(	let left := utils.PrependAll(t.left == nil ? seq[seq[bool]]{ seq[bool]{} } : t.left.NotIncludedPrefixes(depth+1), false) in
+				let right := utils.PrependAll(t.right == nil ? seq[seq[bool]]{ seq[bool]{} } : t.right.NotIncludedPrefixes(depth+1), true) in
 				left ++ right))))
 }
 @*/
