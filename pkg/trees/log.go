@@ -215,7 +215,6 @@ func (t *Log) setLeaf(idx uint64, l *[sha256.Size]byte) {
 // @ ensures !ok ==> acc(value)
 func (t *Log) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 	// @ unfold acc(t.Inv())
-	// @ defer fold acc(t.Inv())
 	if t.left != nil && t.right != nil {
 		if k := t.left.fillLeftMost(value); k {
 			ok = k
@@ -231,6 +230,7 @@ func (t *Log) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 			ok = false
 		}
 	}
+	// @ fold acc(t.Inv())
 	return
 }
 
@@ -311,7 +311,6 @@ func (t *Log) hashContent() (content []byte, err error) {
 // @ ensures err == nil ==> unfolding acc(t.Inv()) in t.value != nil
 func (t *Log) computeHash() (err error) {
 	// @ unfold acc(t.Inv())
-	// @ defer fold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		if t.value == nil {
 			err = errors.New("missing value for incomplete subtree or leaf")
@@ -329,6 +328,7 @@ func (t *Log) computeHash() (err error) {
 			}
 		} // else all good
 	}
+	// @ fold acc(t.Inv())
 	return
 }
 
@@ -337,7 +337,6 @@ func (t *Log) computeHash() (err error) {
 // @ ensures commitment != nil ==> acc(commitment)
 func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha256.Size]byte, err error) {
 	// @ unfold acc(t.Inv(), p)
-	// @ defer fold acc(t.Inv(), p)
 	if t.size == 1 {
 		var c /*@@@*/ [sha256.Size]byte
 		if t.value != nil {
@@ -358,6 +357,7 @@ func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha2
 			// @ fold acc(t.left.Inv(), p)
 		}
 	}
+	// @ fold acc(t.Inv(), p)
 	return
 }
 

@@ -136,7 +136,6 @@ func (t *Prefix) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 // @ ensures err == nil ==> acc(proofs.NodeValuesInv(es), p)
 func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []*proofs.NodeValue, err error) {
 	// @ unfold acc(t.Inv())
-	// @ defer fold acc(t.Inv())
 	if t.leaf != nil {
 		es = elements
 	} else {
@@ -171,6 +170,7 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 			}
 		}
 	}
+	// @ fold acc(t.Inv())
 	return
 }
 
@@ -268,7 +268,6 @@ func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) 
 // @ ensures l != nil ==> acc(l.Inv(), p/2)
 func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
 	// @ unfold acc(t.Inv(), p)
-	// @ defer fold acc(t.Inv(), p/2)
 	if t.leaf != nil || len(searchKey) == 0 {
 		l = t.leaf
 		ok = t.leaf != nil
@@ -291,6 +290,7 @@ func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf,
 			}
 		}
 	}
+	// @ fold acc(t.Inv(), p/2)
 	return
 }
 
