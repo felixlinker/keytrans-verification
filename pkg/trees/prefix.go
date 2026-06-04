@@ -277,18 +277,12 @@ ghost
 requires  t != nil ==> acc(t.Inv(), _)
 ensures   0 <= r
 decreases acc(t.Inv(), _)
-pure func (t *Prefix) depth() (r int) {
+pure func (t *Prefix) depth() (r uint64) {
 	return t == nil ? 0 :
 		unfolding acc(t.Inv(), _) in
 			let lDepth := t.left == nil ? 0 : t.left.depth() in
 			let rDepth := t.right == nil ? 0 : t.right.depth() in
-			1 + max(lDepth, rDepth)
-}
-
-ghost
-decreases
-pure func max(a, b int) int {
-	return a >= b ? a : b
+			1 + utils.max(lDepth, rDepth)
 }
 
 ghost
