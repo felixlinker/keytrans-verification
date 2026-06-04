@@ -19,22 +19,20 @@ type prefixLeaf struct {
 }
 
 /*@
-// note that a `nil` prefixLeaf satisfies the invariant.
 pred (l *prefixLeaf) Inv() {
-	l != nil ==>
-		acc(l) &&
-		(l.searchKey != nil ==> acc(l.searchKey)) &&
-		(l.commitment != nil ==> acc(l.commitment))
+	acc(l) &&
+	(l.searchKey != nil ==> acc(l.searchKey)) &&
+	(l.commitment != nil ==> acc(l.commitment))
 }
 @*/
 
 // @ requires  noPerm < p
-// @ preserves acc(pl.Inv(), p)
-// @ ensures   l.Inv()
-// @ ensures   pl != nil ==> l != nil
+// @ preserves pl != nil ==> acc(pl.Inv(), p)
+// @ ensures   pl != nil ==> l.Inv()
 func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf) {
-	// @ unfold acc(pl.Inv(), p)
 	if pl != nil {
+		// @ unfold acc(pl.Inv(), p)
+
 		// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
 		input := []byte{0x02}
 		input = append( /*@ p, @*/ input, pl.Vrf_output...)
@@ -52,9 +50,9 @@ func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf)
 			searchKey:  append( /*@ p, @*/ []byte{}, pl.Vrf_output...),
 			commitment: &c,
 		}
+		// @ fold l.Inv()
+		// @ fold acc(pl.Inv(), p)
 	}
-	// @ fold l.Inv()
-	// @ fold acc(pl.Inv(), p)
 	return
 }
 
@@ -65,13 +63,11 @@ type Prefix struct {
 }
 
 /*@
-// note that a `nil` Prefix satisfies the invariant.
 pred (t *Prefix) Inv() {
-	t != nil ==>
-		acc(t) &&
-		(t.leaf != nil ==> acc(t.leaf.Inv())) &&
-		t.left.Inv() &&
-		t.right.Inv()
+	acc(t) &&
+	(t.leaf != nil ==> t.leaf.Inv()) &&
+	(t.left != nil ==> t.left.Inv()) &&
+	(t.right != nil ==> t.right.Inv())
 }
 @*/
 
@@ -81,11 +77,9 @@ pred PrefixesInv(ts []*Prefix) {
 }
 @*/
 
-// @ ensures t.Inv() && t != nil
+// @ ensures t.Inv()
 func mkTree() (t *Prefix) {
 	t = &Prefix{}
-	// @ fold t.left.Inv()
-	// @ fold t.right.Inv()
 	// @ fold t.Inv()
 	return
 }
@@ -198,14 +192,12 @@ func nodeValueLeaf(nodeValue proofs.NodeValue) (t *Prefix) {
 		left:  nil,
 		right: nil,
 	}
-	// @ fold t.left.Inv()
-	// @ fold t.right.Inv()
 	// @ fold t.Inv()
 	return
 }
 
 // @ requires  0 <= depth && depth <= len(steps)
-// @ requires  t.Inv() && leaf.Inv() && t != nil
+// @ requires  t.Inv() && leaf.Inv()
 // @ preserves acc(steps)
 // @ ensures   t.Inv()
 func (t *Prefix) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
@@ -214,8 +206,6 @@ func (t *Prefix) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 		t.leaf = leaf
 		t.left = nil
 		t.right = nil
-		// @ fold t.left.Inv()
-		// @ fold t.right.Inv()
 	} else {
 		stepsRec := steps[1:]
 		// @ assert forall i int :: {&stepsRec[i]} 0 <= i && i < len(stepsRec) ==> &stepsRec[i] == &steps[i+1]
@@ -236,7 +226,7 @@ func (t *Prefix) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 
 // @ requires  noPerm < p
 // @ requires  acc(proofs.NodeValuesInv(elements), p)
-// @ preserves t.Inv() && t != nil
+// @ preserves t.Inv()
 // @ ensures err == nil ==> acc(proofs.NodeValuesInv(es), p)
 func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []*proofs.NodeValue, err error) {
 	// @ unfold t.Inv()
@@ -284,8 +274,26 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 
 /*@
 ghost
-requires  acc(t.Inv(), _)
+requires  t != nil ==> acc(t.Inv(), _)
+ensures   0 <= r
 decreases acc(t.Inv(), _)
+pure func (t *Prefix) depth() (r int) {
+	return t == nil ? 0 :
+		unfolding acc(t.Inv(), _) in
+			let lDepth := t.left == nil ? 0 : t.left.depth() in
+			let rDepth := t.right == nil ? 0 : t.right.depth() in
+			1 + max(lDepth, rDepth)
+}
+
+ghost
+decreases
+pure func max(a, b int) int {
+	return a >= b ? a : b
+}
+
+ghost
+requires  t != nil ==> acc(t.Inv(), _)
+decreases t.depth()
 pure func (t *Prefix) Included() (r seq[seq[bool]]) {
 	return (t == nil ?
 		// The empty leaf proves inclusion of no prefix
@@ -298,9 +306,9 @@ pure func (t *Prefix) Included() (r seq[seq[bool]]) {
 }
 
 ghost
-requires  acc(t.Inv(), _)
+requires  t != nil ==> acc(t.Inv(), _)
 requires  0 <= depth
-decreases acc(t.Inv(), _)
+decreases t.depth()
 pure func (t *Prefix) NotIncludedPrefixes(depth int) (r seq[seq[bool]]) {
 	return (t == nil ?
 		// The empty leaf proves non-inclusion of every suffix
@@ -324,9 +332,9 @@ pred NoPrefixMatches(prefixes seq[seq[bool]], values seq[seq[bool]]) {
 @*/
 
 // @ requires noPerm < p
-// @ requires acc(t.Inv(), p)
+// @ requires t != nil ==> acc(t.Inv(), p)
 // @ requires low(t.Included())
-// @ ensures  acc(t.Inv(), p)
+// @ ensures  t != nil ==> acc(t.Inv(), p)
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
@@ -364,30 +372,33 @@ func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) 
 // @ preserves acc(searchKey, p)
 // @ requires  acc(t.Inv(), p)
 // @ ensures   acc(t.Inv(), p/2)
-// @ ensures   acc(l.Inv(), p/2)
+// @ ensures   l == nil ==> acc(t.Inv(), p/2)
+// @ ensures   l != nil ==> acc(l.Inv(), p/2)
 func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
 	// @ unfold acc(t.Inv(), p)
-	if t == nil {
-		ok = true
-		// @ fold acc(l.Inv(), p/2)
-	} else if t.leaf != nil || len(searchKey) == 0 {
+	if t.leaf != nil || len(searchKey) == 0 {
 		l = t.leaf
 		ok = t.leaf != nil
-		/*@
-		if l == nil {
-			fold acc(l.Inv(), p/2)
-		}
-		@*/
 	} else {
 		rec := searchKey[1:]
 		// @ assert forall i int :: {&rec[i]} 0 <= i && i < len(rec) ==> &rec[i] == &searchKey[i+1]
 		if searchKey[0] {
-			l, ok = t.right.getLeaf(rec /*@, p @*/)
+			if t.right == nil {
+				l = nil
+				ok = true
+			} else {
+				l, ok = t.right.getLeaf(rec /*@, p @*/)
+			}
 		} else {
-			l, ok = t.left.getLeaf(rec /*@, p @*/)
+			if t.left == nil {
+				l = nil
+				ok = true
+			} else {
+				l, ok = t.left.getLeaf(rec /*@, p @*/)
+			}
 		}
 	}
-	// @ fold acc(t.Inv(), p/2)
+	// @ fold acc(t.Inv(), l == nil ? p : p/2)
 	return
 }
 
@@ -423,8 +434,6 @@ func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size
 // @ ensures  err == nil ==> tree.Inv()
 func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err error) {
 	tree = &Prefix{}
-	// @ fold tree.left.Inv()
-	// @ fold tree.right.Inv()
 	// @ fold tree.Inv()
 
 	// @ invariant tree.Inv()
