@@ -127,7 +127,7 @@ pred (t *Tree) Inv() {
 
 /*@
 pred PrefixesInv(ts []*Tree) {
-	forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> acc(&ts[i]) && acc(ts[i].Inv())
+	forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> acc(&ts[i]) && ts[i].Inv()
 }
 @*/
 
