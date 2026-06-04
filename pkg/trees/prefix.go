@@ -19,7 +19,7 @@ type prefixLeaf struct {
 }
 
 /*@
-// note that a `nil` Prefix satisfies the invariant.
+// note that a `nil` prefixLeaf satisfies the invariant.
 pred (l *prefixLeaf) Inv() {
 	l != nil ==>
 		acc(l) &&
