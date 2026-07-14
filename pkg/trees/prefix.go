@@ -84,6 +84,101 @@ func mkTree() (t *Prefix) {
 	return &tmp_t
 }
 
+// @ requires noPerm < p
+// @ preserves acc(t.Inv())
+// @ requires acc(path, p)
+// @ requires 0 <= depth
+// @ requires acc(leaf.Inv())
+func (t *Prefix) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, ghost p perm @*/) (err error) {
+	// @ unfold acc(t.Inv())
+	if depth >= len(path) {
+		err = errors.New("path too short for tree depth")
+	} else if path[depth] {
+		if t.left == nil {
+			t.left = mkTree()
+		}
+		err = t.left.insert(path, depth+1, leaf /*@, p @*/)
+	} else {
+		if t.right == nil {
+			t.right = mkTree()
+		}
+		err = t.right.insert(path, depth+1, leaf /*@, p @*/)
+	}
+	// @ fold acc(t.Inv())
+	return
+}
+
+// @ requires noPerm < p
+// @ preserves acc(t.Inv())
+// @ requires acc(path, p)
+// @ requires 0 <= depth
+// @ requires acc(leaf.Inv())
+func (t *Prefix) insert(path []bool, depth int, leaf *prefixLeaf /*@, ghost p perm @*/) (err error) {
+	if /*@ unfolding acc(t.Inv()) in @*/ t.leaf == nil && t.left == nil && t.right == nil {
+		// @ unfold acc(t.Inv())
+		t.leaf = leaf
+		// @ fold acc(t.Inv())
+	} else if len(path) <= depth {
+		// We arrived at the maximum depth; overwrite the respective leaf
+		// @ unfold acc(t.Inv())
+		t.leaf = leaf
+		// We assume that search keys are all of equal length. We enforce this
+		// property by setting the children to nil.
+		t.left = nil
+		t.right = nil
+		// @ fold acc(t.Inv())
+	} else {
+		// If there already is a leaf, "push it down" into the left or right
+		// subtree.
+		if /*@ unfolding acc(t.Inv()) in @*/ t.leaf != nil {
+			// @ unfold acc(t.Inv())
+			recLeaf := t.leaf
+			t.leaf = nil
+			// @ fold acc(t.Inv())
+
+			if /*@ unfolding acc(recLeaf.Inv()) in @*/ recLeaf.searchKey == nil {
+				err = errors.New("search key error at leaf")
+			} else {
+				// @ unfold acc(recLeaf.Inv())
+				recSearchKey := utils.Bits(recLeaf.searchKey /*@, perm(1/2) @*/)
+				// @ fold acc(recLeaf.Inv())
+				err = t.insertAtChild(recSearchKey, depth, recLeaf /*@, perm(1/2) @*/)
+			}
+		}
+
+		if err == nil {
+			err = t.insertAtChild(path, depth, leaf /*@, p @*/)
+		}
+	}
+	return
+}
+
+// @ preserves acc(t.Inv())
+// @ requires acc(leaf.Inv())
+func (t *Prefix) Insert(leaf *prefixLeaf) (err error) {
+	// @ unfold acc(leaf.Inv(), perm(1/2))
+	searchKeyBits := utils.Bits(leaf.searchKey /*@, perm(1/2) @*/)
+	// @ fold acc(leaf.Inv(), perm(1/2))
+	return t.insert(searchKeyBits, 0, leaf /*@, perm(1/2) @*/)
+}
+
+// @ requires noPerm < p
+// @ preserves t != nil ==> acc(t.Inv(), p)
+func (t *Prefix) IsEmpty( /*@ ghost p perm @*/ ) (empty bool) {
+	if t == nil {
+		empty = true
+	} else {
+		// @ unfold acc(t.Inv(), p)
+		if t.left == nil && t.right == nil && (t.leaf == nil || /*@ unfolding acc(t.leaf.Inv(), p) in @*/ t.leaf.searchKey == nil) {
+			empty = true
+		} else {
+			empty = t.left.IsEmpty( /*@ p @*/ ) && t.right.IsEmpty( /*@ p @*/ )
+		}
+		// @ fold acc(t.Inv(), p)
+	}
+	return
+}
+
 // @ ensures acc(t.Inv())
 func nodeValueLeaf(nodeValue proofs.NodeValue) (t *Prefix) {
 	l /*@@@*/ := prefixLeaf{
@@ -366,4 +461,160 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 		err = errors.New("too many elements provided")
 	} // else all good
 	return
+}
+
+// @ requires noPerm < p
+// @ preserves acc(t.Inv())
+// @ preserves acc(searchKey, p)
+// @ requires 0 <= depth
+// @ requires acc(searchKeyPath, p)
+func (t *Prefix) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, ghost p perm @*/) (err error) {
+	if /*@ unfolding acc(t.Inv()) in @*/ t.leaf != nil {
+		// @ unfold acc(t.Inv())
+		// @ unfold acc(t.leaf.Inv())
+		if t.leaf.searchKey != nil && bytes.Equal(t.leaf.searchKey, searchKey /*@, p, p @*/) {
+			t.leaf.searchKey = nil
+			t.leaf.commitment = nil
+		}
+		// @ fold acc(t.leaf.Inv())
+		// @ fold acc(t.Inv())
+	} else if depth < len(searchKeyPath) {
+		if searchKeyPath[depth] {
+			// @ unfold acc(t.Inv())
+			if t.left != nil {
+				err = t.left.prune(searchKey, searchKeyPath, depth+1 /*@, p @*/)
+			}
+			// @ fold acc(t.Inv())
+		} else {
+			// @ unfold acc(t.Inv())
+			if t.right != nil {
+				err = t.right.prune(searchKey, searchKeyPath, depth+1 /*@, p @*/)
+			}
+			// @ fold acc(t.Inv())
+		}
+
+		if err == nil && t.IsEmpty( /*@ perm(1/2) @*/ ) {
+			if value, e /*@@@*/ := t.Value( /*@ perm(1/2) @*/ ); e != nil {
+				err = e
+			} else {
+				l /*@@@*/ := prefixLeaf{
+					value: value,
+				}
+				// @ fold acc((&l).Inv())
+				// @ unfold acc(t.Inv())
+				t.leaf = &l
+				t.left = nil
+				t.right = nil
+				// @ fold acc(t.Inv())
+			}
+		}
+	}
+	return
+}
+
+// @ requires noPerm < p
+// @ preserves acc(t.Inv())
+// @ requires acc(utils.BytesSliceInv(searchKeys), p)
+func (t *Prefix) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
+	// @ invariant 0 <= i && i <= len(searchKeys)
+	// @ invariant acc(t.Inv())
+	// @ invariant acc(utils.BytesSliceInv(searchKeys), p)
+	for i := 0; i < len(searchKeys); i++ {
+		// @ unfold acc(utils.BytesSliceInv(searchKeys), p)
+		t.prune(searchKeys[i], utils.Bits(searchKeys[i] /*@, p @*/), 0 /*@, p @*/)
+		// @ fold acc(utils.BytesSliceInv(searchKeys), p)
+	}
+}
+
+// @ requires prf1 != nil ==> acc(prf1.Inv())
+// @ requires prf2 != nil ==> acc(prf2.Inv())
+// @ ensures  prf != nil  ==> acc(prf.Inv())
+func mergeProofs(prf1, prf2 *proofs.PrefixProof) (prf *proofs.PrefixProof) {
+	if prf1 == nil {
+		prf = prf2
+	} else if prf2 == nil {
+		prf = prf1
+	} else {
+		// @ unfold acc(prf1.Inv())
+		// @ unfold acc(prf2.Inv())
+
+		// @ unfold acc(proofs.PrefixSearchResultsInv(prf1.Results))
+		// @ unfold acc(proofs.PrefixSearchResultsInv(prf2.Results))
+		tmp1 := prf1.Results
+		// @ assert forall i int :: {tmp1[i]} 0 <= i && i < len(tmp1) ==> tmp1[i] == prf1.Results[i]
+		tmp1 = append( /*@ perm(1/2), @*/ tmp1, prf2.Results...)
+		// @ assert len(tmp1) == len(prf1.Results) + len(prf2.Results)
+		// @ assert forall i int :: {tmp1[i]} 0 <= i && i < len(prf2.Results) ==> tmp1[len(prf1.Results)+i] == prf2.Results[i]
+		// @ fold acc(proofs.PrefixSearchResultsInv(tmp1))
+
+		// @ unfold acc(proofs.NodeValuesInv(prf1.Elements))
+		// @ unfold acc(proofs.NodeValuesInv(prf2.Elements))
+		tmp2 := prf1.Elements
+		// @ assert forall i int :: {tmp2[i]} 0 <= i && i < len(tmp2) ==> tmp2[i] == prf1.Elements[i]
+		tmp2 = append( /*@ perm(1/2), @*/ tmp2, prf2.Elements...)
+		// @ assert forall i int :: {tmp2[i]} 0 <= i && i < len(prf2.Elements) ==> tmp2[len(prf1.Elements)+i] == prf2.Elements[i]
+		// @ fold acc(proofs.NodeValuesInv(tmp2))
+
+		prf1.Results = tmp1
+		prf1.Elements = tmp2
+		// @ fold acc(prf1.Inv())
+		prf = prf1
+	}
+	return prf
+}
+
+// @ requires noPerm < p
+// @ preserves acc(t.Inv(), p)
+// @ ensures prf != nil ==> acc(prf.Inv())
+func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.PrefixProof) {
+	// @ unfold acc(t.Inv(), p)
+	if t.leaf != nil {
+		tmp /*@@@*/ := proofs.PrefixProof{
+			Results:  []*proofs.PrefixSearchResult{},
+			Elements: []*proofs.NodeValue{},
+		}
+		// @ fold acc(proofs.PrefixSearchResultsInv(tmp.Results))
+		// @ fold acc(proofs.NodeValuesInv(tmp.Elements))
+		// @ unfold acc(t.leaf.Inv(), p)
+		if t.leaf.searchKey != nil && t.leaf.commitment != nil {
+			comm /*@@@*/ := *t.leaf.commitment
+			leaf /*@@@*/ := proofs.PrefixLeaf{
+				Commitment: &comm,
+			}
+			copy(leaf.Vrf_output, t.leaf.searchKey /*@, p @*/)
+			// @ fold acc((&leaf).Inv())
+			searchResult /*@@@*/ := proofs.PrefixSearchResult{
+				Leaf:  &leaf,
+				Depth: depth,
+			}
+			// @ fold acc((&searchResult).Inv())
+			tmp.Results = []*proofs.PrefixSearchResult{&searchResult}
+			// @ fold acc(proofs.PrefixSearchResultsInv(tmp.Results))
+		} else {
+			val /*@@@*/ := t.leaf.value
+			tmp.Elements = []*proofs.NodeValue{&val}
+			// @ fold acc(proofs.NodeValuesInv(tmp.Elements))
+		}
+		// @ fold acc(t.leaf.Inv(), p)
+		prf = &tmp
+		// @ fold acc(prf.Inv())
+	} else {
+		var prf1, prf2 *proofs.PrefixProof
+		if t.left != nil {
+			prf1 = t.left.proofFromTree(depth + 1 /*@, p @*/)
+		}
+		if t.right != nil {
+			prf2 = t.right.proofFromTree(depth + 1 /*@, p @*/)
+		}
+		prf = mergeProofs(prf1, prf2)
+	}
+	// @ fold acc(t.Inv(), p)
+	return prf
+}
+
+// @ requires noPerm < p
+// @ preserves acc(t.Inv(), p)
+// @ ensures prf != nil ==> acc(prf.Inv())
+func (t *Prefix) ProofFromTree( /*@ ghost p perm @*/ ) (prf *proofs.PrefixProof) {
+	return t.proofFromTree(0 /*@, p @*/)
 }

@@ -96,6 +96,10 @@ pure func FlippedTailsPure(s seq[bool], start int) (r seq[seq[bool]]) {
 @*/
 
 /*@
+pred BytesSliceInv(s [][]byte) {
+	forall i int :: 0 <= i && i < len(s) ==> acc(&s[i]) && acc(s[i])
+}
+
 pred BitsSliceInv(s [][]bool) {
 	forall i int :: 0 <= i && i < len(s) ==> acc(&s[i]) && acc(s[i])
 }
