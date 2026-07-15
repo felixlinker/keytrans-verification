@@ -322,7 +322,7 @@ pred NoPrefixMatches(prefixes seq[seq[bool]], values seq[seq[bool]]) {
 
 // @ requires noPerm < p
 // @ preserves t != nil ==> acc(t.Inv(), p)
-// @ requires low(t.Included())
+// // @ requires low(t.Included())
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
