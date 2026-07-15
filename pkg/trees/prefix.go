@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	"github.com/felixlinker/keytrans-verification/pkg/trees/misc"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
@@ -528,43 +529,6 @@ func (t *Prefix) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
 	}
 }
 
-// @ requires prf1 != nil ==> acc(prf1.Inv())
-// @ requires prf2 != nil ==> acc(prf2.Inv())
-// @ ensures  prf != nil  ==> acc(prf.Inv())
-func mergeProofs(prf1, prf2 *proofs.PrefixProof) (prf *proofs.PrefixProof) {
-	if prf1 == nil {
-		prf = prf2
-	} else if prf2 == nil {
-		prf = prf1
-	} else {
-		// @ unfold acc(prf1.Inv())
-		// @ unfold acc(prf2.Inv())
-
-		// @ unfold acc(proofs.PrefixSearchResultsInv(prf1.Results))
-		// @ unfold acc(proofs.PrefixSearchResultsInv(prf2.Results))
-		tmp1 := prf1.Results
-		// @ assert forall i int :: {tmp1[i]} 0 <= i && i < len(tmp1) ==> tmp1[i] == prf1.Results[i]
-		tmp1 = append( /*@ perm(1/2), @*/ tmp1, prf2.Results...)
-		// @ assert len(tmp1) == len(prf1.Results) + len(prf2.Results)
-		// @ assert forall i int :: {tmp1[i]} 0 <= i && i < len(prf2.Results) ==> tmp1[len(prf1.Results)+i] == prf2.Results[i]
-		// @ fold acc(proofs.PrefixSearchResultsInv(tmp1))
-
-		// @ unfold acc(proofs.NodeValuesInv(prf1.Elements))
-		// @ unfold acc(proofs.NodeValuesInv(prf2.Elements))
-		tmp2 := prf1.Elements
-		// @ assert forall i int :: {tmp2[i]} 0 <= i && i < len(tmp2) ==> tmp2[i] == prf1.Elements[i]
-		tmp2 = append( /*@ perm(1/2), @*/ tmp2, prf2.Elements...)
-		// @ assert forall i int :: {tmp2[i]} 0 <= i && i < len(prf2.Elements) ==> tmp2[len(prf1.Elements)+i] == prf2.Elements[i]
-		// @ fold acc(proofs.NodeValuesInv(tmp2))
-
-		prf1.Results = tmp1
-		prf1.Elements = tmp2
-		// @ fold acc(prf1.Inv())
-		prf = prf1
-	}
-	return prf
-}
-
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p)
 // @ ensures prf != nil ==> acc(prf.Inv())
@@ -608,7 +572,7 @@ func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.P
 		if t.right != nil {
 			prf2 = t.right.proofFromTree(depth + 1 /*@, p @*/)
 		}
-		prf = mergeProofs(prf1, prf2)
+		prf = misc.MergeProofs(prf1, prf2)
 	}
 	// @ fold acc(t.Inv(), p)
 	return prf
