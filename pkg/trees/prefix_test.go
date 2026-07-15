@@ -1,0 +1,128 @@
+package trees
+
+import (
+	"crypto/sha256"
+	"fmt"
+	"math/rand"
+	"testing"
+
+	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+)
+
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
+const prefixTestSeed int64 = 0x5eed
+
+// @ trusted
+func TestPrefixInsertionOrderAndPruning(t *testing.T) {
+	rng := rand.New(rand.NewSource(prefixTestSeed))
+	t.Logf("random seed: %d", prefixTestSeed)
+
+	for testCase := 0; testCase < 4; testCase++ {
+		t.Run(fmt.Sprintf("random set %d", testCase), func(t *testing.T) {
+			commitments := randomLeafs(t, rng, 15)
+			trees := make([]*Prefix, 0, 50)
+
+			t.Run("all insertion orders have the same root", func(t *testing.T) {
+				var wantRoot [sha256.Size]byte
+				for range cap(trees) {
+					tree := buildPrefixTree(t, rng, commitments)
+					if root, err := tree.Value(); err != nil {
+						t.Fatalf("Value(): %v", err)
+					} else if len(trees) == 0 {
+						wantRoot = root
+					} else if root != wantRoot {
+						t.Fatalf("root = %x, want %x", root, wantRoot)
+					}
+
+					trees = append(trees, tree)
+				}
+			})
+
+			t.Run("random pruning preserves only retained inclusions", func(t *testing.T) {
+				for _, tree := range trees {
+					rootBefore, err := tree.Value()
+					if err != nil {
+						t.Fatalf("Value() before pruning error: %v", err)
+					}
+
+					selection := rng.Perm(len(commitments))
+					prunedCount := 1 + rng.Intn(len(commitments)-1)
+					pruned := make(map[int]bool, prunedCount)
+					prunedKeys := make([][]byte, 0, prunedCount)
+					for _, index := range selection[:prunedCount] {
+						pruned[index] = true
+						prunedKeys = append(prunedKeys, commitments[index][:])
+					}
+
+					tree.Prune(prunedKeys)
+					rootAfter, err := tree.Value()
+					if err != nil {
+						t.Fatalf("Value() after pruning error: %v", err)
+					} else if rootAfter != rootBefore {
+						t.Fatalf("pruning changed root: got %x, want %x", rootAfter, rootBefore)
+					}
+
+					for index, commitment := range commitments {
+						_, ok := tree.Search(commitment[:])
+						if pruned[index] == ok {
+							t.Fatalf("Search(%x) did not match pruning status", commitment)
+						}
+					}
+				}
+			})
+		})
+	}
+}
+
+func randomLeafs(t *testing.T, rng *rand.Rand, count int) []*[sha256.Size]byte {
+	t.Helper()
+
+	keys := make([]*[sha256.Size]byte, 0, count)
+	seen := make(map[[sha256.Size]byte]bool, count)
+	for len(keys) < count {
+		var searchKey [sha256.Size]byte
+		if _, err := rng.Read(searchKey[:]); err != nil {
+			t.Fatalf("generating random search key: %v", err)
+		}
+
+		if !seen[searchKey] {
+			seen[searchKey] = true
+			keys = append(keys, &searchKey)
+		}
+	}
+	return keys
+}
+
+func buildPrefixTree(t *testing.T, rng *rand.Rand, commitments []*[sha256.Size]byte) *Prefix {
+	t.Helper()
+
+	tree := mkTree()
+	tmp := make([]*[sha256.Size]byte, len(commitments))
+	copy(tmp, commitments)
+	for 0 < len(tmp) {
+		i := rng.Intn(len(tmp))
+		commitment := *tmp[i]
+		leaf := commitmentLeaf(&proofs.PrefixLeaf{
+			Vrf_output: commitment[:],
+			Commitment: &commitment,
+		})
+		if err := tree.Insert(leaf); err != nil {
+			t.Fatalf("Insert(%x): %v", commitment, err)
+		}
+		tmp = remove(tmp, i)
+	}
+
+	return tree
+}
+
+func remove[T any](s []T, i int) (r []T) {
+	if i < len(s) {
+		if 2 <= len(s) && i < len(s)-1 {
+			s[i] = s[len(s)-1]
+		}
+		return s[:len(s)-1]
+	} else {
+		return s
+	}
+}
