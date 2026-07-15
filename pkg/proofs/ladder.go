@@ -12,7 +12,6 @@ pure func TStar_pure(t1 uint64, t2 uint64) (r uint64) {
 }
 @*/
 
-// =============================Core Lemma======================================
 /*@
 ghost
 requires 0 < t1 && 0 < t2

@@ -8,7 +8,6 @@ import (
 
 	//@ "github.com/felixlinker/keytrans-verification/pkg/arb"
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
-	"github.com/felixlinker/keytrans-verification/pkg/prefixtree"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/trees"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
@@ -36,12 +35,6 @@ import (
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 /*@
-// PrefixTreesInv encapsulates per-element permissions for prefix tree slices.
-// Reduces quantifier count in the SIF product program.
-pred PrefixTreesInv(trees []prefixtree.PT) {
-		forall i int :: { &trees[i] } 0 <= i && i < len(trees) ==> acc(&trees[i]) && trees[i] != nil && trees[i].Inv()
-}
-
 // RootHashesInv encapsulates per-element permissions for root hash slices.
 pred RootHashesInv(hashes []*[sha256.Size]byte) {
 	forall i int :: { &hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i]) && utils.BytesMem(hashes[i][:])
@@ -170,125 +163,6 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	// Phase 5: Single return
 	if err == nil {
 		res = resp.Value
-	}
-	return
-}
-
-// returns the full binary ladder together with tstar for the targets of the two
-// executions (if both executions are active).
-// @ requires 0 <= target
-// @ ensures  proofs.BinaryLadderInv(r)
-// @ ensures  0 <= idx && idx < len(r)
-// @ ensures  proofs.IstStar(r, target, rel(target, 1), idx) // this is the same as wrapping it in `rel(_, 0)`
-// @ ensures  rel(proofs.IstStar(r, target, rel(target, 0), idx), 1)
-// @ decreases
-func FullBinaryLadderSteps_with_tstar(target uint64) (r []uint64 /*@, ghost idx int @*/) {
-	// the following ghost if stmt avoids an issue in the encoding where we
-	// access `rel(target, 1)` before it is available (as it gets first copied
-	// into a local variable)
-	//@ ghost if true {} // acts like a "barrier" in the encoding
-	/*@
-	// t2 should be the other execution's target (if both are active).
-	// we obtain the other execution's target by checking whether "this" execution's target
-	// is equal to the first execution's target. This is an indirect way of figuring out
-	// whether we currently look at the first or second execution:
-	t2 := target == rel(target, 0) ? rel(target, 1) : rel(target, 0)
-	ghost if t2 < 0 {
-		t2 = 0 // make sure that t2 is non-negative even if the other execution is not active
-	}
-	@*/
-	return proofs.FullBinaryLadderSteps(target /*@, t2 @*/)
-}
-
-// alternative implementation for `FullBinaryLadderSteps_with_tstar` based on universal introduction
-// but deriving the same property about tstar
-// @ requires 0 <= target
-// @ ensures  proofs.BinaryLadderInv(r)
-// @ ensures  0 <= idx && idx < len(r)
-// @ ensures  proofs.IstStar(r, target, rel(target, 1), idx) // this is the same as wrapping it in `rel(_, 0)`
-// @ ensures  rel(proofs.IstStar(r, target, rel(target, 0), idx), 1)
-// @ decreases
-func FullBinaryLadderSteps_with_tstar_alternative(target uint64) (r []uint64 /*@, ghost idx int @*/) {
-	// let t2 be arbitrary:
-	//@ t2 := arb.GetArbUint64()
-	r /*@, idx @*/ = proofs.FullBinaryLadderSteps(target /*@, 0 <= t2 ? t2 : 0 @*/)
-
-	// since t2 is arbitrary, termination of `FullBinaryLadderSteps` does not depend on t2, and
-	// `r` is the same for all t2, we can perform a universal introduction on t2:
-	//@ assert 0 <= t2 ==> proofs.IstStar(r, target, t2, idx)
-	//@ assume forall t2 uint64 :: { proofs.IstStar(r, target, t2, idx) } 0 <= t2 ==> proofs.IstStar(r, target, t2, idx)
-	// since `proofs.IstStar(r, target, t2, idx)` holds for all non-negative t2, it also holds for `rel(target, 1)` as
-	// stated in the postcondition.
-	return
-}
-
-// CheckGreatest iterates over the binary ladder steps and queries the prefix
-// tree at each step to check consistency with t being the greatest version.
-// Returns:
-//
-//	-1: a version at or below t is absent (gap detected)
-//	 0: all steps are consistent (t is the greatest version)
-//	+1: a version above t is present (greater version exists)
-//
-// @ requires  noPerm < p
-// @ requires  prefixTree != nil
-// @ preserves acc(prefixTree.Inv(), p)
-// @ preserves acc(utils.BytesMem(label), p)
-// @ preserves acc(utils.BytesMem(rootHash), p)
-// @ requires  0 <= t
-// @ ensures   err == nil ==> -1 <= res && res <= 1
-// @ ensures   err == nil && res == 0 &&
-// @ 	low(utils.GetBytesContent(label)) &&
-// @ 	low(utils.GetBytesContent(rootHash)) ==>
-// @ 		low(t)
-// @ decreases
-func CheckGreatest(prefixTree prefixtree.PT, label []byte, t uint64, rootHash []byte /*@, ghost p perm @*/) (res int, err error) {
-	steps /*@, tStarIdx @*/ := FullBinaryLadderSteps_with_tstar(t)
-	//@ unfold proofs.BinaryLadderInv(steps)
-
-	determined := false // this flag encodes early returns, which are not yet supported by Gobra's hypermode
-	//@ tStar := steps[tStarIdx]
-
-	// after visiting `tStarIdx` and successfully passing all checks (i.e., `!determined`), one of the following two cases will hold.
-	// as desired, these two conditions are contradictory unless `low(t)` holds, which establishes the postcondition.
-	//@ labelSeq, rootHashSeq := utils.GetBytesContent(label), utils.GetBytesContent(rootHash)
-	//@ non_incl_expected :=  prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) && tStar <= t
-	//@ incl_expected 	  := !prefixtree.GetCommitmentExists(labelSeq, tStar, rootHashSeq) &&     t  <  tStar
-
-	//@ invariant acc(prefixTree.Inv(), p/2)
-	//@ invariant acc(utils.BytesMem(rootHash), p/2) && rootHashSeq == utils.GetBytesContent(rootHash)
-	//@ invariant acc(utils.BytesMem(label), p/2) && labelSeq == utils.GetBytesContent(label)
-	//@ invariant acc(steps, 1/2)
-	//@ invariant forall i int :: {steps[i]} 0 <= i && i < len(steps) ==> 0 <= steps[i]
-	//@ invariant 0 <= idx && idx <= len(steps)
-	//@ invariant 0 <= tStarIdx && tStarIdx < len(steps)
-	//@ invariant tStar == steps[tStarIdx]
-	//@ invariant determined != (res == 0 && err == nil)
-	//@ invariant err == nil ==> -1 <= res && res <= 1
-	//@ invariant tStarIdx < idx && !determined ==> non_incl_expected || incl_expected
-	//@ decreases len(steps) - idx
-	for idx := 0; idx < len(steps); idx++ {
-		if !determined {
-			step := steps[idx]
-			var commitment []byte
-			commitment, err = prefixTree.GetCommitment(label, step, rootHash /*@, p/4 @*/)
-			if err != nil {
-				if !determined {
-					res = 404
-					determined = true
-				}
-			} else {
-				incl := commitment != nil
-				if !incl && step <= t {
-					res = -1
-					determined = true
-				}
-				if incl && t < step {
-					res = 1
-					determined = true
-				}
-			}
-		}
 	}
 	return
 }
