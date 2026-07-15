@@ -3,7 +3,6 @@ package proofs
 import (
 	"bytes"
 	"crypto/sha256"
-	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
@@ -132,41 +131,3 @@ pred (c *CombinedTreeProof) Inv() {
 	NodeValuesInv(c.Prefix_roots) && acc(c.Inclusion.Inv())
 }
 @*/
-
-type CompleteBinaryLadderStep struct {
-	Step   PrefixLeaf
-	Result PrefixSearchResult
-}
-
-// @ requires forall i int :: { &results[i] } 0 <= i && 0 < len(results) ==> acc(&results[i]) && acc(results[i].Inv())
-// @ requires forall i int :: { &steps[i] } 0 <= i && 0 < len(steps) ==> acc(&steps[i]) && acc(steps[i].Inv())
-// @ ensures acc(completeSteps)
-// @ ensures len(completeSteps) == len(results)
-// @ trusted
-func CombineResults(results []*PrefixSearchResult, steps []*BinaryLadderStep) (completeSteps []*CompleteBinaryLadderStep, err error) {
-	completeSteps = make([]*CompleteBinaryLadderStep, len(results))
-	if len(steps) != len(results) {
-		return completeSteps, errors.New("steps mismatch")
-	}
-
-	// @ invariant 0 <= i && i <= len(results)
-	// @ invariant len(completeSteps) == len(results)
-	// @ invariant acc(completeSteps)
-	// @ invariant forall i int :: { &results[i] } 0 <= i && 0 < len(results) ==> acc(&results[i]) && acc(results[i].Inv())
-	// @ invariant forall j int :: { &steps[j] } 0 <= j && 0 < len(steps) ==> acc(&steps[j]) && acc(steps[j].Inv())
-	for i := 0; i < len(results); i++ {
-		// @ unfold acc(steps[i].Inv())
-		completeSteps[i] = &CompleteBinaryLadderStep{
-			Step: PrefixLeaf{
-				// TODO: To be replaced with actual VRF output
-				// TODO: This might be nil; now set to nil because of API changes;
-				// function will be deprecated anyway
-				Commitment: nil,
-			},
-			Result: *results[i],
-		}
-		// @ fold acc(steps[i].Inv())
-	}
-
-	return completeSteps, nil
-}
