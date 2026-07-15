@@ -75,6 +75,7 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 	}
 }
 
+// @ trusted
 func randomLeafs(t *testing.T, rng *rand.Rand, count int) []*[sha256.Size]byte {
 	t.Helper()
 
@@ -94,6 +95,7 @@ func randomLeafs(t *testing.T, rng *rand.Rand, count int) []*[sha256.Size]byte {
 	return keys
 }
 
+// @ trusted
 func buildPrefixTree(t *testing.T, rng *rand.Rand, commitments []*[sha256.Size]byte) *Prefix {
 	t.Helper()
 
@@ -116,7 +118,8 @@ func buildPrefixTree(t *testing.T, rng *rand.Rand, commitments []*[sha256.Size]b
 	return tree
 }
 
-func remove[T any](s []T, i int) (r []T) {
+// @ trusted
+func remove(s []*[sha256.Size]byte, i int) (r []*[sha256.Size]byte) {
 	if i < len(s) {
 		if 2 <= len(s) && i < len(s)-1 {
 			s[i] = s[len(s)-1]
