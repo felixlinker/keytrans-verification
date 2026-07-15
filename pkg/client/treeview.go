@@ -107,10 +107,17 @@ func (st *UserState) UpdateView(newSize uint64, timestamps []uint64, prf *proofs
 // encountered verifying MkPrefixes.
 // @ requires trees.PrefixesInv(ts)
 // @ requires t.Inv()
-// @ requires unfolding trees.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
 // @ ensures trees.PrefixesInv(r) && len(r) == len(ts)+1
 func auxAppend(ts []*trees.Prefix, t *trees.Prefix) (r []*trees.Prefix) {
 	// @ unfold trees.PrefixesInv(ts)
+	/*@
+	assert forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t by contra {
+		// existential elimination (requires Gobra `7fa4f86` or newer):
+		var j int :| 0 <= j && j < len(ts) && ts[j] == t
+		unfold ts[j].Inv()
+		unfold t.Inv()
+	}
+	@*/
 	r = append( /*@ perm(1/2), @*/ ts, t)
 	// @ fold trees.PrefixesInv(r)
 	return
@@ -170,9 +177,6 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 				} else if !bytes.Equal(utils.FromDigest(v), utils.FromDigest(*c) /*@, perm(1/2), perm(1/2) @*/) {
 					err = errors.New("log tree commitment does not match prefix tree root hash")
 				} else {
-					// TODO: I cannot assert below because whenever I add new lines after
-					// the (now) assume, the assert fails.
-					// @ assume unfolding trees.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
 					ts = auxAppend(ts, t)
 				}
 				// @ fold acc(st.Inv(), p)
