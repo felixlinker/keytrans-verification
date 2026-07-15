@@ -94,15 +94,15 @@ func (t *Prefix) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, gho
 	if depth >= len(path) {
 		err = errors.New("path too short for tree depth")
 	} else if path[depth] {
-		if t.left == nil {
-			t.left = mkTree()
-		}
-		err = t.left.insert(path, depth+1, leaf /*@, p @*/)
-	} else {
 		if t.right == nil {
 			t.right = mkTree()
 		}
 		err = t.right.insert(path, depth+1, leaf /*@, p @*/)
+	} else {
+		if t.left == nil {
+			t.left = mkTree()
+		}
+		err = t.left.insert(path, depth+1, leaf /*@, p @*/)
 	}
 	// @ fold acc(t.Inv())
 	return
@@ -169,7 +169,9 @@ func (t *Prefix) IsEmpty( /*@ ghost p perm @*/ ) (empty bool) {
 		empty = true
 	} else {
 		// @ unfold acc(t.Inv(), p)
-		if t.left == nil && t.right == nil && (t.leaf == nil || /*@ unfolding acc(t.leaf.Inv(), p) in @*/ t.leaf.searchKey == nil) {
+		if t.leaf != nil {
+			empty = /*@ unfolding acc(t.leaf.Inv(), p) in @*/ t.leaf.searchKey == nil
+		} else if t.left == nil && t.right == nil {
 			empty = true
 		} else {
 			empty = t.left.IsEmpty( /*@ p @*/ ) && t.right.IsEmpty( /*@ p @*/ )
@@ -481,14 +483,14 @@ func (t *Prefix) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, gh
 	} else if depth < len(searchKeyPath) {
 		if searchKeyPath[depth] {
 			// @ unfold acc(t.Inv())
-			if t.left != nil {
-				err = t.left.prune(searchKey, searchKeyPath, depth+1 /*@, p @*/)
+			if t.right != nil {
+				err = t.right.prune(searchKey, searchKeyPath, depth+1 /*@, p @*/)
 			}
 			// @ fold acc(t.Inv())
 		} else {
 			// @ unfold acc(t.Inv())
-			if t.right != nil {
-				err = t.right.prune(searchKey, searchKeyPath, depth+1 /*@, p @*/)
+			if t.left != nil {
+				err = t.left.prune(searchKey, searchKeyPath, depth+1 /*@, p @*/)
 			}
 			// @ fold acc(t.Inv())
 		}
