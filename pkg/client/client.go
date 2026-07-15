@@ -105,9 +105,9 @@ pred (s *SearchResponse) Inv() {
 func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (res *proofs.UpdateValue, err error) {
 	// we use `err` to skip later phases instead of returning early, which is not yet supported by Gobra's hypermode.
 
-	var label []byte
 	// @ unfold acc(query.Inv())
 	// @ unfold acc(utils.BytesMem(query.Label))
+	label := make([]byte, len(query.Label))
 	copy(label, query.Label /*@, perm(1/2) @*/)
 	// @ fold acc(utils.BytesMem(query.Label))
 	// @ fold acc(query.Inv())

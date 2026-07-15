@@ -46,6 +46,7 @@ func mapGet(m map[uint64][]byte, k uint64 /*@, ghost p perm @*/) (r []byte, ok b
 	var tmp []byte
 	// @ unfold acc(SliceMapInv(m), p)
 	if tmp, ok = m[k]; ok {
+		r = make([]byte, len(tmp))
 		copy(r, tmp /*@, p @*/)
 	}
 	// @ fold acc(SliceMapInv(m), p)
@@ -82,7 +83,7 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 			if searchKey, ok := crypto.VRF_verify(pk, label, ladderVersion, leafData.Proof /*@, p @*/); !ok {
 				err = errors.New("VRF verification failed")
 			} else {
-				var k []byte
+				k := make([]byte, len(searchKey))
 				copy(k, searchKey /*@, perm(1/2) @*/)
 				mapSet(ladderVersion, k, vrfOutputs)
 
@@ -90,8 +91,7 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 					if leafData.Commitment == nil {
 						err = errors.New("missing commitment")
 					} else {
-						var c []byte
-						copy(c, utils.FromDigest(*leafData.Commitment) /*@, perm(1/2) @*/)
+						c := utils.FromDigest(*leafData.Commitment)
 						mapSet(ladderVersion, c, commitments)
 					}
 				}
@@ -101,6 +101,7 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 		}
 
 		ls = &Lookups{
+			label:       make([]byte, len(label)),
 			version:     version,
 			vrfOutputs:  vrfOutputs,
 			commitments: commitments,
