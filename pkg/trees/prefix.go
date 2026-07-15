@@ -437,7 +437,7 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 		// TODO: Should verify `result.result_type`, but I skip this for now as it seems to
 		// be redundant information
 
-		var searchKey []byte
+		searchKey := make([]byte, len(result.Leaf.Vrf_output))
 		// @ unfold acc(result.Leaf.Inv(), p)
 		copy(searchKey, result.Leaf.Vrf_output /*@, p @*/)
 		// @ fold acc(result.Leaf.Inv(), p)
@@ -529,6 +529,19 @@ func (t *Prefix) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
 	}
 }
 
+// @ ensures acc(prf.Inv())
+func emptyTreeProof() (prf *proofs.PrefixProof) {
+	val /*@@@*/ := proofs.NodeValue{}
+	tmp /*@@@*/ := proofs.PrefixProof{
+		Results:  []*proofs.PrefixSearchResult{},
+		Elements: []*proofs.NodeValue{&val},
+	}
+	// @ fold acc(proofs.PrefixSearchResultsInv(tmp.Results))
+	// @ fold acc(proofs.NodeValuesInv(tmp.Elements))
+	// @ fold acc((&tmp).Inv())
+	return &tmp
+}
+
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p)
 // @ ensures prf != nil ==> acc(prf.Inv())
@@ -545,6 +558,7 @@ func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.P
 		if t.leaf.searchKey != nil && t.leaf.commitment != nil {
 			comm /*@@@*/ := *t.leaf.commitment
 			leaf /*@@@*/ := proofs.PrefixLeaf{
+				Vrf_output: make([]byte, len(t.leaf.searchKey)),
 				Commitment: &comm,
 			}
 			copy(leaf.Vrf_output, t.leaf.searchKey /*@, p @*/)
@@ -568,9 +582,13 @@ func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.P
 		var prf1, prf2 *proofs.PrefixProof
 		if t.left != nil {
 			prf1 = t.left.proofFromTree(depth + 1 /*@, p @*/)
+		} else {
+			prf1 = emptyTreeProof()
 		}
 		if t.right != nil {
 			prf2 = t.right.proofFromTree(depth + 1 /*@, p @*/)
+		} else {
+			prf2 = emptyTreeProof()
 		}
 		prf = misc.MergeProofs(prf1, prf2)
 	}
