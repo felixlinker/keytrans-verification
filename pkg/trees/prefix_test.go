@@ -39,7 +39,7 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 				}
 			})
 
-			t.Run("random pruning preserves only retained inclusions", func(t *testing.T) {
+			t.Run("pruning and proof construction works correctly", func(t *testing.T) {
 				for _, tree := range trees {
 					rootBefore, err := tree.Value()
 					if err != nil {
@@ -48,10 +48,8 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 
 					selection := rng.Perm(len(commitments))
 					prunedCount := 1 + rng.Intn(len(commitments)-1)
-					pruned := make(map[int]bool, prunedCount)
 					prunedKeys := make([][]byte, 0, prunedCount)
 					for _, index := range selection[:prunedCount] {
-						pruned[index] = true
 						prunedKeys = append(prunedKeys, commitments[index][:])
 					}
 
@@ -63,10 +61,35 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 						t.Fatalf("pruning changed root: got %x, want %x", rootAfter, rootBefore)
 					}
 
-					for index, commitment := range commitments {
-						_, ok := tree.Search(commitment[:])
-						if pruned[index] == ok {
-							t.Fatalf("Search(%x) did not match pruning status", commitment)
+					for i, index := range selection {
+						_, ok := tree.Search(commitments[index][:])
+						expectInclusion := prunedCount <= i
+						if ok != expectInclusion {
+							t.Fatalf("Search(%x) did not match pruning status", index)
+						}
+					}
+
+					prf := tree.ProofFromTree()
+					reconstructed, err := MkPrefix(prf)
+					if err != nil {
+						t.Fatalf("MkPrefix(ProofFromTree()): %v", err)
+					}
+
+					reconstructedRoot, err := reconstructed.Value()
+					if err != nil {
+						t.Fatalf("reconstructed Value(): %v", err)
+					} else if reconstructedRoot != rootAfter {
+						t.Fatalf("reconstructed root = %x, want %x", reconstructedRoot, rootAfter)
+					}
+
+					for _, commitment := range commitments {
+						expectCommitment, expectOk := tree.Search(commitment[:])
+						gotCommitment, gotOk := reconstructed.Search(commitment[:])
+						if *expectCommitment != *gotCommitment {
+							t.Fatalf("got commitment = %x, want %x", *gotCommitment, *expectCommitment)
+						}
+						if expectOk != gotOk {
+							t.Fatalf("got inclusion status = %v, want %v", gotOk, expectOk)
 						}
 					}
 				}
