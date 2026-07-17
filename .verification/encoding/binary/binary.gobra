@@ -14,6 +14,10 @@ func (b bigEndian) AppendUint64(buf []byte, x uint64) (r []byte)
 
 requires  noPerm < p
 preserves acc(buf, p)
+func (b bigEndian) Uint16(buf []byte, ghost p perm) (n uint16)
+
+requires  noPerm < p
+preserves acc(buf, p)
 func (b bigEndian) Uint32(buf []byte, ghost p perm) (n uint32)
 
 requires  noPerm < p

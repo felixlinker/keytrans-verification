@@ -36,7 +36,7 @@ type FullTreeHead struct {
 
 /*@
 pred (f *FullTreeHead) Inv() {
-	acc(f) && acc(f.Tree_head.Inv())
+	acc(f) && (f.Tree_head != nil ==> acc(f.Tree_head.Inv()))
 }
 @*/
 
@@ -84,7 +84,7 @@ func (st *UserState) UpdateView(newSize uint64, timestamps []uint64, prf *proofs
 			st.Tree = newTree
 
 			// @ unfold acc(utils.Monotonic(timestamps), p)
-			// @ assert forall i, j int :: {st.Frontier_timestamps[i]} 0 <= i && i < len(st.Frontier_timestamps) && 0 < j && j < len(timestamps) ==> st.Frontier_timestamps[i] < timestamps[j]
+			// @ assert forall i, j int :: {st.Frontier_timestamps[i], timestamps[j]} 0 <= i && i < len(st.Frontier_timestamps) && 0 < j && j < len(timestamps) ==> st.Frontier_timestamps[i] < timestamps[j]
 
 			frontier := search.Frontier(newSize)
 			keep := len(frontier) - len(timestamps)

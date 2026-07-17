@@ -11,7 +11,7 @@ func AllZero(bs [sha256.Size]byte) bool {
 	return bs == [sha256.Size]byte{}
 }
 
-// @ requires 0 <= lenBytes && lenBytes <= 32/8
+// @ requires 0 <= lenBytes && lenBytes <= 4
 // @ ensures p != nil ==> acc(p)
 func ReadBytes(buf *bytes.Buffer, lenBytes int) (p []byte, err error) {
 	lenBuf := make([]byte, lenBytes)

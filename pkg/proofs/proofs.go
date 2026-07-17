@@ -36,13 +36,12 @@ type InclusionProof struct {
 
 /*@
 pred (i *InclusionProof) Inv() {
-	acc(i) && i.Elements != nil &&
-	(forall j int :: 0 <= j && j < len(i.Elements) ==> acc(&i.Elements[j]) && acc(i.Elements[j]))
+	acc(i) && acc(NodeValuesInv(i.Elements))
 }
 @*/
 
 // Values for PrefixSearchResult.Result_type
-type PrefixSearchResultType int
+type PrefixSearchResultType byte
 
 const (
 	Reserved           PrefixSearchResultType = 0
@@ -73,7 +72,7 @@ type PrefixSearchResult struct {
 
 /*@
 pred (p *PrefixSearchResult) Inv() {
-	acc(p) && acc(p.Leaf.Inv())
+	acc(p) && (p.Leaf != nil ==> acc(p.Leaf.Inv()))
 }
 
 pred PrefixSearchResultsInv(rs []*PrefixSearchResult) {

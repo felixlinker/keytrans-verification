@@ -68,3 +68,14 @@ func FromDigest(dig [sha256.Size]byte) (r []byte) {
 	}
 	return r
 }
+
+// @ requires noPerm < p
+// @ requires len(s) == sha256.Size
+// @ preserves acc(s, p)
+// @ ensures acc(r)
+func ToDigest(s []byte /*@, ghost p perm @*/) (r *[sha256.Size]byte) {
+	tmp /*@@@*/ := [sha256.Size]byte{}
+	copy(tmp[:], s /*@, p @*/)
+	r = &tmp
+	return
+}
