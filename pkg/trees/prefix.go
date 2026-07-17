@@ -439,8 +439,8 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 		// TODO: Should verify `result.result_type`, but I skip this for now as it seems to
 		// be redundant information
 
-		searchKey := make([]byte, len(result.Leaf.Vrf_output))
 		// @ unfold acc(result.Leaf.Inv(), p)
+		searchKey := make([]byte, len(result.Leaf.Vrf_output))
 		copy(searchKey, result.Leaf.Vrf_output /*@, p @*/)
 		// @ fold acc(result.Leaf.Inv(), p)
 		searchKeyBits := utils.Bits(searchKey /*@, perm(1/2) @*/)
