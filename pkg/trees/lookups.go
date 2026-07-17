@@ -7,6 +7,7 @@ import (
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	"github.com/felixlinker/keytrans-verification/pkg/trees/misc"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
@@ -20,38 +21,10 @@ type Lookups struct {
 }
 
 /*@
-pred SliceMapInv(m map[uint64][]byte) {
-	acc(m) && (forall k uint64 :: k elem m ==> acc(m[k]))
-}
-
 pred (ls *Lookups) Inv() {
-	acc(ls) && acc(ls.label) && acc(SliceMapInv(ls.vrfOutputs)) && acc(SliceMapInv(ls.commitments))
+	acc(ls) && acc(ls.label) && acc(misc.SliceMapInv(ls.vrfOutputs)) && acc(misc.SliceMapInv(ls.commitments))
 }
 @*/
-
-// Auxiliary map functions to speed up verification
-
-// @ requires acc(v)
-// @ preserves acc(SliceMapInv(m))
-func mapSet(k uint64, v []byte, m map[uint64][]byte) {
-	// @ unfold acc(SliceMapInv(m))
-	m[k] = v
-	// @ fold acc(SliceMapInv(m))
-}
-
-// @ requires noPerm < p
-// @ preserves acc(SliceMapInv(m), p)
-// @ ensures ok ==> acc(r)
-func mapGet(m map[uint64][]byte, k uint64 /*@, ghost p perm @*/) (r []byte, ok bool) {
-	var tmp []byte
-	// @ unfold acc(SliceMapInv(m), p)
-	if tmp, ok = m[k]; ok {
-		r = make([]byte, len(tmp))
-		copy(r, tmp /*@, p @*/)
-	}
-	// @ fold acc(SliceMapInv(m), p)
-	return
-}
 
 // @ requires noPerm < p
 // @ requires 0 <= version
@@ -66,12 +39,12 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 	} else {
 		vrfOutputs := make(map[uint64][]byte, len(steps))
 		commitments := make(map[uint64][]byte, len(steps)/2)
-		// @ fold acc(SliceMapInv(vrfOutputs))
-		// @ fold acc(SliceMapInv(commitments))
+		// @ fold acc(misc.SliceMapInv(vrfOutputs))
+		// @ fold acc(misc.SliceMapInv(commitments))
 		// @ unfold acc(proofs.BinaryLadderInv(steps))
 
 		// @ invariant 0 <= i && i <= len(fullLadder)
-		// @ invariant acc(label, p) && acc(pk, p) && acc(steps) && acc(SliceMapInv(vrfOutputs)) && acc(SliceMapInv(commitments))
+		// @ invariant acc(label, p) && acc(pk, p) && acc(steps) && acc(misc.SliceMapInv(vrfOutputs)) && acc(misc.SliceMapInv(commitments))
 		// @ invariant len(steps) == len(fullLadder)
 		// @ invariant acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 		for i := 0; i < len(fullLadder) && err == nil; i++ {
@@ -85,14 +58,14 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 			} else {
 				k := make([]byte, len(searchKey))
 				copy(k, searchKey /*@, perm(1/2) @*/)
-				mapSet(ladderVersion, k, vrfOutputs)
+				misc.MapSet(ladderVersion, k, vrfOutputs)
 
 				if ladderVersion <= version {
 					if leafData.Commitment == nil {
 						err = errors.New("missing commitment")
 					} else {
 						c := utils.FromDigest(*leafData.Commitment)
-						mapSet(ladderVersion, c, commitments)
+						misc.MapSet(ladderVersion, c, commitments)
 					}
 				}
 			}
@@ -136,7 +109,7 @@ func (ls *Lookups) CheckPrefixTree(t *Prefix /*@, ghost p perm @*/) (r *[sha256.
 	for i := 0; i < len(steps) && err == nil && !done; i++ {
 		lookup := steps[i]
 		// @ unfold acc(ls.Inv(), p)
-		if searchKey, ok := mapGet(ls.vrfOutputs, lookup /*@, p @*/); !ok {
+		if searchKey, ok := misc.MapGet(ls.vrfOutputs, lookup /*@, p @*/); !ok {
 			err = errors.New("vrfOutputs incomplete")
 		} else {
 			if c, ok := t.Search(searchKey /*@, tp @*/); !ok {
@@ -149,7 +122,7 @@ func (ls *Lookups) CheckPrefixTree(t *Prefix /*@, ghost p perm @*/) (r *[sha256.
 						// r == nil && err == nil means that the prefix tree has a greatest
 						// version smaller than the expected one, which can be consistent with
 						// a greatest version lookup.
-					} else if cExpected, ok := mapGet(ls.commitments, lookup /*@, p @*/); !ok {
+					} else if cExpected, ok := misc.MapGet(ls.commitments, lookup /*@, p @*/); !ok {
 						err = errors.New("commitments incomplete")
 					} else if !bytes.Equal(cExpected, utils.FromDigest(*c) /*@, p, p @*/) {
 						err = errors.New("failed expected prefix tree lookup")

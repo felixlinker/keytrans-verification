@@ -50,3 +50,31 @@ func MergeProofs(prf1, prf2 *proofs.PrefixProof) (prf *proofs.PrefixProof) {
 	// @ fold acc(prf.Inv())
 	return
 }
+
+/*@
+pred SliceMapInv(m map[uint64][]byte) {
+	acc(m) && (forall k uint64 :: k elem m ==> acc(m[k]))
+}
+@*/
+
+// @ requires acc(v)
+// @ preserves acc(SliceMapInv(m))
+func MapSet(k uint64, v []byte, m map[uint64][]byte) {
+	// @ unfold acc(SliceMapInv(m))
+	m[k] = v
+	// @ fold acc(SliceMapInv(m))
+}
+
+// @ requires noPerm < p
+// @ preserves acc(SliceMapInv(m), p)
+// @ ensures ok ==> acc(r)
+func MapGet(m map[uint64][]byte, k uint64 /*@, ghost p perm @*/) (r []byte, ok bool) {
+	var tmp []byte
+	// @ unfold acc(SliceMapInv(m), p)
+	if tmp, ok = m[k]; ok {
+		r = make([]byte, len(tmp))
+		copy(r, tmp /*@, p @*/)
+	}
+	// @ fold acc(SliceMapInv(m), p)
+	return
+}
