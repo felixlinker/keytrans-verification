@@ -29,6 +29,27 @@ func (v *UpdateValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 	return buf.Bytes()
 }
 
+// @ preserves acc(v.Inv())
+func (v *UpdateValue) Unmarshal(buf *bytes.Buffer, expectSuffix bool) (err error) {
+	if p, e := utils.ReadBytes(buf, 32/8); e != nil {
+		err = e
+	} else {
+		// @ unfold acc(v.Inv())
+		v.Value = p
+		// @ fold acc(v.Inv())
+	}
+
+	// NOTE: We currently do not support third party auditing and thus drop the
+	// signature during parsing
+	if expectSuffix {
+		if _, e := utils.ReadBytes(buf, 16/8); e != nil {
+			err = e
+		}
+	}
+
+	return
+}
+
 type CommitmentValue struct {
 	Opening []byte
 	Label   []byte
