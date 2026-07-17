@@ -531,6 +531,44 @@ func (t *Prefix) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
 	}
 }
 
+// @ requires noPerm < p
+// @ preserves acc(leaf.Inv(), p)
+// @ ensures acc(prf.Inv())
+func leafTreeProof(leaf *prefixLeaf, depth uint8 /*@, ghost p perm @*/) (prf *proofs.PrefixProof) {
+	tmp /*@@@*/ := proofs.PrefixProof{
+		Results:  []*proofs.PrefixSearchResult{},
+		Elements: []*proofs.NodeValue{},
+	}
+	// @ fold acc(proofs.PrefixSearchResultsInv(tmp.Results))
+	// @ fold acc(proofs.NodeValuesInv(tmp.Elements))
+
+	// @ unfold acc(leaf.Inv(), p)
+	if leaf.searchKey != nil && leaf.commitment != nil {
+		comm /*@@@*/ := *leaf.commitment
+		prfLeaf /*@@@*/ := proofs.PrefixLeaf{
+			Vrf_output: make([]byte, len(leaf.searchKey)),
+			Commitment: &comm,
+		}
+		copy(prfLeaf.Vrf_output, leaf.searchKey /*@, p @*/)
+		// @ fold acc((&prfLeaf).Inv())
+		searchResult /*@@@*/ := proofs.PrefixSearchResult{
+			Leaf:  &prfLeaf,
+			Depth: depth,
+		}
+		// @ fold acc((&searchResult).Inv())
+		tmp.Results = []*proofs.PrefixSearchResult{&searchResult}
+		// @ fold acc(proofs.PrefixSearchResultsInv(tmp.Results))
+	} else {
+		val /*@@@*/ := leaf.value
+		tmp.Elements = []*proofs.NodeValue{&val}
+		// @ fold acc(proofs.NodeValuesInv(tmp.Elements))
+	}
+	// @ fold acc(leaf.Inv(), p)
+	prf = &tmp
+	// @ fold acc(prf.Inv())
+	return
+}
+
 // @ ensures acc(prf.Inv())
 func emptyTreeProof() (prf *proofs.PrefixProof) {
 	val /*@@@*/ := proofs.NodeValue{}
@@ -546,40 +584,11 @@ func emptyTreeProof() (prf *proofs.PrefixProof) {
 
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p)
-// @ ensures prf != nil ==> acc(prf.Inv())
+// @ ensures acc(prf.Inv())
 func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.PrefixProof) {
 	// @ unfold acc(t.Inv(), p)
 	if t.leaf != nil {
-		tmp /*@@@*/ := proofs.PrefixProof{
-			Results:  []*proofs.PrefixSearchResult{},
-			Elements: []*proofs.NodeValue{},
-		}
-		// @ fold acc(proofs.PrefixSearchResultsInv(tmp.Results))
-		// @ fold acc(proofs.NodeValuesInv(tmp.Elements))
-		// @ unfold acc(t.leaf.Inv(), p)
-		if t.leaf.searchKey != nil && t.leaf.commitment != nil {
-			comm /*@@@*/ := *t.leaf.commitment
-			leaf /*@@@*/ := proofs.PrefixLeaf{
-				Vrf_output: make([]byte, len(t.leaf.searchKey)),
-				Commitment: &comm,
-			}
-			copy(leaf.Vrf_output, t.leaf.searchKey /*@, p @*/)
-			// @ fold acc((&leaf).Inv())
-			searchResult /*@@@*/ := proofs.PrefixSearchResult{
-				Leaf:  &leaf,
-				Depth: depth,
-			}
-			// @ fold acc((&searchResult).Inv())
-			tmp.Results = []*proofs.PrefixSearchResult{&searchResult}
-			// @ fold acc(proofs.PrefixSearchResultsInv(tmp.Results))
-		} else {
-			val /*@@@*/ := t.leaf.value
-			tmp.Elements = []*proofs.NodeValue{&val}
-			// @ fold acc(proofs.NodeValuesInv(tmp.Elements))
-		}
-		// @ fold acc(t.leaf.Inv(), p)
-		prf = &tmp
-		// @ fold acc(prf.Inv())
+		prf = leafTreeProof(t.leaf, depth /*@, p @*/)
 	} else {
 		var prf1, prf2 *proofs.PrefixProof
 		if t.left != nil {
@@ -600,7 +609,7 @@ func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.P
 
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p)
-// @ ensures prf != nil ==> acc(prf.Inv())
+// @ ensures acc(prf.Inv())
 func (t *Prefix) ProofFromTree( /*@ ghost p perm @*/ ) (prf *proofs.PrefixProof) {
 	return t.proofFromTree(0 /*@, p @*/)
 }
