@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/search"
 	"github.com/felixlinker/keytrans-verification/pkg/trees"
@@ -141,7 +142,9 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 		)
 		// @ fold acc(st.Inv(), p)
 
-		if len(prfs)+mrd+1 != len(frontier) {
+		if len(frontier) != /*@ unfolding acc(st.Inv(), p) in @*/ len(st.Frontier_timestamps) {
+			err = errors.New("length mismatch between frontier and frontier timestamps")
+		} else if len(prfs)+mrd+1 != len(frontier) {
 			err = errors.New("too few or too many prefix proofs")
 		} else {
 			ts = make([]*trees.Prefix, 0, len(prfs))
@@ -151,12 +154,17 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 			// @ invariant 0 <= i && i <= len(prfs)
 			// @ invariant 0 <= i+mrd && i+mrd <= len(frontier)
 			// @ invariant acc(frontier) && acc(prfs, p) && acc(st.Inv(), p)
+			// @ invariant len(frontier) == unfolding acc(st.Inv(), p) in len(st.Frontier_timestamps)
 			// @ invariant unfolding acc(st.Inv(), p) in st.Tree != nil
 			// @ invariant forall j int :: {prfs[j]} i <= j && j < len(prfs) ==> acc(prfs[j].Inv(), p)
 			// @ invariant trees.PrefixesInv(ts)
 			// @ invariant 0 < i && err == nil ==> 0 < len(ts)
 			for i := 0; i < len(prfs) && err == nil; i++ {
 				// @ unfold acc(st.Inv(), p)
+				// @ unfold acc(utils.Monotonic(st.Frontier_timestamps), p)
+				timestamp := st.Frontier_timestamps[i+mrd]
+				// @ fold acc(utils.Monotonic(st.Frontier_timestamps), p)
+
 				if t, e := trees.MkPrefix(prfs[i] /*@, p @*/); e != nil {
 					err = e
 				} else if v, e := t.Value( /*@ p @*/ ); e != nil {
@@ -165,9 +173,7 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 					err = e
 				} else if c == nil {
 					err = errors.New("no commitment for frontier node")
-					// TODO: Probably, checking for equality below is wrong and there is
-					// more included in the hash than the prefix tree root
-				} else if !bytes.Equal(utils.FromDigest(v), utils.FromDigest(*c) /*@, perm(1/2), perm(1/2) @*/) {
+				} else if !bytes.Equal(utils.FromDigest(v), crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/) /*@, perm(1/2), perm(1/2) @*/) {
 					err = errors.New("log tree commitment does not match prefix tree root hash")
 				} else {
 					// TODO: I cannot assert below because whenever I add new lines after

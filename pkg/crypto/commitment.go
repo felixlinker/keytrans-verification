@@ -69,3 +69,11 @@ func VerifyCommitmentValue(commitment []byte, cv *CommitmentValue /*@, ghost p p
 	mac.Write(cv.Marshal( /*@ p @*/ ) /*@, p @*/)
 	return hmac.Equal(commitment, mac.Sum(nil /*@, noPerm @*/) /*@, p @*/)
 }
+
+// @ requires noPerm < p
+// @ preserves acc(prefix_tree, p)
+// @ ensures acc(r)
+func LogEntryHash(timestamp uint64, prefix_tree *[sha256.Size]byte /*@, ghost p perm @*/) (r []byte) {
+	input := append( /*@ p, @*/ utils.Uint64(timestamp), (*prefix_tree)[:]...)
+	return utils.FromDigest(sha256.Sum256(input /*@, p @*/))
+}
