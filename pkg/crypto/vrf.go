@@ -14,7 +14,7 @@ func encode(label []byte, version uint64 /*@, ghost p perm @*/) (res []byte) {
 	buf := bytes.NewBuffer([]byte{})
 	buf.WriteByte(utils.Uint8(len(label)))
 	buf.Write(label)
-	buf.Write(utils.Uint64(version))
+	buf.Write(utils.Uint32(uint32(version)))
 	return buf.Bytes()
 }
 
