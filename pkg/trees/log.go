@@ -106,15 +106,15 @@ func Singleton() (t *Log) {
 	return &tree
 }
 
-// @ requires forall i int :: 0 <= i && i < len(leafs) ==> acc(&leafs[i]) && acc(leafs[i])
+// @ requires forall i int :: 0 <= i && i < len(leaves) ==> acc(&leaves[i]) && acc(leaves[i])
 // @ ensures acc(t.Inv())
-func FullTree(leafs []*[sha256.Size]byte) (t *Log) {
+func FullTree(leaves []*[sha256.Size]byte) (t *Log) {
 	t = Singleton()
-	// @ invariant 0 <= i && i <= len(leafs)
-	// @ invariant forall j int :: i <= j && j < len(leafs) ==> acc(&leafs[j]) && acc(leafs[j])
+	// @ invariant 0 <= i && i <= len(leaves)
+	// @ invariant forall j int :: i <= j && j < len(leaves) ==> acc(&leaves[j]) && acc(leaves[j])
 	// @ invariant acc(t.Inv())
-	for i := 0; i < len(leafs); i++ {
-		t.setLeaf(uint64(i), leafs[i])
+	for i := 0; i < len(leaves); i++ {
+		t.setLeaf(uint64(i), leaves[i])
 	}
 	t.computeHash()
 	return t
