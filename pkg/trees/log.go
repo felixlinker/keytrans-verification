@@ -94,7 +94,9 @@ func (t *Log) prune(keeping []uint64) (r []uint64) {
 	return
 }
 
-// @ ensures acc(t.Inv())
+// @ requires 1 <= size
+// @ ensures t != nil && acc(t.Inv())
+// @ ensures unfolding acc(t.Inv()) in t.index == index && t.size == size
 func Singleton(index uint64, size uint64) (t *Log) {
 	tree /*@@@*/ := Log{
 		index: index,
@@ -108,7 +110,10 @@ func Singleton(index uint64, size uint64) (t *Log) {
 }
 
 // @ preserves acc(t.Inv())
-// @ ensures acc(copied.Inv())
+// @ ensures copied != nil && acc(copied.Inv())
+// @ ensures old(unfolding acc(t.Inv()) in t.size) == (unfolding acc(t.Inv()) in t.size)
+// @ ensures old(unfolding acc(t.Inv()) in t.index) == (unfolding acc(t.Inv()) in t.index)
+// @ ensures unfolding acc(copied.Inv()) in unfolding acc(t.Inv()) in copied.index == t.index && copied.size == t.size
 func (t *Log) copy() (copied *Log) {
 	// @ unfold acc(t.Inv())
 	copied = Singleton(t.index, t.size)
@@ -154,8 +159,7 @@ func (t *Log) fit(idx uint64) {
 			t.left = newLeft
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
-			newRight := Singleton(newLeft.index+newLeft.size, 1)
-			t.right = newRight
+			t.right = Singleton( /*@ unfolding acc(newLeft.Inv()) in @*/ newLeft.index+newLeft.size, 1)
 			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
 		}
 
@@ -166,7 +170,6 @@ func (t *Log) fit(idx uint64) {
 		if t.index+(lsp*2) <= idx {
 			t.size = lsp * 2
 		} else {
-			// @ assume 0 <= idx
 			t.size = idx - t.index + 1
 		}
 
@@ -197,7 +200,8 @@ func (t *Log) setLeaf(idx uint64, l *[sha256.Size]byte) {
 			// @ assert t.left == nil && t.right == nil
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
 			t.left = Singleton(t.index, sizeLeft)
-			t.right = Singleton(t.left.index+t.left.size, t.size-sizeLeft)
+			rightIndex := /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index + t.left.size
+			t.right = Singleton(rightIndex, t.size-sizeLeft)
 		}
 
 		if idx < /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size {
