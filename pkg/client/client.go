@@ -135,7 +135,7 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	if err == nil {
 		// @ unfold acc(st.Inv())
 		// @ unfold acc(st.Config.Inv())
-		lookups, err = trees.MkLookups(label, *resp.Version, st.Config.SignaturePublicKey, resp.Binary_ladder /*@, perm(1/2) @*/)
+		lookups, err = trees.MkLookups(label, *resp.Version, st.Config.VrfPublicKey, resp.Binary_ladder /*@, perm(1/2) @*/)
 		// @ fold acc(st.Config.Inv())
 		// @ fold acc(st.Inv())
 	}
@@ -144,7 +144,7 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	if err == nil {
 		// @ unfold acc(st.Inv())
 		// @ unfold acc(st.Config.Inv())
-		err = proofs.PullLeaves(resp.Search.Prefix_proofs, resp.Binary_ladder, st.Config.SignaturePublicKey, label, *resp.Version /*@, perm(1/2) @*/)
+		err = proofs.PullLeaves(resp.Search.Prefix_proofs, resp.Binary_ladder, st.Config.VrfPublicKey, label, *resp.Version /*@, perm(1/2) @*/)
 		// @ fold acc(st.Config.Inv())
 		// @ fold acc(st.Inv())
 	}

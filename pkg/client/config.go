@@ -12,9 +12,9 @@ type Configuration struct {
 	Mode                       DeploymentMode
 	ReasonableMonitoringWindow uint64
 	SignaturePublicKey         []byte
+	VrfPublicKey               []byte
 	/*
 		Ciphersuite                uint16
-		VrfPublicKey               []byte
 		LeafPublickey              []byte //Only for Contact monitoring or ThirdParty
 		MaxAuditorLag              uint64 //Only for ThirdParty
 		AuditorStartPos            uint64 //Only for ThirdParty
@@ -29,6 +29,6 @@ type Configuration struct {
 
 /*@
 pred (c *Configuration) Inv() {
-	acc(c) && acc(c.SignaturePublicKey) && 0 < c.ReasonableMonitoringWindow
+	acc(c) && acc(c.SignaturePublicKey) && acc(c.VrfPublicKey)
 }
 @*/
