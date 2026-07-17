@@ -35,7 +35,7 @@ var testLeafs = []*[sha256.Size]byte{
 func TestFit(t *testing.T) {
 	for i := range uint64(8) {
 		t.Run(fmt.Sprintf("fitting to size %d", i+1), func(t *testing.T) {
-			tree := Singleton()
+			tree := Singleton(0, 1)
 			tree.fit(i)
 			assertSize(t, tree, i+1)
 		})

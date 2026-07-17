@@ -95,9 +95,10 @@ func (t *Log) prune(keeping []uint64) (r []uint64) {
 }
 
 // @ ensures acc(t.Inv())
-func Singleton() (t *Log) {
+func Singleton(index uint64, size uint64) (t *Log) {
 	tree /*@@@*/ := Log{
-		size:  1,
+		index: index,
+		size:  size,
 		value: nil,
 		left:  nil,
 		right: nil,
@@ -106,10 +107,27 @@ func Singleton() (t *Log) {
 	return &tree
 }
 
+// @ preserves acc(t.Inv())
+// @ ensures acc(copied.Inv())
+func (t *Log) copy() (copied *Log) {
+	// @ unfold acc(t.Inv())
+	copied = Singleton(t.index, t.size)
+	// @ unfold acc(copied.Inv())
+	copied.value = t.value
+	t.value = nil
+	copied.left = t.left
+	t.left = nil
+	copied.right = t.right
+	t.right = nil
+	// @ fold acc(copied.Inv())
+	// @ fold acc(t.Inv())
+	return
+}
+
 // @ requires forall i int :: 0 <= i && i < len(leaves) ==> acc(&leaves[i]) && acc(leaves[i])
 // @ ensures acc(t.Inv())
 func FullTree(leaves []*[sha256.Size]byte) (t *Log) {
-	t = Singleton()
+	t = Singleton(0, 1)
 	// @ invariant 0 <= i && i <= len(leaves)
 	// @ invariant forall j int :: i <= j && j < len(leaves) ==> acc(&leaves[j]) && acc(leaves[j])
 	// @ invariant acc(t.Inv())
@@ -130,25 +148,14 @@ func (t *Log) fit(idx uint64) {
 		if lsp == t.size && (t.value != nil || (t.left != nil && t.right != nil)) {
 			// Tree is already fully balanced; move both children into left child if
 			// they exist.
-
-			newLeft := Singleton()
-			// @ unfold acc(newLeft.Inv())
-			newLeft.index = t.index
-			newLeft.size = t.size
-			newLeft.value = t.value
-			newLeft.left = t.left
-			newLeft.right = t.right
-
-			newRight := Singleton()
-			// @ unfold acc(newRight.Inv())
-			newRight.index = newLeft.index + newLeft.size
-			// @ fold acc(newRight.Inv())
-			// @ fold acc(newLeft.Inv())
-
+			// @ fold acc(t.Inv())
+			newLeft := t.copy()
+			// @ unfold acc(t.Inv())
 			t.left = newLeft
-			t.right = newRight
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
+			newRight := Singleton(newLeft.index+newLeft.size, 1)
+			t.right = newRight
 			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
 		}
 
@@ -189,18 +196,8 @@ func (t *Log) setLeaf(idx uint64, l *[sha256.Size]byte) {
 			// test invariant; justifies initializing both trees
 			// @ assert t.left == nil && t.right == nil
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
-			t.left = Singleton()
-			// @ unfold t.left.Inv()
-			t.left.index = t.index
-			t.left.size = sizeLeft
-
-			t.right = Singleton()
-			// @ unfold t.right.Inv()
-			t.right.index = t.left.index + t.left.size
-			t.right.size = t.size - sizeLeft
-
-			// @ fold t.left.Inv()
-			// @ fold t.right.Inv()
+			t.left = Singleton(t.index, sizeLeft)
+			t.right = Singleton(t.left.index+t.left.size, t.size-sizeLeft)
 		}
 
 		if idx < /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size {
@@ -256,7 +253,7 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 		err = errors.New("new size smaller than old size")
 	} else {
 		if t == nil {
-			t = Singleton()
+			t = Singleton(0, 1)
 			consistencyPath = search.Frontier(newSize)
 		} else {
 			consistencyPath = search.YoungerToMostRecent(oldSize-1, newSize)
