@@ -419,6 +419,8 @@ func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size
 	return
 }
 
+// This function assumes that every prefix search result includes a leaf. This
+// can be established by calling proofs.PullLeaves.
 // @ requires noPerm < p
 // @ requires acc(prf.Inv(), p)
 // @ ensures err == nil ==> acc(tree.Inv())

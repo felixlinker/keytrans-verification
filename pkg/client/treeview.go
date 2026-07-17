@@ -67,7 +67,7 @@ func (st *UserState) UpdateView(newSize uint64, timestamps []uint64, prf *proofs
 	if len(timestamps) == 0 {
 		err = errors.New("no timestamps provided")
 	} else if newSize <= oldSize {
-		err = errors.New("new tree cannot be empty")
+		err = errors.New("new tree must not  become smaller")
 	} else {
 		var start uint64 = 0
 		// @ unfold acc(utils.Monotonic(st.Frontier_timestamps))

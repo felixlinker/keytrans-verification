@@ -74,7 +74,7 @@ type SearchResponse struct {
 	Binary_ladder  []*proofs.BinaryLadderStep
 	Search         *proofs.CombinedTreeProof
 	Opening        []byte
-	Value          *proofs.UpdateValue // value associated with queried label
+	Value          *crypto.UpdateValue // value associated with queried label
 }
 
 /*@
@@ -95,7 +95,7 @@ pred (s *SearchResponse) Inv() {
 // // @	low(query.LabelContent()) &&
 // // @ 	(unfolding acc(resp.Inv(), p) in low(resp.Full_tree_head.Tree_head.Tree_size) && low(len(resp.Search.Prefix_proofs))) ==>
 // // @		unfolding acc(resp.Inv(), p) in resp.Version != nil && low(*resp.Version)
-func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (res *proofs.UpdateValue, err error) {
+func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (res *crypto.UpdateValue, err error) {
 	// we use `err` to skip later phases instead of returning early, which is not yet supported by Gobra's hypermode.
 
 	// @ unfold acc(query.Inv())
@@ -141,6 +141,13 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	}
 
 	var pts []*trees.Prefix
+	if err == nil {
+		// @ unfold acc(st.Inv())
+		// @ unfold acc(st.Config.Inv())
+		err = proofs.PullLeaves(resp.Search.Prefix_proofs, resp.Binary_ladder, st.Config.SignaturePublicKey, label, *resp.Version /*@, perm(1/2) @*/)
+		// @ fold acc(st.Config.Inv())
+		// @ fold acc(st.Inv())
+	}
 	if err == nil {
 		pts, err = st.MkPrefixes(resp.Search.Prefix_proofs /*@, perm(1/2) @*/)
 	}

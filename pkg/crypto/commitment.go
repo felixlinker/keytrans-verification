@@ -5,15 +5,35 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 
-	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
+
+type UpdateValue struct {
+	Value []byte
+}
+
+/*@
+pred (u *UpdateValue) Inv() {
+	acc(u) && acc(u.Value)
+}
+@*/
+
+// @ requires noPerm < p
+// @ preserves acc(v.Inv(), p)
+func (v *UpdateValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
+	// @ unfold acc(v.Inv(), p)
+	buf := bytes.NewBuffer(nil)
+	buf.Write(utils.Uint32(uint32(len(v.Value))))
+	buf.Write(v.Value)
+	// @ fold acc(v.Inv(), p)
+	return buf.Bytes()
+}
 
 type CommitmentValue struct {
 	Opening []byte
 	Label   []byte
 	Version uint64
-	Update  *proofs.UpdateValue
+	Update  *UpdateValue
 }
 
 /*@

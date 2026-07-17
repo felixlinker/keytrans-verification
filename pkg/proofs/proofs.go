@@ -1,10 +1,10 @@
 package proofs
 
 import (
-	"bytes"
 	"crypto/sha256"
+	"errors"
 
-	"github.com/felixlinker/keytrans-verification/pkg/utils"
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 )
 
 type NodeValue = [sha256.Size]byte
@@ -14,27 +14,6 @@ pred NodeValuesInv(vs []*NodeValue) {
 	forall i int :: {&vs[i]} 0 <= i && i < len(vs) ==> acc(&vs[i]) && acc(vs[i])
 }
 @*/
-
-type UpdateValue struct {
-	Value []byte
-}
-
-/*@
-pred (u *UpdateValue) Inv() {
-	acc(u) && acc(u.Value)
-}
-@*/
-
-// @ requires noPerm < p
-// @ preserves acc(v.Inv(), p)
-func (v *UpdateValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
-	// @ unfold acc(v.Inv(), p)
-	buf := bytes.NewBuffer(nil)
-	buf.Write(utils.Uint32(uint32(len(v.Value))))
-	buf.Write(v.Value)
-	// @ fold acc(v.Inv(), p)
-	return buf.Bytes()
-}
 
 type BinaryLadderStep struct {
 	Proof      []byte             // opaque proof[VRF.Np] — variable length per VRF scheme
@@ -63,11 +42,13 @@ pred (i *InclusionProof) Inv() {
 @*/
 
 // Values for PrefixSearchResult.Result_type
+type PrefixSearchResultType int
+
 const (
-	Reserved           = 0
-	Inclusion          = 1
-	NonInclusionLeaf   = 2
-	NonInclusionParent = 3
+	Reserved           PrefixSearchResultType = 0
+	Inclusion          PrefixSearchResultType = 1
+	NonInclusionLeaf   PrefixSearchResultType = 2
+	NonInclusionParent PrefixSearchResultType = 3
 )
 
 // A leaf in a prefix tree
@@ -85,12 +66,9 @@ pred (l *PrefixLeaf) Inv() {
 @*/
 
 type PrefixSearchResult struct {
-	// NOTE: Real API also provides a result type, but this is not needed for
-	// reconstruction, thus, dropped.
-	// NOTE: I always expect a leaf and removed commitments from the binary ladder
-	// This is an API change, that, however simplifies my life.
-	Leaf  *PrefixLeaf
-	Depth uint8
+	ResultType PrefixSearchResultType
+	Leaf       *PrefixLeaf
+	Depth      uint8
 }
 
 /*@
@@ -117,6 +95,63 @@ pred PrefixProofsInv(ps []*PrefixProof) {
 	forall i int :: {ps[i]} 0 <= i && i < len(ps) ==> acc(&ps[i]) && acc(ps[i].Inv())
 }
 @*/
+
+// @ requires noPerm < p
+// @ preserves acc(PrefixProofsInv(prfs))
+// @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+func PullLeaves(prfs []*PrefixProof, ladder []*BinaryLadderStep, pk []byte, label []byte, version uint64 /*@, ghost p perm @*/) (err error) {
+	// @ invariant acc(PrefixProofsInv(prfs))
+	// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+	// @ invariant 0 <= i && i <= len(prfs)
+	for i := 0; i < len(prfs) && err == nil; i++ {
+		// @ unfold acc(PrefixProofsInv(prfs))
+		err = pullLeaves(prfs[i], ladder, pk, label, version /*@, p @*/)
+		// @ fold acc(PrefixProofsInv(prfs))
+	}
+	return
+}
+
+// @ requires noPerm < p
+// @ preserves acc(prf.Inv())
+// @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label []byte, version uint64 /*@, ghost p perm @*/) (err error) {
+	// @ unfold acc(prf.Inv())
+	if len(ladder) < len(prf.Results) {
+		err = errors.New("too few binary ladder steps")
+	} else {
+		// @ invariant acc(prf) && PrefixSearchResultsInv(prf.Results) && NodeValuesInv(prf.Elements)
+		// @ invariant 0 <= i && i <= len(prf.Results) && i <= len(ladder)
+		// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+		for i := 0; i < len(prf.Results) && i < len(ladder) && err == nil; i++ {
+			// @ unfold PrefixSearchResultsInv(prf.Results)
+			// @ unfold acc(prf.Results[i].Inv())
+			if prf.Results[i].ResultType == Inclusion {
+				// @ unfold acc(BinaryLadderStepsInv(ladder), p)
+				// @ unfold acc(ladder[i].Inv(), p)
+				if vrfOutput, ok := crypto.VRF_verify(pk, label, version, ladder[i].Proof /*@, p @*/); !ok {
+					err = errors.New("VRF did not verify")
+				} else if ladder[i].Commitment == nil {
+					err = errors.New("binary ladder misses commitment")
+				} else {
+					// Copy commitment
+					tmp /*@@@*/ := *ladder[i].Commitment
+					leaf /*@@@*/ := PrefixLeaf{
+						Vrf_output: vrfOutput,
+						Commitment: &tmp,
+					}
+					prf.Results[i].Leaf = &leaf
+					// @ fold acc(prf.Results[i].Leaf.Inv())
+				}
+				// @ fold acc(ladder[i].Inv(), p)
+				// @ fold acc(BinaryLadderStepsInv(ladder), p)
+			}
+			// @ fold acc(prf.Results[i].Inv())
+			// @ fold PrefixSearchResultsInv(prf.Results)
+		}
+	}
+	// @ fold acc(prf.Inv())
+	return
+}
 
 type CombinedTreeProof struct {
 	Timestamps    []uint64
