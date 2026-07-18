@@ -116,9 +116,9 @@ func (l *PrefixLeaf) Unmarshal(buf *bytes.Buffer) (err error) {
 	// length of output is same for all cipher suites
 	output /*@@@*/ := make([]byte, sha256.Size)
 	var commitment /*@@@*/ [sha256.Size]byte
-	if n, e := buf.Read(output); n != len(output) || err != nil {
+	if n, e := buf.Read(output); n != len(output) || e != nil {
 		return utils.BufferError(e)
-	} else if n, e := buf.Read(commitment[:]); n != len(commitment) || err != nil {
+	} else if n, e := buf.Read(commitment[:]); n != len(commitment) || e != nil {
 		return utils.BufferError(e)
 	} else {
 		l.Vrf_output = output
