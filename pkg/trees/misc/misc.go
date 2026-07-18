@@ -32,22 +32,21 @@ func mergeValues(ns1, ns2 []*proofs.NodeValue) (ns []*proofs.NodeValue) {
 	return
 }
 
-// @ requires acc(prf1.Inv())
-// @ requires acc(prf2.Inv())
-// @ ensures  acc(prf.Inv())
+// @ requires prf1.Inv()
+// @ requires prf2.Inv()
+// @ ensures  prf.Inv()
 func MergeProofs(prf1, prf2 *proofs.PrefixProof) (prf *proofs.PrefixProof) {
-	// @ unfold acc(prf1.Inv())
-	// @ unfold acc(prf2.Inv())
+	// @ unfold prf1.Inv()
+	// @ unfold prf2.Inv()
 	rs := mergeResults(prf1.Results, prf2.Results)
-	// @ assert acc(proofs.PrefixSearchResultsInv(rs))
+	// @ assert proofs.PrefixSearchResultsInv(rs)
 	ns := mergeValues(prf1.Elements, prf2.Elements)
-	// @ assert acc(proofs.NodeValuesInv(ns))
-	tmp /*@@@*/ := proofs.PrefixProof{
+	// @ assert proofs.NodeValuesInv(ns)
+	prf = &proofs.PrefixProof{
 		Results:  rs,
 		Elements: ns,
 	}
-	prf = &tmp
-	// @ fold acc(prf.Inv())
+	// @ fold prf.Inv()
 	return
 }
 
