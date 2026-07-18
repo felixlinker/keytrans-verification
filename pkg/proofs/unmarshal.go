@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
@@ -70,7 +71,8 @@ func UnmarshalBinaryLadderSteps(buf *bytes.Buffer, version uint64) (r []*BinaryL
 			err = e
 		} else {
 			// @ assert int(steps) != len(ladder)
-			err = errors.New("wrong number of binary ladder steps provided")
+			msg := fmt.Sprintf("wrong number of binary ladder steps provided (version %d): got %d want %d", version, steps, len(ladder))
+			err = errors.New(msg)
 		}
 	} else {
 		// @ invariant 0 <= i && i <= len(ladder)
