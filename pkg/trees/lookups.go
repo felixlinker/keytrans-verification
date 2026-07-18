@@ -22,13 +22,13 @@ type Lookups struct {
 
 /*@
 pred (ls *Lookups) Inv() {
-	acc(ls) && acc(ls.label) && acc(misc.SliceMapInv(ls.vrfOutputs)) && acc(misc.SliceMapInv(ls.commitments))
+	acc(ls) && acc(utils.BytesMem(ls.label)) && acc(misc.SliceMapInv(ls.vrfOutputs)) && acc(misc.SliceMapInv(ls.commitments))
 }
 @*/
 
 // @ requires noPerm < p
 // @ requires 0 <= version
-// @ preserves acc(label, p) && acc(pk, p) && acc(proofs.BinaryLadderStepsInv(fullLadder), p)
+// @ preserves acc(utils.BytesMem(label), p) && acc(utils.BytesMem(pk), p) && acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 // @ ensures err == nil ==> acc(ls.Inv())
 func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (ls *Lookups, err error) {
 	ls = nil
@@ -44,7 +44,7 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 		// @ unfold acc(proofs.BinaryLadderInv(steps))
 
 		// @ invariant 0 <= i && i <= len(fullLadder)
-		// @ invariant acc(label, p) && acc(pk, p) && acc(steps) && acc(misc.SliceMapInv(vrfOutputs)) && acc(misc.SliceMapInv(commitments))
+		// @ invariant acc(utils.BytesMem(label), p) && acc(utils.BytesMem(pk), p) && acc(steps) && acc(misc.SliceMapInv(vrfOutputs)) && acc(misc.SliceMapInv(commitments))
 		// @ invariant len(steps) == len(fullLadder)
 		// @ invariant acc(proofs.BinaryLadderStepsInv(fullLadder), p)
 		for i := 0; i < len(fullLadder) && err == nil; i++ {
@@ -74,12 +74,11 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 		}
 
 		ls = &Lookups{
-			label:       make([]byte, len(label)),
+			label:       utils.Copy(label /*@, p/2 @*/),
 			version:     version,
 			vrfOutputs:  vrfOutputs,
 			commitments: commitments,
 		}
-		copy(ls.label, label /*@, p/2 @*/)
 		// @ fold acc(ls.Inv())
 	}
 	return

@@ -108,6 +108,7 @@ func (t *Prefix) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, gho
 	return
 }
 
+// TODO: Verification is rather slow. Speed up.
 // @ requires  noPerm < p
 // @ requires  acc(path, p)
 // @ requires  0 <= depth
@@ -226,6 +227,7 @@ func (t *Prefix) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 	// @ fold t.Inv()
 }
 
+// TODO: Verification is rather slow. Speed up.
 // @ requires  noPerm < p
 // @ requires  acc(proofs.NodeValuesInv(elements), p)
 // @ preserves t.Inv()
@@ -437,27 +439,30 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 	// @ invariant tree.Inv()
 	// @ invariant acc(prf.Inv(), p)
 	// @ invariant 0 <= i && i <= len(unfolding acc(prf.Inv(), p) in prf.Results)
-	for i := 0; i < len( /*@ unfolding acc(prf.Inv(), p) in @*/ prf.Results); i++ {
+	for i := 0; i < len( /*@ unfolding acc(prf.Inv(), p) in @*/ prf.Results) && err == nil; i++ {
 		// @ unfold acc(prf.Inv(), p)
 		// @ unfold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
 		// @ unfold acc(prf.Results[i].Inv(), p)
 		result := prf.Results[i]
-		// TODO: Should verify `result.result_type`, but I skip this for now as it seems to
-		// be redundant information
+		if result.Leaf == nil {
+			// NOTE: That data structure in the draft does not provide the invariant
+			// that leafs are never nil, but I establish it in proofs.PullLeaves
+			err = errors.New("missing prefix proof leaf")
+		} else {
+			// @ unfold acc(result.Leaf.Inv(), p)
+			searchKey := make([]byte, len(result.Leaf.Vrf_output))
+			copy(searchKey, result.Leaf.Vrf_output /*@, p @*/)
+			searchKeyBits := utils.Bits(searchKey /*@, perm(1/2) @*/)
 
-		// @ unfold acc(result.Leaf.Inv(), p)
-		searchKey := make([]byte, len(result.Leaf.Vrf_output))
-		copy(searchKey, result.Leaf.Vrf_output /*@, p @*/)
-		searchKeyBits := utils.Bits(searchKey /*@, perm(1/2) @*/)
+			commitment /*@@@*/ := *result.Leaf.Commitment // Copy commitment
+			// @ fold acc(result.Leaf.Inv(), p)
+			l /*@@@*/ := proofs.PrefixLeaf{Vrf_output: searchKey, Commitment: &commitment}
+			// @ fold acc((&l).Inv(), p)
+			// @ assume 0 <= result.Depth && result.Depth <= 255 // help gobra with uint
+			// @ assume int(result.Depth) <= len(searchKeyBits) // TODO: make invariant
+			tree.setLeaf(searchKeyBits, int(result.Depth), commitmentLeaf(&l /*@, p @*/))
 
-		commitment /*@@@*/ := *result.Leaf.Commitment // Copy commitment
-		// @ fold acc(result.Leaf.Inv(), p)
-		l /*@@@*/ := proofs.PrefixLeaf{Vrf_output: searchKey, Commitment: &commitment}
-		// @ fold acc((&l).Inv(), p)
-		// @ assume 0 <= result.Depth && result.Depth <= 255 // help gobra with uint
-		// @ assume int(result.Depth) <= len(searchKeyBits) // TODO: make invariant
-		tree.setLeaf(searchKeyBits, int(result.Depth), commitmentLeaf(&l /*@, p @*/))
-
+		}
 		// @ fold acc(prf.Results[i].Inv(), p)
 		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
 		// @ fold acc(prf.Inv(), p)
@@ -472,6 +477,7 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 	return
 }
 
+// TODO: Verification is rather slow. Optimize.
 // @ requires  noPerm < p
 // @ requires  0 <= depth
 // @ preserves acc(t.Inv())

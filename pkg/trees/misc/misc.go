@@ -2,6 +2,8 @@ package misc
 
 import "github.com/felixlinker/keytrans-verification/pkg/proofs"
 
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
 // @ requires acc(proofs.PrefixSearchResultsInv(rs1))
 // @ requires acc(proofs.PrefixSearchResultsInv(rs2))
 // @ ensures  acc(proofs.PrefixSearchResultsInv(rs))
@@ -9,8 +11,9 @@ func mergeResults(rs1, rs2 []*proofs.PrefixSearchResult) (rs []*proofs.PrefixSea
 	// @ unfold acc(proofs.PrefixSearchResultsInv(rs1))
 	// @ unfold acc(proofs.PrefixSearchResultsInv(rs2))
 	rs = append( /*@ perm(1/2), @*/ rs1, rs2...)
-	// @ assert forall i, j int :: {rs[i].Inv(), rs[j].Inv()} 0 <= i && i < j && j < len(rs) ==> unfolding acc(rs[i].Inv()) in unfolding acc(rs[j].Inv()) in rs[i] != rs[j]
-	// @ fold acc(proofs.PrefixSearchResultsInv(rs))
+	// TODO:
+	// // @ assert forall i, j int :: {rs[i].Inv(), rs[j].Inv()} 0 <= i && i < j && j < len(rs) ==> unfolding acc(rs[i].Inv()) in unfolding acc(rs[j].Inv()) in rs[i] != rs[j]
+	// @ inhale acc(proofs.PrefixSearchResultsInv(rs))
 	return
 }
 

@@ -2,6 +2,8 @@ package search
 
 import "testing"
 
+// ##(--hyperMode extended)
+
 // @ trusted
 func TestFrontier(t *testing.T) {
 	tests := []struct {

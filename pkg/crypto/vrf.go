@@ -19,15 +19,23 @@ func encode(label []byte, version uint64 /*@, ghost p perm @*/) (res []byte) {
 }
 
 // @ requires noPerm < p
-// @ preserves acc(pk, p) && acc(label, p) && acc(prf, p)
+// @ preserves acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p) && acc(utils.BytesMem(prf), p)
 // @ ensures ok ==> len(r) == 32 && acc(r)
 func VRF_verify(pk []byte, label []byte, version uint64, prf []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
+	// @ unfold acc(utils.BytesMem(pk), p)
+	// @ unfold acc(utils.BytesMem(label), p)
+	// @ unfold acc(utils.BytesMem(prf), p)
 	if pk, err := vrf.NewPublicKey(pk /*@, p @*/); err != nil {
-		return nil, false
+		ok = false
 	} else if out, err := pk.Verify(encode(label, version /*@, p @*/), prf /*@, p @*/); out == nil || err != nil {
-		return nil, false
+		ok = false
 	} else {
 		// Truncation required in https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#name-kt-cipher-suites
-		return out[:32], true
+		r = out[:32]
+		ok = true
 	}
+	// @ fold acc(utils.BytesMem(pk), p)
+	// @ fold acc(utils.BytesMem(label), p)
+	// @ fold acc(utils.BytesMem(prf), p)
+	return
 }

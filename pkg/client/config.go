@@ -1,5 +1,7 @@
 package client
 
+// @ import "github.com/felixlinker/keytrans-verification/pkg/utils"
+
 type DeploymentMode uint8
 
 const (
@@ -29,6 +31,6 @@ type Configuration struct {
 
 /*@
 pred (c *Configuration) Inv() {
-	acc(c) && acc(c.SignaturePublicKey) && acc(c.VrfPublicKey)
+	acc(c) && 0 < c.ReasonableMonitoringWindow && acc(utils.BytesMem(c.SignaturePublicKey)) && acc(utils.BytesMem(c.VrfPublicKey))
 }
 @*/

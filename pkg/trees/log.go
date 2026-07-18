@@ -143,6 +143,7 @@ func FullTree(leaves []*[sha256.Size]byte) (t *Log) {
 	return t
 }
 
+// TODO: Below function takes long to verify. Speed up.
 // Grow the tree until it can store idx.
 // @ preserves acc(t.Inv())
 func (t *Log) fit(idx uint64) {
@@ -200,8 +201,7 @@ func (t *Log) setLeaf(idx uint64, l *[sha256.Size]byte) {
 			// @ assert t.left == nil && t.right == nil
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
 			t.left = Singleton(t.index, sizeLeft)
-			rightIndex := /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index + t.left.size
-			t.right = Singleton(rightIndex, t.size-sizeLeft)
+			t.right = Singleton( /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size, t.size-sizeLeft)
 		}
 
 		if idx < /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size {
@@ -272,9 +272,10 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 		}
 
 		// @ unfold acc(prf.Inv())
+		// @ unfold acc(proofs.NodeValuesInv(prf.Elements))
 		// @ invariant acc(prf) && acc(t.Inv()) && acc(consistencyPath, perm(1/2))
 		// @ invariant 0 <= i && i <= len(prf.Elements)
-		// @ invariant forall j int :: i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
+		// @ invariant forall j int :: {prf.Elements[j]} i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
 		for i := 0; i < len(prf.Elements) && err == nil; i++ {
 			if ok := t.fillLeftMost(prf.Elements[i]); !ok {
 				err = errors.New("could not insert proof element")
@@ -335,29 +336,30 @@ func (t *Log) computeHash() (err error) {
 	return
 }
 
+// TODO: Below function takes long to verify. Speed up.
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
-// @ ensures commitment != nil ==> acc(commitment)
+// @ ensures err == nil ==> acc(commitment)
 func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha256.Size]byte, err error) {
 	// @ unfold acc(t.Inv(), p)
 	if t.size == 1 {
-		var c /*@@@*/ [sha256.Size]byte
 		if t.value != nil {
+			var c /*@@@*/ [sha256.Size]byte
 			c = *t.value
+			commitment = &c
+		} else {
+			err = errors.New("leaf without commitment")
 		}
-		commitment = &c
 	} else if t.left == nil || t.right == nil {
 		// Technically, we do not need both subtrees, but we check the invariant
 		// that every node should be a leaf or have two children
 		err = errors.New("missing subtree")
 	} else {
-		// @ unfold acc(t.left.Inv(), p)
-		if index < t.left.size {
-			// @ fold acc(t.left.Inv(), p)
+		leftSize := /*@ unfolding acc(t.left.Inv(), p) in @*/ t.left.size
+		if index < leftSize {
 			commitment, err = t.left.GetLeafHash(index /*@, p @*/)
 		} else {
-			commitment, err = t.right.GetLeafHash(index - t.left.size /*@, p @*/)
-			// @ fold acc(t.left.Inv(), p)
+			commitment, err = t.right.GetLeafHash(index - leftSize /*@, p @*/)
 		}
 	}
 	// @ fold acc(t.Inv(), p)
@@ -384,8 +386,8 @@ func (t *Log) GetRoot( /*@ ghost p perm @*/ ) *[sha256.Size]byte {
 }
 
 // @ preserves acc(t.Inv())
-// @ requires elems != nil && forall i int :: {elems[i]} 0 <= i && i < len(elems) ==> acc(&elems[i]) && acc(elems[i])
-// @ ensures err == nil ==> r != nil && forall i int :: {r[i]} 0 <= i && i < len(r) ==> acc(&r[i]) && acc(r[i])
+// @ requires acc(proofs.NodeValuesInv(elems))
+// @ ensures err == nil ==> acc(proofs.NodeValuesInv(r))
 func (t *Log) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (r []*proofs.NodeValue, err error) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
@@ -394,7 +396,10 @@ func (t *Log) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (r []
 		} else if cacheSize < t.index+t.size {
 			// Only include sub trees that the client cannot compute
 			v /*@@@*/ := *t.value
+			// @ unfold acc(proofs.NodeValuesInv(elems))
 			r = append( /*@ perm(1/2), @*/ elems, &v)
+			// @ fold acc(proofs.NodeValuesInv(r))
+
 		} else {
 			// Client can compute this subtree; do not include
 			r = elems
@@ -410,7 +415,9 @@ func (t *Log) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (r []
 // @ preserves acc(t.Inv())
 // @ ensures err == nil ==> acc(prf.Inv())
 func (t *Log) ProofFromPruned(cacheSize uint64) (prf *proofs.InclusionProof, err error) {
-	if elems, e := t.proofFromPruned(cacheSize, []*proofs.NodeValue{}); e != nil {
+	vs := []*proofs.NodeValue{}
+	// @ fold acc(proofs.NodeValuesInv(vs))
+	if elems, e := t.proofFromPruned(cacheSize, vs); e != nil {
 		err = e
 	} else {
 		incPrf /*@@@*/ := proofs.InclusionProof{

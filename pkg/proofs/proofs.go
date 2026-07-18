@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
+	// @ "github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
 type NodeValue = [sha256.Size]byte
@@ -22,7 +23,7 @@ type BinaryLadderStep struct {
 
 /*@
 pred (s *BinaryLadderStep) Inv() {
-	acc(s) && acc(s.Proof) && (s.Commitment != nil ==> acc(s.Commitment))
+	acc(s) && acc(utils.BytesMem(s.Proof)) && (s.Commitment != nil ==> acc(s.Commitment))
 }
 
 pred BinaryLadderStepsInv(steps []*BinaryLadderStep) {
@@ -97,10 +98,10 @@ pred PrefixProofsInv(ps []*PrefixProof) {
 
 // @ requires noPerm < p
 // @ preserves acc(PrefixProofsInv(prfs))
-// @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+// @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
 func PullLeaves(prfs []*PrefixProof, ladder []*BinaryLadderStep, pk []byte, label []byte, version uint64 /*@, ghost p perm @*/) (err error) {
 	// @ invariant acc(PrefixProofsInv(prfs))
-	// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+	// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
 	// @ invariant 0 <= i && i <= len(prfs)
 	for i := 0; i < len(prfs) && err == nil; i++ {
 		// @ unfold acc(PrefixProofsInv(prfs))
@@ -112,7 +113,7 @@ func PullLeaves(prfs []*PrefixProof, ladder []*BinaryLadderStep, pk []byte, labe
 
 // @ requires noPerm < p
 // @ preserves acc(prf.Inv())
-// @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+// @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
 func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label []byte, version uint64 /*@, ghost p perm @*/) (err error) {
 	// @ unfold acc(prf.Inv())
 	if len(ladder) < len(prf.Results) {
@@ -120,7 +121,7 @@ func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label [
 	} else {
 		// @ invariant acc(prf) && PrefixSearchResultsInv(prf.Results) && NodeValuesInv(prf.Elements)
 		// @ invariant 0 <= i && i <= len(prf.Results) && i <= len(ladder)
-		// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(pk, p) && acc(label, p)
+		// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
 		for i := 0; i < len(prf.Results) && i < len(ladder) && err == nil; i++ {
 			// @ unfold PrefixSearchResultsInv(prf.Results)
 			// @ unfold acc(prf.Results[i].Inv())

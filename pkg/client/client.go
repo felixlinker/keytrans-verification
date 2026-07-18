@@ -99,10 +99,7 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	// we use `err` to skip later phases instead of returning early, which is not yet supported by Gobra's hypermode.
 
 	// @ unfold acc(query.Inv())
-	// @ unfold acc(utils.BytesMem(query.Label))
-	label := make([]byte, len(query.Label))
-	copy(label, query.Label /*@, perm(1/2) @*/)
-	// @ fold acc(utils.BytesMem(query.Label))
+	label := utils.Copy(query.Label /*@, perm(1/2) @*/)
 	// @ fold acc(query.Inv())
 
 	// Phase 1: UpdateView

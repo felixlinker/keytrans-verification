@@ -43,6 +43,7 @@ func (s *BinaryLadderStep) Unmarshal(buf *bytes.Buffer, withCommitment bool) (er
 		err = utils.BufferError(e)
 	} else {
 		s.Proof = prf
+		// @ fold acc(utils.BytesMem(s.Proof))
 		s.Commitment = nil
 		if withCommitment {
 			var commitment /*@@@*/ [sha256.Size]byte
