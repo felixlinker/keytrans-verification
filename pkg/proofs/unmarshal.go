@@ -26,9 +26,9 @@ func UnmarshalNodeValues(buf *bytes.Buffer) (r []*NodeValue, err error) {
 				err = utils.BufferError(e)
 			} else {
 				// @ unfold acc(NodeValuesInv(r))
+				// @ assert forall i int :: {r[i], val} 0 <= i && i < len(r) ==> &(*r[i])[0] != &val[0] && r[i] != &val
 				r = append( /*@ perm(1/2), @*/ r, &val)
-				// TODO:
-				// @ inhale acc(NodeValuesInv(r))
+				// @ fold acc(NodeValuesInv(r))
 			}
 		}
 	}
