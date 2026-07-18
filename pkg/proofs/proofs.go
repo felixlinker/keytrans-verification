@@ -11,7 +11,7 @@ type NodeValue = [sha256.Size]byte
 
 /*@
 pred NodeValuesInv(vs []*NodeValue) {
-	forall i int :: {&vs[i]} 0 <= i && i < len(vs) ==> acc(&vs[i]) && acc(vs[i])
+	forall i int :: {vs[i]} 0 <= i && i < len(vs) ==> acc(&vs[i]) && acc(vs[i])
 }
 @*/
 
@@ -76,7 +76,7 @@ pred (p *PrefixSearchResult) Inv() {
 }
 
 pred PrefixSearchResultsInv(rs []*PrefixSearchResult) {
-	forall i int :: {&rs[i]} 0 <= i && i < len(rs) ==> acc(&rs[i]) && acc(rs[i].Inv())
+	forall i int :: {rs[i]} 0 <= i && i < len(rs) ==> acc(&rs[i]) && acc(rs[i].Inv())
 }
 @*/
 
