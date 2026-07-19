@@ -61,7 +61,7 @@ type PrefixLeaf struct {
 
 /*@
 pred (l *PrefixLeaf) Inv() {
-	acc(l) && acc(l.Vrf_output) && acc(l.Commitment)
+	acc(l) && acc(utils.BytesMem(l.Vrf_output)) && acc(l.Commitment)
 }
 @*/
 

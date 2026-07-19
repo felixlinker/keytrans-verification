@@ -173,7 +173,7 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 					err = e
 				} else if c == nil {
 					err = errors.New("no commitment for frontier node")
-				} else if !bytes.Equal(utils.FromDigest(v), crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/) /*@, perm(1/2), perm(1/2) @*/) {
+				} else if !bytes.Equal(utils.FromDigest(*v), crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/) /*@, perm(1/2), perm(1/2) @*/) {
 					err = errors.New("log tree commitment does not match prefix tree root hash")
 				} else {
 					// TODO: I cannot assert below because whenever I add new lines after

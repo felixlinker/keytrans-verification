@@ -30,8 +30,8 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 					if root, err := tree.Value(); err != nil {
 						t.Fatalf("Value(): %v", err)
 					} else if len(trees) == 0 {
-						wantRoot = root
-					} else if root != wantRoot {
+						wantRoot = *root
+					} else if *root != wantRoot {
 						t.Fatalf("root = %x, want %x", root, wantRoot)
 					}
 
@@ -57,7 +57,7 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 					rootAfter, err := tree.Value()
 					if err != nil {
 						t.Fatalf("Value() after pruning error: %v", err)
-					} else if rootAfter != rootBefore {
+					} else if *rootAfter != *rootBefore {
 						t.Fatalf("pruning changed root: got %x, want %x", rootAfter, rootBefore)
 					}
 
@@ -78,14 +78,16 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 					reconstructedRoot, err := reconstructed.Value()
 					if err != nil {
 						t.Fatalf("reconstructed Value(): %v", err)
-					} else if reconstructedRoot != rootAfter {
+					} else if *reconstructedRoot != *rootAfter {
 						t.Fatalf("reconstructed root = %x, want %x", reconstructedRoot, rootAfter)
 					}
 
 					for _, commitment := range commitments {
 						expectCommitment, expectOk := tree.Search(commitment[:])
 						gotCommitment, gotOk := reconstructed.Search(commitment[:])
-						if *expectCommitment != *gotCommitment {
+						if (expectCommitment == nil) != (gotCommitment == nil) {
+							t.Fatalf("got commitment = %x, want %x", gotCommitment, expectCommitment)
+						} else if expectCommitment != nil && *expectCommitment != *gotCommitment {
 							t.Fatalf("got commitment = %x, want %x", *gotCommitment, *expectCommitment)
 						}
 						if expectOk != gotOk {

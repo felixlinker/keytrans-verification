@@ -13,7 +13,7 @@ import (
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 type prefixLeaf struct {
-	value      [sha256.Size]byte
+	value      *[sha256.Size]byte
 	searchKey  []byte
 	commitment *[sha256.Size]byte
 }
@@ -21,10 +21,44 @@ type prefixLeaf struct {
 /*@
 pred (l *prefixLeaf) Inv() {
 	acc(l) &&
-	(l.searchKey != nil ==> acc(l.searchKey)) &&
+	// Either value is not nil, or search key AND commitment are not nil
+	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
+	(l.value != nil ==> acc(l.value)) &&
+	(l.searchKey != nil ==> acc(utils.BytesMem(l.searchKey))) &&
 	(l.commitment != nil ==> acc(l.commitment))
 }
 @*/
+
+// @ requires  noPerm < p
+// @ requires  0 <= depth
+// @ preserves acc(l.Inv(), p)
+// @ ensures   v != nil && acc(v)
+// // @ ensures   low(*v) ==> true
+func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v *proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
+	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
+		// @ unfold acc(l.Inv(), p)
+		cop /*@@@*/ := *l.value
+		// @ fold acc(l.Inv(), p)
+		v = &cop
+		// A hash value proves nothing about inclusion or non-inclusion
+		// @ incl = Incl{}
+		// @ notIncl = NotIncl{}
+	} else {
+		// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
+		input := []byte{0x02}
+		// @ unfold acc(l.Inv(), p)
+		// @ unfold acc(utils.BytesMem(l.searchKey), p)
+		input = append( /*@ p, @*/ input, l.searchKey...)
+		input = append( /*@ p, @*/ input, utils.FromDigest(*l.commitment)...)
+		// @ incl = Incl{ utils.Bits_Pure(l.searchKey) }
+		// @ notIncl = utils.FlippedTailsPure(utils.Bits_Pure(l.searchKey), depth)
+		// @ fold acc(utils.BytesMem(l.searchKey), p)
+		// @ fold acc(l.Inv(), p)
+		value /*@@@*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
+		v = &value
+	}
+	return
+}
 
 // @ requires  noPerm < p
 // @ preserves pl != nil ==> acc(pl.Inv(), p)
@@ -32,22 +66,16 @@ pred (l *prefixLeaf) Inv() {
 func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf) {
 	if pl != nil {
 		// @ unfold acc(pl.Inv(), p)
-
-		// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
-		input := []byte{0x02}
-		input = append( /*@ p, @*/ input, pl.Vrf_output...)
-		input = append( /*@ p, @*/ input, utils.FromDigest(*pl.Commitment)...)
-		value := sha256.Sum256(input /*@, perm(1/2) @*/)
 		c /*@@@*/ := *pl.Commitment
 		// @ assert c[0] == pl.Commitment[0]
 		// The above assert is required so that gobra realizes the assert below.
 		// @ assert &c != pl.Commitment
 		// @ assert acc(&c)
 		l = &prefixLeaf{
-			value: value,
+			value: nil,
 			// TODO: Could not use pl.Vrf_output[:], so opted for append.
 			// Folding pl.Inv() failed on using [:]
-			searchKey:  append( /*@ p, @*/ []byte{}, pl.Vrf_output...),
+			searchKey:  utils.Copy(pl.Vrf_output /*@, p/2 @*/),
 			commitment: &c,
 		}
 		// @ fold l.Inv()
@@ -164,10 +192,17 @@ func (t *Prefix) insert(path []bool, depth int, leaf *prefixLeaf /*@, ghost p pe
 // @ requires  leaf.Inv()
 // @ preserves t.Inv()
 func (t *Prefix) Insert(leaf *prefixLeaf) (err error) {
-	// @ unfold acc(leaf.Inv(), perm(1/2))
-	searchKeyBits := utils.Bits(leaf.searchKey /*@, perm(1/2) @*/)
-	// @ fold acc(leaf.Inv(), perm(1/2))
-	return t.insert(searchKeyBits, 0, leaf /*@, perm(1/2) @*/)
+	if /*@ unfolding acc(leaf.Inv()) in @*/ leaf.searchKey == nil {
+		err = errors.New("cannot insert leaf without search key")
+	} else {
+		// @ unfold acc(leaf.Inv(), perm(1/2))
+		// @ unfold acc(utils.BytesMem(leaf.searchKey), perm(1/2))
+		searchKeyBits := utils.Bits(leaf.searchKey /*@, perm(1/2) @*/)
+		// @ fold acc(utils.BytesMem(leaf.searchKey), perm(1/2))
+		// @ fold acc(leaf.Inv(), perm(1/2))
+		err = t.insert(searchKeyBits, 0, leaf /*@, perm(1/2) @*/)
+	}
+	return
 }
 
 // @ requires  noPerm < p
@@ -189,19 +224,21 @@ func (t *Prefix) IsEmpty( /*@ ghost p perm @*/ ) (empty bool) {
 	return
 }
 
+// @ requires noPerm < p
+// @ preserves acc(nodeValue, p)
 // @ ensures t.Inv()
-func nodeValueLeaf(nodeValue proofs.NodeValue) (t *Prefix) {
-	l := &prefixLeaf{
-		value:      nodeValue,
-		searchKey:  nil,
-		commitment: nil,
-	}
-	// @ fold l.Inv()
+func nodeValueLeaf(nodeValue *proofs.NodeValue /*@, ghost p perm @*/) (t *Prefix) {
+	tmp /*@@@*/ := *nodeValue
 	t = &Prefix{
-		leaf:  l,
+		leaf: &prefixLeaf{
+			value:      &tmp,
+			searchKey:  nil,
+			commitment: nil,
+		},
 		left:  nil,
 		right: nil,
 	}
+	// @ fold t.leaf.Inv()
 	// @ fold t.Inv()
 	return
 }
@@ -252,7 +289,7 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 		} else {
 			// @ unfold acc(proofs.NodeValuesInv(elements), p)
 			if !utils.AllZero(*elements[0]) {
-				t.left = nodeValueLeaf(*elements[0])
+				t.left = nodeValueLeaf(elements[0] /*@, p @*/)
 			}
 			esL = elements[1:]
 			// @ assert forall i int :: {&esL[i]} 0 <= i && i < len(esL) ==> &esL[i] == &elements[i+1]
@@ -267,7 +304,7 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 			} else {
 				// @ unfold acc(proofs.NodeValuesInv(esL), p)
 				if !utils.AllZero(*esL[0]) {
-					t.right = nodeValueLeaf(*esL[0])
+					t.right = nodeValueLeaf(esL[0] /*@, p @*/)
 				}
 				es = esL[1:]
 				// @ assert forall i int :: {&es[i]} 0 <= i && i < len(es) ==> &es[i] == &esL[i+1]
@@ -296,80 +333,125 @@ pure func (t *Prefix) depth() (r uint64) {
 			1 + utils.max(lDepth, rDepth)
 }
 
+ghost type Incl = seq[seq[bool]]
+
 ghost
 requires  t != nil ==> acc(t.Inv(), _)
 decreases t.depth()
-pure func (t *Prefix) Included() (r seq[seq[bool]]) {
+pure func (t *Prefix) Included() (r Incl) {
 	return (t == nil ?
 		// The empty leaf proves inclusion of no prefix
-		seq[seq[bool]]{} :
+		Incl{} :
 		(unfolding acc(t.Inv(), _) in (t.leaf != nil ?
 			(unfolding acc(t.leaf.Inv(), _) in t.leaf.searchKey != nil ?
-				seq[seq[bool]]{ utils.Bits_Pure(t.leaf.searchKey) } :
-				seq[seq[bool]]{}) :
+				unfolding acc(utils.BytesMem(t.leaf.searchKey), _) in Incl{ utils.Bits_Pure(t.leaf.searchKey) } :
+				Incl{}) :
 			(t.left.Included() ++ t.right.Included()))))
 }
+
+ghost type NotIncl = seq[seq[bool]]
 
 ghost
 requires  t != nil ==> acc(t.Inv(), _)
 requires  0 <= depth
 decreases t.depth()
-pure func (t *Prefix) NotIncludedPrefixes(depth int) (r seq[seq[bool]]) {
+pure func (t *Prefix) NotIncludedPrefixes(depth int) (r NotIncl) {
 	return (t == nil ?
 		// The empty leaf proves non-inclusion of every suffix
-		seq[seq[bool]]{ seq[bool]{} } :
+		NotIncl{ seq[bool]{} } :
 		(unfolding acc(t.Inv(), _) in (t.leaf != nil ?
 			// A leaf proves the non-inclusion of no suffix
 			(unfolding acc(t.leaf.Inv(), _) in (t.leaf.searchKey != nil ?
 				// No search key proves the non-inclusion of nothing; we are only given a hash
-				seq[seq[bool]]{} :
+				NotIncl{} :
 				// A search key proves the non-inclusion of every intermediate infix with the last bit respectively flipped
+				// TODO: Below does not require unfolding of BytesMem, which suggests this branch is unreachable and erroneous
 				utils.FlippedTailsPure(utils.Bits_Pure(t.leaf.searchKey), depth))) :
 			(	let left := utils.PrependAll(t.left.NotIncludedPrefixes(depth+1), false) in
 				let right := utils.PrependAll(t.right.NotIncludedPrefixes(depth+1), true) in
 				left ++ right))))
 }
 
-pred NoPrefixMatches(prefixes seq[seq[bool]], values seq[seq[bool]]) {
+pred NoPrefixMatches(prefixes NotIncl, values Incl) {
 	forall i, j int :: 0 <= i && i < len(prefixes) && 0 <= j && j < len(values) ==>
 		(len(values[j]) < len(prefixes[i]) || prefixes[i] != values[j][:len(prefixes[i])])
 }
 @*/
 
 // @ requires noPerm < p
+// @ requires 0 <= depth
+// @ preserves acc(t.Inv(), p)
+// @ ensures err == nil ==> r != nil && acc(r)
+func (t *Prefix) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r *proofs.NodeValue, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
+	// @ unfold acc(t.Inv(), p)
+	if t.left == nil && t.right == nil {
+		err = errors.New("tree is not inner node")
+		// @ fold acc(t.Inv(), p)
+	} else if left, errL /*@, inclL, notInclL @*/ := t.left.value( /*@ depth+1, p @*/ ); errL != nil {
+		err = errL
+		// @ fold acc(t.Inv(), p)
+	} else if right, errR /*@, inclR, notInclR @*/ := t.right.value( /*@ depth+1, p @*/ ); errR != nil {
+		err = errR
+		// @ fold acc(t.Inv(), p)
+	} else {
+		// @ fold acc(t.Inv(), p)
+		input := make([]byte, 1+sha256.Size+sha256.Size)
+		input[0] = 0x03
+		// @ invariant 0 <= i && i <= sha256.Size
+		// @ invariant acc(input) && acc(left, perm(1/2)) && acc(right, perm(1/2))
+		for i := 0; i < sha256.Size; i++ {
+			input[1+i] = left[i]
+			input[1+sha256.Size+i] = right[i]
+		}
+		tmp /*@@@*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
+		r = &tmp
+		// @ incl = inclL ++ inclR
+		// @ notIncl = notInclL ++ notInclR
+	}
+	return
+}
+
+// @ requires noPerm < p
 // @ requires t != nil ==> acc(t.Inv(), p)
+// @ requires 0 <= depth
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
+// @ ensures  err == nil ==> r != nil && acc(r)
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
-func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r [sha256.Size]byte, err error) {
-	r = [sha256.Size]byte{}
+func (t *Prefix) value( /*@ ghost depth int, ghost p perm @*/ ) (r *[sha256.Size]byte, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if t != nil {
-		// @ unfold acc(t.Inv(), p)
-		if t.leaf != nil {
-			// @ unfold acc(t.leaf.Inv(), p)
-			r = t.leaf.value
-			// @ fold acc(t.leaf.Inv(), p)
-		} else if t.left == nil && t.right == nil {
-			err = errors.New("incomplete tree")
-		} else if left, errL := t.left.Value( /*@ p @*/ ); errL != nil {
-			err = errL
-		} else if right, errR := t.right.Value( /*@ p @*/ ); errR != nil {
-			err = errR
+		if /*@ unfolding acc(t.Inv(), p) in @*/ t.leaf != nil {
+			// @ unfold acc(t.Inv(), p)
+			r /*@, incl, notIncl @*/ = t.leaf.Value( /*@ depth, p @*/ )
+			// @ fold acc(t.Inv(), p)
 		} else {
-			input := make([]byte, 1+sha256.Size+sha256.Size)
-			input[0] = 0x03
-			// @ invariant 0 <= i && i <= sha256.Size
-			// @ invariant acc(input)
-			for i := 0; i < sha256.Size; i++ {
-				input[1+i] = left[i]
-				input[1+sha256.Size+i] = right[i]
-			}
-			r = sha256.Sum256(input /*@, perm(1/2) @*/)
+			r, err /*@, incl, notIncl @*/ = t.innerNodeValue( /*@ depth, p @*/ )
 		}
-		// @ fold acc(t.Inv(), p)
+	} else { // t == nil
+		/*@
+		ghost
+		incl = t.Included()
+		notIncl = t.NotIncludedPrefixes(depth)
+		 @*/
+		tmp /*@@@*/ := proofs.NodeValue{}
+		r = &tmp
 	}
+	return
+}
+
+// @ requires noPerm < p
+// @ requires t != nil ==> acc(t.Inv(), p)
+// // @ requires low(t.Included())
+// @ ensures  t != nil ==> acc(t.Inv(), p)
+// @ ensures  err == nil ==> r != nil && acc(r)
+// // @ ensures low(r) && err == nil ==>
+// // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
+// // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
+func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r *proofs.NodeValue, err error) {
+	// @ ghost var incl, notIncl seq[seq[bool]]
+	r, err /*@, incl, notIncl @*/ = t.value( /*@ 0, p @*/ )
 	return
 }
 
@@ -484,6 +566,23 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 	return
 }
 
+// @ requires 0 <= depth
+// @ preserves t.Inv()
+func (t *Prefix) cutLeaf( /*@ ghost depth int @*/ ) {
+	// @ unfold t.Inv()
+	if t.leaf != nil {
+		var value /*@@@*/ *proofs.NodeValue
+		// @ ghost var tmp1, tmp2 seq[seq[bool]]
+		value /*@, tmp1, tmp2 @*/ = t.leaf.Value( /*@ depth, perm(1/2) @*/ )
+		// @ unfold t.leaf.Inv()
+		t.leaf.value = value
+		t.leaf.searchKey = nil
+		t.leaf.commitment = nil
+		// @ fold t.leaf.Inv()
+	}
+	// @ fold t.Inv()
+}
+
 // TODO: Verification is rather slow. Optimize.
 // @ requires  noPerm < p
 // @ requires  0 <= depth
@@ -494,12 +593,19 @@ func (t *Prefix) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, gh
 	if /*@ unfolding t.Inv() in @*/ t.leaf != nil {
 		// @ unfold t.Inv()
 		// @ unfold t.leaf.Inv()
-		if t.leaf.searchKey != nil && bytes.Equal(t.leaf.searchKey, searchKey /*@, p, p @*/) {
-			t.leaf.searchKey = nil
-			t.leaf.commitment = nil
-		}
-		// @ fold t.leaf.Inv()
-		// @ fold t.Inv()
+		if t.leaf.searchKey != nil {
+			// @ unfold utils.BytesMem(t.leaf.searchKey)
+			cut := bytes.Equal(t.leaf.searchKey, searchKey /*@, perm(1/2), p @*/)
+			// @ fold utils.BytesMem(t.leaf.searchKey)
+			// @ fold t.leaf.Inv()
+			// @ fold t.Inv()
+			if cut {
+				t.cutLeaf( /*@ depth @*/ )
+			}
+		} /*@ else {
+			// @ fold t.leaf.Inv()
+			// @ fold t.Inv()
+		} @*/
 	} else if depth < len(searchKeyPath) {
 		// @ unfold t.Inv()
 		if searchKeyPath[depth] {
@@ -562,18 +668,18 @@ func leafTreeProof(leaf *prefixLeaf, depth uint8 /*@, ghost p perm @*/) (prf *pr
 		comm /*@@@*/ := *leaf.commitment
 		searchResult /*@@@*/ := proofs.PrefixSearchResult{
 			Leaf: &proofs.PrefixLeaf{
-				Vrf_output: make([]byte, len(leaf.searchKey)),
+				Vrf_output: utils.Copy(leaf.searchKey /*@, p @*/),
 				Commitment: &comm,
 			},
 			Depth: depth,
 		}
-		copy(searchResult.Leaf.Vrf_output, leaf.searchKey /*@, p @*/)
 		// @ fold acc(searchResult.Leaf.Inv())
 		// @ fold acc((&searchResult).Inv())
 		prf.Results = []*proofs.PrefixSearchResult{&searchResult}
 		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results))
 	} else {
-		prf.Elements = []*proofs.NodeValue{&leaf.value}
+		tmp /*@@@*/ := *leaf.value
+		prf.Elements = []*proofs.NodeValue{&tmp}
 		// @ assert forall i, j int :: {prf.Elements[i], prf.Elements[j]} 0 <= i && i < j && j < len(prf.Elements) ==> &(*prf.Elements[i])[0] != &(*prf.Elements[j])[0] && prf.Elements[i] != prf.Elements[j]
 		// TODO: folding below predicate currently fails. No idea why, above
 		// assertion should be enough
