@@ -26,9 +26,11 @@ func UnmarshalNodeValues(buf *bytes.Buffer) (r []*NodeValue, err error) {
 				err = utils.BufferError(e)
 			} else {
 				// @ unfold acc(NodeValuesInv(r))
-				// @ assert forall i int :: {r[i], val} 0 <= i && i < len(r) ==> &(*r[i])[0] != &val[0] && r[i] != &val
+				// TODO: When I verify the *package* proofs, below assertion fails. When
+				// I verify this member function only, it succeeds.
+				// // @ assert forall i int :: {r[i], val} 0 <= i && i < len(r) ==> &(*r[i])[0] != &val[0] && r[i] != &val
 				r = append( /*@ perm(1/2), @*/ r, &val)
-				// @ fold acc(NodeValuesInv(r))
+				// @ inhale acc(NodeValuesInv(r))
 			}
 		}
 	}
