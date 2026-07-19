@@ -184,6 +184,7 @@ func (t *Log) fit(idx uint64) {
 	}
 }
 
+// TODO: Verification takes rather long. Optimize.
 // @ requires l != nil ==> acc(l)
 // @ requires 0 <= idx
 // @ preserves acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
@@ -336,8 +337,8 @@ func (t *Log) computeHash() (err error) {
 	return
 }
 
-// TODO: Below function takes long to verify. Speed up.
 // @ requires noPerm < p
+// TODO: Proving 1 <= size should not be necessary as it is provided by t.Inv() directly
 // @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
 // @ ensures err == nil ==> acc(commitment)
 func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha256.Size]byte, err error) {

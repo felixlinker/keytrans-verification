@@ -108,7 +108,28 @@ func (t *Prefix) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, gho
 	return
 }
 
-// TODO: Verification is rather slow. Speed up.
+// If this is a leaf, move the leaf in a newly created child of the node.
+// @ requires 0 <= depth
+// @ preserves t.Inv()
+func (t *Prefix) extend(depth int) (err error) {
+	if /*@ unfolding t.Inv() in @*/ t.leaf != nil {
+		// @ unfold t.Inv()
+		recLeaf := t.leaf
+		t.leaf = nil
+		// @ fold t.Inv()
+
+		if /*@ unfolding recLeaf.Inv() in @*/ recLeaf.searchKey == nil {
+			err = errors.New("search key error at leaf")
+		} else {
+			// @ unfold recLeaf.Inv()
+			recSearchKey := utils.Bits(recLeaf.searchKey /*@, perm(1/2) @*/)
+			// @ fold recLeaf.Inv()
+			err = t.insertAtChild(recSearchKey, depth, recLeaf /*@, perm(1/2) @*/)
+		}
+	}
+	return
+}
+
 // @ requires  noPerm < p
 // @ requires  acc(path, p)
 // @ requires  0 <= depth
@@ -130,24 +151,10 @@ func (t *Prefix) insert(path []bool, depth int, leaf *prefixLeaf /*@, ghost p pe
 		// @ fold t.Inv()
 	} else {
 		// If there already is a leaf, "push it down" into the left or right
-		// subtree.
-		if /*@ unfolding t.Inv() in @*/ t.leaf != nil {
-			// @ unfold t.Inv()
-			recLeaf := t.leaf
-			t.leaf = nil
-			// @ fold t.Inv()
-
-			if /*@ unfolding recLeaf.Inv() in @*/ recLeaf.searchKey == nil {
-				err = errors.New("search key error at leaf")
-			} else {
-				// @ unfold recLeaf.Inv()
-				recSearchKey := utils.Bits(recLeaf.searchKey /*@, perm(1/2) @*/)
-				// @ fold recLeaf.Inv()
-				err = t.insertAtChild(recSearchKey, depth, recLeaf /*@, perm(1/2) @*/)
-			}
-		}
-
-		if err == nil {
+		// subtree. If there is no leaf, t.extend() is a noop.
+		if e := t.extend(depth); e != nil {
+			err = e
+		} else {
 			err = t.insertAtChild(path, depth, leaf /*@, p @*/)
 		}
 	}
