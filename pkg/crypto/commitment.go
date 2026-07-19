@@ -50,7 +50,7 @@ type CommitmentValue struct {
 
 /*@
 pred (cv *CommitmentValue) Inv() {
-	acc(cv) && acc(cv.Opening) && acc(cv.Label) && acc(cv.Update.Inv())
+	acc(cv) && acc(utils.BytesMem(cv.Opening)) && acc(utils.BytesMem(cv.Label)) && acc(cv.Update.Inv())
 }
 @*/
 

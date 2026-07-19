@@ -69,6 +69,8 @@ pure func (s *SearchRequest) LabelContent() seq[byte] {
 @*/
 
 type SearchResponse struct {
+	// NOTE: Per spec, Version is a uint32, but we use a uint64 for internal
+	// compatibility.
 	Full_tree_head *FullTreeHead
 	Version        *uint64
 	Binary_ladder  []*proofs.BinaryLadderStep
@@ -82,9 +84,26 @@ pred (s *SearchResponse) Inv() {
 	acc(s) && acc(s.Full_tree_head.Inv()) &&
 	(s.Version != nil ==> acc(s.Version)) &&
 	proofs.BinaryLadderStepsInv(s.Binary_ladder) && acc(s.Search.Inv()) &&
-	acc(s.Opening) && acc(s.Value.Inv())
+	acc(utils.BytesMem(s.Opening)) && acc(s.Value.Inv())
 }
 @*/
+
+// @ requires noPerm < p
+// @ requires acc(proofs.PrefixProofsInv(prfs)) && acc(proofs.BinaryLadderStepsInv(ladder))
+// @ preserves acc(utils.BytesMem(label), p)
+// @ preserves acc(st.Inv(), p)
+// @ ensures err == nil ==> 0 < len(pts) && trees.PrefixesInv(pts)
+func (st *UserState) buildPrefixes(label []byte, version uint64, prfs []*proofs.PrefixProof, ladder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (pts []*trees.Prefix, err error) {
+	// @ unfold acc(st.Inv(), p)
+	// @ unfold acc(st.Config.Inv(), p)
+	err = proofs.PullLeaves(prfs, ladder, st.Config.VrfPublicKey, label, version /*@, p/2 @*/)
+	// @ fold acc(st.Config.Inv(), p)
+	// @ fold acc(st.Inv(), p)
+	if err == nil {
+		pts, err = st.MkPrefixes(prfs /*@, p/2 @*/)
+	}
+	return
+}
 
 // @ requires acc(st.Inv())
 // @ preserves acc(query.Inv())
@@ -106,12 +125,10 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	// @ unfold acc(resp.Inv())
 	// @ unfold acc(resp.Search.Inv())
 
-	fth := resp.Full_tree_head
-	// @ unfold acc(fth.Inv())
-	if fth.headType == FullTreeHeadUpdated {
-		err = st.UpdateView( /*@ unfolding acc(fth.Tree_head.Inv()) in @*/ fth.Tree_head.Tree_size, resp.Search.Timestamps, resp.Search.Inclusion /*@, perm(1/2) @*/)
+	if /*@ unfolding acc(resp.Full_tree_head.Inv()) in @*/ resp.Full_tree_head.Tree_head != nil {
+		newTreeSize := /*@ unfolding acc(resp.Full_tree_head.Inv()) in unfolding acc(resp.Full_tree_head.Tree_head.Inv()) in @*/ resp.Full_tree_head.Tree_head.Tree_size
+		err = st.UpdateView(newTreeSize, resp.Search.Timestamps, resp.Search.Inclusion /*@, perm(1/2) @*/)
 	}
-	// @ fold acc(fth.Inv())
 
 	// Phase 2: Validation checks (resp.Inv() still unfolded)
 	if err == nil && resp.Version == nil {
@@ -121,7 +138,7 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 		// @ assert resp.Version != nil // sanity check
 		// TODO: Limitation by Gobra
 		// @ assume 0 <= *resp.Version
-		ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(uint64(*resp.Version) /*@, 0 @*/)
+		ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(*resp.Version /*@, 0 @*/)
 		if len(resp.Binary_ladder) != len(ladderIndices) {
 			err = errors.New("length of binary ladder does not match greatest version")
 		}
@@ -139,14 +156,7 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 
 	var pts []*trees.Prefix
 	if err == nil {
-		// @ unfold acc(st.Inv())
-		// @ unfold acc(st.Config.Inv())
-		err = proofs.PullLeaves(resp.Search.Prefix_proofs, resp.Binary_ladder, st.Config.VrfPublicKey, label, *resp.Version /*@, perm(1/2) @*/)
-		// @ fold acc(st.Config.Inv())
-		// @ fold acc(st.Inv())
-	}
-	if err == nil {
-		pts, err = st.MkPrefixes(resp.Search.Prefix_proofs /*@, perm(1/2) @*/)
+		pts, err = st.buildPrefixes(label, *resp.Version, resp.Search.Prefix_proofs, resp.Binary_ladder /*@, perm(1/2) @*/)
 	}
 
 	// Phase 4: VerifyLatestKey
