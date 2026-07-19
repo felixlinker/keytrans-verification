@@ -58,12 +58,13 @@ func (resp *SearchResponse) Unmarshal(buf *bytes.Buffer, version *uint64) (err e
 	} else {
 		resp.Version = nil
 		if version == nil {
-			if ver /*@@@*/, e := utils.ReadUint64(buf); e != nil {
+			if ver /*@@@*/, e := utils.ReadUint32(buf); e != nil {
 				err = e
 			} else {
-				resp.Version = &ver
+				tmp /*@@@*/ := uint64(ver)
+				resp.Version = &tmp
 				// @ assert acc(resp.Version)
-				version = &ver
+				version = &tmp
 			}
 		}
 
