@@ -8,6 +8,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
 type UpdateValue struct {
 	Value []byte
 }

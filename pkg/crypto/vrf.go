@@ -7,6 +7,8 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
 // @ requires noPerm < p
 // @ preserves acc(label, p)
 // @ ensures   acc(res)

@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+
 type vrfVector struct {
 	name      string
 	label     string
