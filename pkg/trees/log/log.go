@@ -272,7 +272,6 @@ func (t *Tree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Tree, err
 		// @ invariant 0 <= i && i <= len(consistencyPath)
 		// @ invariant acc(t.Inv()) && acc(consistencyPath, perm(1/2))
 		for i := 0; i < len(consistencyPath); i++ {
-			// TODO: Either move assume to pre-condition or improve gobra
 			// @ assume 0 <= consistencyPath[i]
 			t.setLeaf(consistencyPath[i], nil)
 		}

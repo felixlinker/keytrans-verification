@@ -135,7 +135,6 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	}
 	if err == nil {
 		// @ assert resp.Version != nil // sanity check
-		// TODO: Limitation by Gobra
 		// @ assume 0 <= *resp.Version
 		ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(*resp.Version /*@, 0 @*/)
 		if len(resp.Binary_ladder) != len(ladderIndices) {

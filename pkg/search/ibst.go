@@ -156,7 +156,7 @@ func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @
 	// @ unfold acc(utils.Monotonic(timestamps), p)
 	// @ pureTimestamps := utils.GetUint64sContent(timestamps)
 	rightMost := timestamps[len(timestamps)-1] // right timestamp in recursive algorithm from spec
-	// @ assume 0 <= rightMost // TODO: Gobra limitation
+	// @ assume 0 <= rightMost
 	// @ fold acc(utils.Monotonic(timestamps), p)
 	done := false
 	// @ invariant t <= rightMost

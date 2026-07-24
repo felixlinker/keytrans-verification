@@ -71,9 +71,7 @@ func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf)
 		// @ unfold acc(pl.Inv(), p)
 		c /*@@@*/ := utils.Copy(pl.Commitment /*@, p/2 @*/)
 		l = &prefixLeaf{
-			value: nil,
-			// TODO: Could not use pl.Vrf_output[:], so opted for append.
-			// Folding pl.Inv() failed on using [:]
+			value:      nil,
 			searchKey:  utils.Copy(pl.Vrf_output /*@, p/2 @*/),
 			commitment: c,
 		}

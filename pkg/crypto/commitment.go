@@ -74,8 +74,6 @@ func (cv *CommitmentValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 
 // @ preserves noPerm < p && acc(utils.BytesMem(commitment), p) && acc(cv.Inv(), p)
 func VerifyCommitmentValue(commitment []byte, cv *CommitmentValue /*@, ghost p perm @*/) bool {
-	// TODO: Make package variable, but I don't know how to handle the memory
-	// permission of that
 	// See https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-15.1-8.3.1
 	kc := []byte{0xd8, 0x21, 0xf8, 0x79, 0x0d, 0x97, 0x70, 0x97, 0x96, 0xb4, 0xd7, 0x90, 0x33, 0x57, 0xc3, 0xf5}
 
