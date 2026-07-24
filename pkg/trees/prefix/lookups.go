@@ -55,16 +55,13 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 			if searchKey, ok := crypto.VRF_verify(pk, label, ladderVersion, leafData.Proof /*@, p @*/); !ok {
 				err = errors.New("VRF verification failed")
 			} else {
-				k := make([]byte, len(searchKey))
-				copy(k, searchKey /*@, perm(1/2) @*/)
-				misc.MapSet(ladderVersion, k, vrfOutputs)
+				misc.MapSet(ladderVersion, utils.Copy(searchKey /*@, perm(1/2) @*/), vrfOutputs)
 
 				if ladderVersion <= version {
 					if leafData.Commitment == nil {
 						err = errors.New("missing commitment")
 					} else {
 						c := utils.Copy(leafData.Commitment /*@, p @*/)
-						// @ unfold utils.BytesMem(c)
 						misc.MapSet(ladderVersion, c, commitments)
 					}
 				}
@@ -111,7 +108,6 @@ func (ls *Lookups) CheckPrefixTree(t *Tree /*@, ghost p perm @*/) (r []byte, err
 		if searchKey, ok := misc.MapGet(ls.vrfOutputs, lookup /*@, p @*/); !ok {
 			err = errors.New("vrfOutputs incomplete")
 		} else {
-			// @ fold acc(utils.BytesMem(searchKey), tp)
 			if c, ok := t.Search(searchKey /*@, tp @*/); !ok {
 				err = errors.New("failed expected prefix tree lookup")
 			} else {
@@ -125,9 +121,11 @@ func (ls *Lookups) CheckPrefixTree(t *Tree /*@, ghost p perm @*/) (r []byte, err
 					} else if cExpected, ok := misc.MapGet(ls.commitments, lookup /*@, p @*/); !ok {
 						err = errors.New("commitments incomplete")
 					} else {
+						// @ unfold acc(utils.BytesMem(cExpected), p)
 						// @ unfold acc(utils.BytesMem(c), tp/2)
 						equal := bytes.Equal(cExpected, c /*@, p, tp/2 @*/)
 						// @ fold acc(utils.BytesMem(c), tp/2)
+						// @ fold acc(utils.BytesMem(cExpected), p)
 						if !equal {
 							err = errors.New("failed expected prefix tree lookup")
 						} else if lookup == ls.version {

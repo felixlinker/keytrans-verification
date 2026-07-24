@@ -173,13 +173,20 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 					err = e
 				} else if c == nil {
 					err = errors.New("no commitment for frontier node")
-				} else if !bytes.Equal(v, crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/) /*@, perm(1/2), perm(1/2) @*/) {
-					err = errors.New("log tree commitment does not match prefix tree root hash")
 				} else {
-					// TODO: I cannot assert below because whenever I add new lines after
-					// the (now) assume, the assert fails.
-					// @ assume unfolding prefix.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
-					ts = auxAppend(ts, t)
+					h := crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/)
+					// @ unfold utils.BytesMem(v)
+					// @ unfold utils.BytesMem(h)
+					if !bytes.Equal(v, h /*@, perm(1/2), perm(1/2) @*/) {
+						err = errors.New("log tree commitment does not match prefix tree root hash")
+					} else {
+						// TODO: I cannot assert below because whenever I add new lines after
+						// the (now) assume, the assert fails.
+						// @ assume unfolding prefix.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
+						ts = auxAppend(ts, t)
+					}
+					// @ fold utils.BytesMem(v)
+					// @ fold utils.BytesMem(h)
 				}
 				// @ fold acc(st.Inv(), p)
 			}

@@ -84,7 +84,8 @@ func (resp *SearchResponse) Unmarshal(buf *bytes.Buffer, version *uint64) (err e
 				resp.Search = &search
 				resp.Opening = opening
 				resp.Value = &value
-				// @ fold acc(resp.Inv())
+				// @ fold utils.BytesMem(resp.Opening)
+				// @ fold resp.Inv()
 			}
 		}
 	}

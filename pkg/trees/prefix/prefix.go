@@ -666,10 +666,10 @@ func (t *Tree) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
 	// @ invariant acc(utils.BytesSliceInv(searchKeys), p)
 	for i := 0; i < len(searchKeys); i++ {
 		// @ unfold acc(utils.BytesSliceInv(searchKeys), p)
+		// @ unfold acc(utils.BytesMem(searchKeys[i]), p)
 		path := utils.Bits(searchKeys[i] /*@, p @*/)
 		// @ fold acc(utils.BytesMem(searchKeys[i]), p)
 		t.prune(searchKeys[i], path, 0 /*@, p @*/)
-		// @ unfold acc(utils.BytesMem(searchKeys[i]), p)
 		// @ fold acc(utils.BytesSliceInv(searchKeys), p)
 	}
 }

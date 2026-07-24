@@ -54,8 +54,6 @@ func (s *BinaryLadderStep) Unmarshal(buf *bytes.Buffer, withCommitment bool) (er
 				return utils.BufferError(e)
 			}
 			// @ fold acc(utils.BytesMem(s.Commitment))
-		} else {
-			// @ fold acc(utils.BytesMem(s.Commitment))
 		}
 		// @ fold acc(s.Inv())
 	}

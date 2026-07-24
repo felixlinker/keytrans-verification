@@ -220,7 +220,7 @@ func (t *Tree) setLeaf(idx uint64, l []byte) {
 }
 
 // @ preserves acc(t.Inv())
-// @ requires value != nil && acc(utils.BytesMem(value))
+// @ requires acc(utils.BytesMem(value))
 // @ ensures !ok ==> acc(utils.BytesMem(value))
 func (t *Tree) fillLeftMost(value []byte) (ok bool) {
 	// @ unfold acc(t.Inv())
@@ -298,7 +298,7 @@ func (t *Tree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Tree, err
 }
 
 // @ preserves acc(t.Inv())
-// @ ensures err == nil ==> acc(utils.BytesMem(content))
+// @ ensures err == nil ==> 0 < len(content) && acc(utils.BytesMem(content))
 func (t *Tree) hashContent() (content []byte, err error) {
 	if e := t.computeHash(); e != nil {
 		err = e
