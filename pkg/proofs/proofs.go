@@ -134,7 +134,6 @@ func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label [
 					err = errors.New("binary ladder misses commitment")
 				} else {
 					// Copy commitment
-					// @ fold acc(utils.BytesMem(vrfOutput))
 					leaf /*@@@*/ := PrefixLeaf{
 						Vrf_output: vrfOutput,
 						Commitment: utils.Copy(ladder[i].Commitment /*@, p @*/),
