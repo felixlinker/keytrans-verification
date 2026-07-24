@@ -2,13 +2,13 @@ package client
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/search"
-	"github.com/felixlinker/keytrans-verification/pkg/trees"
+	"github.com/felixlinker/keytrans-verification/pkg/trees/log"
+	"github.com/felixlinker/keytrans-verification/pkg/trees/prefix"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
@@ -40,13 +40,13 @@ pred (f *FullTreeHead) Inv() {
 }
 @*/
 
-func VerifyFullTreeHead(config *Configuration, size uint64, root *[sha256.Size]byte, signature []byte) (ok bool) {
+func VerifyFullTreeHead(config *Configuration, size uint64, root []byte, signature []byte) (ok bool) {
 	// TODO:
 	return true
 }
 
 type UserState struct {
-	Tree                *trees.Log
+	Tree                *log.Tree
 	Frontier_timestamps []uint64
 	Config              *Configuration
 }
@@ -106,22 +106,22 @@ func (st *UserState) UpdateView(newSize uint64, timestamps []uint64, prf *proofs
 
 // NOTE: Below function was an attempt to encapsulate some of the challenges I
 // encountered verifying MkPrefixes.
-// @ requires trees.PrefixesInv(ts)
+// @ requires prefix.PrefixesInv(ts)
 // @ requires t.Inv()
-// @ requires unfolding trees.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
-// @ ensures trees.PrefixesInv(r) && len(r) == len(ts)+1
-func auxAppend(ts []*trees.Prefix, t *trees.Prefix) (r []*trees.Prefix) {
-	// @ unfold trees.PrefixesInv(ts)
+// @ requires unfolding prefix.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
+// @ ensures prefix.PrefixesInv(r) && len(r) == len(ts)+1
+func auxAppend(ts []*prefix.Tree, t *prefix.Tree) (r []*prefix.Tree) {
+	// @ unfold prefix.PrefixesInv(ts)
 	r = append( /*@ perm(1/2), @*/ ts, t)
-	// @ fold trees.PrefixesInv(r)
+	// @ fold prefix.PrefixesInv(r)
 	return
 }
 
 // @ requires noPerm < p
 // @ preserves acc(st.Inv(), p)
 // @ requires acc(proofs.PrefixProofsInv(prfs), p)
-// @ ensures err == nil ==> 0 < len(ts) && trees.PrefixesInv(ts)
-func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/) (ts []*trees.Prefix, err error) {
+// @ ensures err == nil ==> 0 < len(ts) && prefix.PrefixesInv(ts)
+func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/) (ts []*prefix.Tree, err error) {
 	// @ unfold acc(st.Inv(), p)
 	size := st.Tree.GetSize( /*@ p @*/ )
 	if size <= 0 {
@@ -147,8 +147,8 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 		} else if len(prfs)+mrd+1 != len(frontier) {
 			err = errors.New("too few or too many prefix proofs")
 		} else {
-			ts = make([]*trees.Prefix, 0, len(prfs))
-			// @ fold trees.PrefixesInv(ts)
+			ts = make([]*prefix.Tree, 0, len(prfs))
+			// @ fold prefix.PrefixesInv(ts)
 			// @ unfold acc(proofs.PrefixProofsInv(prfs), p)
 
 			// @ invariant 0 <= i && i <= len(prfs)
@@ -157,7 +157,7 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 			// @ invariant len(frontier) == unfolding acc(st.Inv(), p) in len(st.Frontier_timestamps)
 			// @ invariant unfolding acc(st.Inv(), p) in st.Tree != nil
 			// @ invariant forall j int :: {prfs[j]} i <= j && j < len(prfs) ==> acc(prfs[j].Inv(), p)
-			// @ invariant trees.PrefixesInv(ts)
+			// @ invariant prefix.PrefixesInv(ts)
 			// @ invariant 0 < i && err == nil ==> 0 < len(ts)
 			for i := 0; i < len(prfs) && err == nil; i++ {
 				// @ unfold acc(st.Inv(), p)
@@ -165,7 +165,7 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 				timestamp := st.Frontier_timestamps[i+mrd]
 				// @ fold acc(utils.Monotonic(st.Frontier_timestamps), p)
 
-				if t, e := trees.MkPrefix(prfs[i] /*@, p @*/); e != nil {
+				if t, e := prefix.MkPrefix(prfs[i] /*@, p @*/); e != nil {
 					err = e
 				} else if v, e := t.Value( /*@ p @*/ ); e != nil {
 					err = e
@@ -173,12 +173,12 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 					err = e
 				} else if c == nil {
 					err = errors.New("no commitment for frontier node")
-				} else if !bytes.Equal(utils.FromDigest(*v), crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/) /*@, perm(1/2), perm(1/2) @*/) {
+				} else if !bytes.Equal(v, crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/) /*@, perm(1/2), perm(1/2) @*/) {
 					err = errors.New("log tree commitment does not match prefix tree root hash")
 				} else {
 					// TODO: I cannot assert below because whenever I add new lines after
 					// the (now) assume, the assert fails.
-					// @ assume unfolding trees.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
+					// @ assume unfolding prefix.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
 					ts = auxAppend(ts, t)
 				}
 				// @ fold acc(st.Inv(), p)

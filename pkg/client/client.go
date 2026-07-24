@@ -1,7 +1,6 @@
 package client
 
 import (
-	"crypto/sha256"
 	"errors"
 
 	//@ "math"
@@ -9,7 +8,7 @@ import (
 	//@ "github.com/felixlinker/keytrans-verification/pkg/arb"
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
-	"github.com/felixlinker/keytrans-verification/pkg/trees"
+	"github.com/felixlinker/keytrans-verification/pkg/trees/prefix"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 	//@ utilsrel "github.com/felixlinker/keytrans-verification/pkg/utils-rel"
 )
@@ -36,16 +35,16 @@ import (
 
 /*@
 // RootHashesInv encapsulates per-element permissions for root hash slices.
-pred RootHashesInv(hashes []*[sha256.Size]byte) {
-	forall i int :: { &hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i]) && utils.BytesMem(hashes[i][:])
+pred RootHashesInv(hashes [][]byte) {
+	forall i int :: { &hashes[i] } 0 <= i && i < len(hashes) ==> acc(&hashes[i]) && utils.BytesMem(hashes[i])
 }
 
 ghost
 requires acc(RootHashesInv(hashes), _)
 requires 0 <= idx && idx < len(hashes)
 decreases
-pure func GetRootHashContent(hashes []*[sha256.Size]byte, idx int) seq[byte] {
-	return unfolding acc(RootHashesInv(hashes), _) in utils.GetBytesContent(hashes[idx][:])
+pure func GetRootHashContent(hashes [][]byte, idx int) seq[byte] {
+	return unfolding acc(RootHashesInv(hashes), _) in utils.GetBytesContent(hashes[idx])
 }
 @*/
 
@@ -92,8 +91,8 @@ pred (s *SearchResponse) Inv() {
 // @ requires acc(proofs.PrefixProofsInv(prfs)) && acc(proofs.BinaryLadderStepsInv(ladder))
 // @ preserves acc(utils.BytesMem(label), p)
 // @ preserves acc(st.Inv(), p)
-// @ ensures err == nil ==> 0 < len(pts) && trees.PrefixesInv(pts)
-func (st *UserState) buildPrefixes(label []byte, version uint64, prfs []*proofs.PrefixProof, ladder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (pts []*trees.Prefix, err error) {
+// @ ensures err == nil ==> 0 < len(pts) && prefix.PrefixesInv(pts)
+func (st *UserState) buildPrefixes(label []byte, version uint64, prfs []*proofs.PrefixProof, ladder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (pts []*prefix.Tree, err error) {
 	// @ unfold acc(st.Inv(), p)
 	// @ unfold acc(st.Config.Inv(), p)
 	err = proofs.PullLeaves(prfs, ladder, st.Config.VrfPublicKey, label, version /*@, p/2 @*/)
@@ -145,16 +144,16 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	}
 
 	// Phase 3: Build prefix pts
-	var lookups *trees.Lookups
+	var lookups *prefix.Lookups
 	if err == nil {
 		// @ unfold acc(st.Inv())
 		// @ unfold acc(st.Config.Inv())
-		lookups, err = trees.MkLookups(label, *resp.Version, st.Config.VrfPublicKey, resp.Binary_ladder /*@, perm(1/2) @*/)
+		lookups, err = prefix.MkLookups(label, *resp.Version, st.Config.VrfPublicKey, resp.Binary_ladder /*@, perm(1/2) @*/)
 		// @ fold acc(st.Config.Inv())
 		// @ fold acc(st.Inv())
 	}
 
-	var pts []*trees.Prefix
+	var pts []*prefix.Tree
 	if err == nil {
 		pts, err = st.buildPrefixes(label, *resp.Version, resp.Search.Prefix_proofs, resp.Binary_ladder /*@, perm(1/2) @*/)
 	}
@@ -189,9 +188,9 @@ type MonitoringMapEntry struct {
 // @ requires  noPerm < p
 // @ preserves acc(cv.Inv(), p)
 // @ preserves acc(lookups.Inv(), p)
-// @ requires acc(trees.PrefixesInv(prefixTrees), p)
+// @ requires acc(prefix.PrefixesInv(prefixTrees), p)
 // @ ensures noPerm < rp
-// @ ensures acc(trees.PrefixesInv(prefixTrees), rp)
+// @ ensures acc(prefix.PrefixesInv(prefixTrees), rp)
 // @ requires  0 < len(prefixTrees) // && len(prefixTrees) <= math.MaxUint64
 // hyper-postcondition:
 // // @ ensures   err == nil &&
@@ -200,15 +199,15 @@ type MonitoringMapEntry struct {
 // // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *trees.Lookups, prefixTrees []*trees.Prefix /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error /*@, ghost rp perm @*/) {
+func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *prefix.Lookups, prefixTrees []*prefix.Tree /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error /*@, ghost rp perm @*/) {
 	// we use `err` to skip loop iterations instead of
 	// returning early, which is not yet supported by Gobra's hypermode.
 
-	var commitment *[sha256.Size]byte
+	var commitment []byte
 	// @ ghost rp = p
 	// @ invariant noPerm < rp && rp <= p
 	// @ invariant acc(cv.Inv(), p) && acc(lookups.Inv(), p)
-	// @ invariant acc(trees.PrefixesInv(prefixTrees), rp)
+	// @ invariant acc(prefix.PrefixesInv(prefixTrees), rp)
 	// @ invariant 0 <= idx && idx <= len(prefixTrees)
 	// hyper-invariants:
 	// // @ invariant low(len(prefixTrees)) ==> low(idx)
@@ -219,14 +218,14 @@ func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *trees.Lookups, prefixT
 	// // @ decreases len(prefixTrees) - idx
 	for idx := 0; idx < len(prefixTrees) && err == nil; idx++ {
 		// TODO: Check monitoring
-		//@ unfold acc(trees.PrefixesInv(prefixTrees), rp)
+		//@ unfold acc(prefix.PrefixesInv(prefixTrees), rp)
 		commitment, err /*@, rp @*/ = lookups.CheckPrefixTree(prefixTrees[idx] /*@, rp @*/)
 		if commitment != nil && err != nil {
-			if !crypto.VerifyCommitmentValue(utils.FromDigest(*commitment), cv /*@, rp @*/) {
+			if !crypto.VerifyCommitmentValue(commitment, cv /*@, rp @*/) {
 				err = errors.New("commitments did not match")
 			}
 		}
-		//@ fold acc(trees.PrefixesInv(prefixTrees), rp)
+		//@ fold acc(prefix.PrefixesInv(prefixTrees), rp)
 	}
 
 	if commitment == nil {

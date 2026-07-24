@@ -1,6 +1,7 @@
-package trees
+package prefix
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"math/rand"
@@ -21,17 +22,17 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 	for testCase := 0; testCase < 4; testCase++ {
 		t.Run(fmt.Sprintf("random set %d", testCase), func(t *testing.T) {
 			commitments := randomLeafs(t, rng, 15)
-			trees := make([]*Prefix, 0, 50)
+			trees := make([]*Tree, 0, 50)
 
 			t.Run("all insertion orders have the same root", func(t *testing.T) {
-				var wantRoot [sha256.Size]byte
+				var wantRoot []byte
 				for range cap(trees) {
 					tree := buildPrefixTree(t, rng, commitments)
 					if root, err := tree.Value(); err != nil {
 						t.Fatalf("Value(): %v", err)
 					} else if len(trees) == 0 {
-						wantRoot = *root
-					} else if *root != wantRoot {
+						wantRoot = root
+					} else if !bytes.Equal(root, wantRoot) {
 						t.Fatalf("root = %x, want %x", root, wantRoot)
 					}
 
@@ -57,7 +58,7 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 					rootAfter, err := tree.Value()
 					if err != nil {
 						t.Fatalf("Value() after pruning error: %v", err)
-					} else if *rootAfter != *rootBefore {
+					} else if !bytes.Equal(rootAfter, rootBefore) {
 						t.Fatalf("pruning changed root: got %x, want %x", rootAfter, rootBefore)
 					}
 
@@ -78,7 +79,7 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 					reconstructedRoot, err := reconstructed.Value()
 					if err != nil {
 						t.Fatalf("reconstructed Value(): %v", err)
-					} else if *reconstructedRoot != *rootAfter {
+					} else if !bytes.Equal(reconstructedRoot, rootAfter) {
 						t.Fatalf("reconstructed root = %x, want %x", reconstructedRoot, rootAfter)
 					}
 
@@ -87,8 +88,8 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 						gotCommitment, gotOk := reconstructed.Search(commitment[:])
 						if (expectCommitment == nil) != (gotCommitment == nil) {
 							t.Fatalf("got commitment = %x, want %x", gotCommitment, expectCommitment)
-						} else if expectCommitment != nil && *expectCommitment != *gotCommitment {
-							t.Fatalf("got commitment = %x, want %x", *gotCommitment, *expectCommitment)
+						} else if expectCommitment != nil && !bytes.Equal(expectCommitment, gotCommitment) {
+							t.Fatalf("got commitment = %x, want %x", gotCommitment, expectCommitment)
 						}
 						if expectOk != gotOk {
 							t.Fatalf("got inclusion status = %v, want %v", gotOk, expectOk)
@@ -101,38 +102,39 @@ func TestPrefixInsertionOrderAndPruning(t *testing.T) {
 }
 
 // @ trusted
-func randomLeafs(t *testing.T, rng *rand.Rand, count int) []*[sha256.Size]byte {
+func randomLeafs(t *testing.T, rng *rand.Rand, count int) [][]byte {
 	t.Helper()
 
-	keys := make([]*[sha256.Size]byte, 0, count)
-	seen := make(map[[sha256.Size]byte]bool, count)
+	keys := make([][]byte, 0, count)
+	seen := make(map[string]bool, count)
 	for len(keys) < count {
-		var searchKey [sha256.Size]byte
-		if _, err := rng.Read(searchKey[:]); err != nil {
+		searchKey := make([]byte, sha256.Size)
+		if _, err := rng.Read(searchKey); err != nil {
 			t.Fatalf("generating random search key: %v", err)
 		}
 
-		if !seen[searchKey] {
-			seen[searchKey] = true
-			keys = append(keys, &searchKey)
+		key := string(searchKey)
+		if !seen[key] {
+			seen[key] = true
+			keys = append(keys, searchKey)
 		}
 	}
 	return keys
 }
 
 // @ trusted
-func buildPrefixTree(t *testing.T, rng *rand.Rand, commitments []*[sha256.Size]byte) *Prefix {
+func buildPrefixTree(t *testing.T, rng *rand.Rand, commitments [][]byte) *Tree {
 	t.Helper()
 
 	tree := mkTree()
-	tmp := make([]*[sha256.Size]byte, len(commitments))
+	tmp := make([][]byte, len(commitments))
 	copy(tmp, commitments)
 	for 0 < len(tmp) {
 		i := rng.Intn(len(tmp))
-		commitment := *tmp[i]
+		commitment := tmp[i]
 		leaf := commitmentLeaf(&proofs.PrefixLeaf{
-			Vrf_output: commitment[:],
-			Commitment: &commitment,
+			Vrf_output: commitment,
+			Commitment: commitment,
 		})
 		if err := tree.Insert(leaf); err != nil {
 			t.Fatalf("Insert(%x): %v", commitment, err)
@@ -144,7 +146,7 @@ func buildPrefixTree(t *testing.T, rng *rand.Rand, commitments []*[sha256.Size]b
 }
 
 // @ trusted
-func remove(s []*[sha256.Size]byte, i int) (r []*[sha256.Size]byte) {
+func remove(s [][]byte, i int) (r [][]byte) {
 	if i < len(s) {
 		if 2 <= len(s) && i < len(s)-1 {
 			s[i] = s[len(s)-1]

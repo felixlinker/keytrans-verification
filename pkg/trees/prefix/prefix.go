@@ -1,10 +1,11 @@
-package trees
+package prefix
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
 
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/trees/misc"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
@@ -13,9 +14,9 @@ import (
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
 type prefixLeaf struct {
-	value      *[sha256.Size]byte
+	value      []byte
 	searchKey  []byte
-	commitment *[sha256.Size]byte
+	commitment []byte
 }
 
 /*@
@@ -23,23 +24,23 @@ pred (l *prefixLeaf) Inv() {
 	acc(l) &&
 	// Either value is not nil, or search key AND commitment are not nil
 	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
-	(l.value != nil ==> acc(l.value)) &&
+	(l.value != nil ==> acc(utils.BytesMem(l.value))) &&
 	(l.searchKey != nil ==> acc(utils.BytesMem(l.searchKey))) &&
-	(l.commitment != nil ==> acc(l.commitment))
+	(l.commitment != nil ==> acc(utils.BytesMem(l.commitment)))
 }
 @*/
 
 // @ requires  noPerm < p
 // @ requires  0 <= depth
 // @ preserves acc(l.Inv(), p)
-// @ ensures   v != nil && acc(v)
+// @ ensures   v != nil && acc(utils.BytesMem(v))
 // // @ ensures   low(*v) ==> true
-func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v *proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
+func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
 		// @ unfold acc(l.Inv(), p)
-		cop /*@@@*/ := *l.value
+		cop /*@@@*/ := utils.Copy(l.value /*@, p @*/)
 		// @ fold acc(l.Inv(), p)
-		v = &cop
+		v = cop
 		// A hash value proves nothing about inclusion or non-inclusion
 		// @ incl = Incl{}
 		// @ notIncl = NotIncl{}
@@ -49,13 +50,15 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v *proofs.N
 		// @ unfold acc(l.Inv(), p)
 		// @ unfold acc(utils.BytesMem(l.searchKey), p)
 		input = append( /*@ p, @*/ input, l.searchKey...)
-		input = append( /*@ p, @*/ input, utils.FromDigest(*l.commitment)...)
+		// @ unfold acc(utils.BytesMem(l.commitment), p)
+		input = append( /*@ p, @*/ input, l.commitment...)
+		// @ fold acc(utils.BytesMem(l.commitment), p)
 		// @ incl = Incl{ utils.Bits_Pure(l.searchKey) }
 		// @ notIncl = utils.FlippedTailsPure(utils.Bits_Pure(l.searchKey), depth)
 		// @ fold acc(utils.BytesMem(l.searchKey), p)
 		// @ fold acc(l.Inv(), p)
-		value /*@@@*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
-		v = &value
+		// @ fold acc(utils.BytesMem(input))
+		v = crypto.Sum(input /*@, perm(1/2) @*/)
 	}
 	return
 }
@@ -66,17 +69,13 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v *proofs.N
 func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf) {
 	if pl != nil {
 		// @ unfold acc(pl.Inv(), p)
-		c /*@@@*/ := *pl.Commitment
-		// @ assert c[0] == pl.Commitment[0]
-		// The above assert is required so that gobra realizes the assert below.
-		// @ assert &c != pl.Commitment
-		// @ assert acc(&c)
+		c /*@@@*/ := utils.Copy(pl.Commitment /*@, p/2 @*/)
 		l = &prefixLeaf{
 			value: nil,
 			// TODO: Could not use pl.Vrf_output[:], so opted for append.
 			// Folding pl.Inv() failed on using [:]
 			searchKey:  utils.Copy(pl.Vrf_output /*@, p/2 @*/),
-			commitment: &c,
+			commitment: c,
 		}
 		// @ fold l.Inv()
 		// @ fold acc(pl.Inv(), p)
@@ -84,14 +83,14 @@ func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf)
 	return
 }
 
-type Prefix struct {
+type Tree struct {
 	leaf  *prefixLeaf
-	left  *Prefix
-	right *Prefix
+	left  *Tree
+	right *Tree
 }
 
 /*@
-pred (t *Prefix) Inv() {
+pred (t *Tree) Inv() {
 	acc(t) &&
 	(t.leaf != nil ==> t.leaf.Inv()) &&
 	(t.left != nil ==> t.left.Inv()) &&
@@ -100,14 +99,14 @@ pred (t *Prefix) Inv() {
 @*/
 
 /*@
-pred PrefixesInv(ts []*Prefix) {
+pred PrefixesInv(ts []*Tree) {
 	forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> acc(&ts[i]) && acc(ts[i].Inv())
 }
 @*/
 
 // @ ensures t.Inv()
-func mkTree() (t *Prefix) {
-	t = &Prefix{}
+func mkTree() (t *Tree) {
+	t = &Tree{}
 	// @ fold t.Inv()
 	return
 }
@@ -117,7 +116,7 @@ func mkTree() (t *Prefix) {
 // @ requires  0 <= depth
 // @ requires  leaf.Inv()
 // @ preserves t.Inv()
-func (t *Prefix) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, ghost p perm @*/) (err error) {
+func (t *Tree) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, ghost p perm @*/) (err error) {
 	// @ unfold t.Inv()
 	if depth >= len(path) {
 		err = errors.New("path too short for tree depth")
@@ -139,7 +138,7 @@ func (t *Prefix) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, gho
 // If this is a leaf, move the leaf in a newly created child of the node.
 // @ requires 0 <= depth
 // @ preserves t.Inv()
-func (t *Prefix) extend(depth int) (err error) {
+func (t *Tree) extend(depth int) (err error) {
 	if /*@ unfolding t.Inv() in @*/ t.leaf != nil {
 		// @ unfold t.Inv()
 		recLeaf := t.leaf
@@ -150,7 +149,9 @@ func (t *Prefix) extend(depth int) (err error) {
 			err = errors.New("search key error at leaf")
 		} else {
 			// @ unfold recLeaf.Inv()
+			// @ unfold utils.BytesMem(recLeaf.searchKey)
 			recSearchKey := utils.Bits(recLeaf.searchKey /*@, perm(1/2) @*/)
+			// @ fold utils.BytesMem(recLeaf.searchKey)
 			// @ fold recLeaf.Inv()
 			err = t.insertAtChild(recSearchKey, depth, recLeaf /*@, perm(1/2) @*/)
 		}
@@ -163,7 +164,7 @@ func (t *Prefix) extend(depth int) (err error) {
 // @ requires  0 <= depth
 // @ requires  leaf.Inv()
 // @ preserves t.Inv()
-func (t *Prefix) insert(path []bool, depth int, leaf *prefixLeaf /*@, ghost p perm @*/) (err error) {
+func (t *Tree) insert(path []bool, depth int, leaf *prefixLeaf /*@, ghost p perm @*/) (err error) {
 	if /*@ unfolding t.Inv() in @*/ t.leaf == nil && t.left == nil && t.right == nil {
 		// @ unfold t.Inv()
 		t.leaf = leaf
@@ -191,7 +192,7 @@ func (t *Prefix) insert(path []bool, depth int, leaf *prefixLeaf /*@, ghost p pe
 
 // @ requires  leaf.Inv()
 // @ preserves t.Inv()
-func (t *Prefix) Insert(leaf *prefixLeaf) (err error) {
+func (t *Tree) Insert(leaf *prefixLeaf) (err error) {
 	if /*@ unfolding acc(leaf.Inv()) in @*/ leaf.searchKey == nil {
 		err = errors.New("cannot insert leaf without search key")
 	} else {
@@ -207,7 +208,7 @@ func (t *Prefix) Insert(leaf *prefixLeaf) (err error) {
 
 // @ requires  noPerm < p
 // @ preserves t != nil ==> acc(t.Inv(), p)
-func (t *Prefix) IsEmpty( /*@ ghost p perm @*/ ) (empty bool) {
+func (t *Tree) IsEmpty( /*@ ghost p perm @*/ ) (empty bool) {
 	if t == nil {
 		empty = true
 	} else {
@@ -225,13 +226,12 @@ func (t *Prefix) IsEmpty( /*@ ghost p perm @*/ ) (empty bool) {
 }
 
 // @ requires noPerm < p
-// @ preserves acc(nodeValue, p)
+// @ preserves acc(utils.BytesMem(nodeValue), p)
 // @ ensures t.Inv()
-func nodeValueLeaf(nodeValue *proofs.NodeValue /*@, ghost p perm @*/) (t *Prefix) {
-	tmp /*@@@*/ := *nodeValue
-	t = &Prefix{
+func nodeValueLeaf(nodeValue proofs.NodeValue /*@, ghost p perm @*/) (t *Tree) {
+	t = &Tree{
 		leaf: &prefixLeaf{
-			value:      &tmp,
+			value:      utils.Copy(nodeValue /*@, p @*/),
 			searchKey:  nil,
 			commitment: nil,
 		},
@@ -247,7 +247,7 @@ func nodeValueLeaf(nodeValue *proofs.NodeValue /*@, ghost p perm @*/) (t *Prefix
 // @ requires  t.Inv() && leaf.Inv()
 // @ preserves acc(steps)
 // @ ensures   t.Inv()
-func (t *Prefix) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
+func (t *Tree) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 	// @ unfold t.Inv()
 	if depth == 0 {
 		t.leaf = leaf
@@ -276,19 +276,19 @@ func (t *Prefix) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 // @ requires  acc(proofs.NodeValuesInv(elements), p)
 // @ preserves t.Inv()
 // @ ensures   err == nil ==> acc(proofs.NodeValuesInv(es), p)
-func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []*proofs.NodeValue, err error) {
+func (t *Tree) fill(elements []proofs.NodeValue /*@, ghost p perm @*/) (es []proofs.NodeValue, err error) {
 	// @ unfold t.Inv()
 	if t.leaf != nil {
 		es = elements
 	} else {
-		var esL []*proofs.NodeValue
+		var esL []proofs.NodeValue
 		if t.left != nil {
 			esL, err = t.left.fill(elements /*@, p @*/)
 		} else if len(elements) == 0 {
 			err = errors.New("too few elements")
 		} else {
 			// @ unfold acc(proofs.NodeValuesInv(elements), p)
-			if !utils.AllZero(*elements[0]) {
+			if !utils.AllZero(elements[0] /*@, p @*/) {
 				t.left = nodeValueLeaf(elements[0] /*@, p @*/)
 			}
 			esL = elements[1:]
@@ -303,7 +303,7 @@ func (t *Prefix) fill(elements []*proofs.NodeValue /*@, ghost p perm @*/) (es []
 				err = errors.New("too few elements")
 			} else {
 				// @ unfold acc(proofs.NodeValuesInv(esL), p)
-				if !utils.AllZero(*esL[0]) {
+				if !utils.AllZero(esL[0] /*@, p @*/) {
 					t.right = nodeValueLeaf(esL[0] /*@, p @*/)
 				}
 				es = esL[1:]
@@ -325,7 +325,7 @@ ghost
 requires  t != nil ==> acc(t.Inv(), _)
 ensures   0 <= r
 decreases acc(t.Inv(), _)
-pure func (t *Prefix) depth() (r uint64) {
+pure func (t *Tree) depth() (r uint64) {
 	return t == nil ? 0 :
 		unfolding acc(t.Inv(), _) in
 			let lDepth := t.left == nil ? 0 : t.left.depth() in
@@ -338,7 +338,7 @@ ghost type Incl = seq[seq[bool]]
 ghost
 requires  t != nil ==> acc(t.Inv(), _)
 decreases t.depth()
-pure func (t *Prefix) Included() (r Incl) {
+pure func (t *Tree) Included() (r Incl) {
 	return (t == nil ?
 		// The empty leaf proves inclusion of no prefix
 		Incl{} :
@@ -355,7 +355,7 @@ ghost
 requires  t != nil ==> acc(t.Inv(), _)
 requires  0 <= depth
 decreases t.depth()
-pure func (t *Prefix) NotIncludedPrefixes(depth int) (r NotIncl) {
+pure func (t *Tree) NotIncludedPrefixes(depth int) (r NotIncl) {
 	return (t == nil ?
 		// The empty leaf proves non-inclusion of every suffix
 		NotIncl{ seq[bool]{} } :
@@ -381,8 +381,8 @@ pred NoPrefixMatches(prefixes NotIncl, values Incl) {
 // @ requires noPerm < p
 // @ requires 0 <= depth
 // @ preserves acc(t.Inv(), p)
-// @ ensures err == nil ==> r != nil && acc(r)
-func (t *Prefix) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r *proofs.NodeValue, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
+// @ ensures err == nil ==> r != nil && acc(utils.BytesMem(r))
+func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs.NodeValue, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	// @ unfold acc(t.Inv(), p)
 	if t.left == nil && t.right == nil {
 		err = errors.New("tree is not inner node")
@@ -395,16 +395,24 @@ func (t *Prefix) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r *pro
 		// @ fold acc(t.Inv(), p)
 	} else {
 		// @ fold acc(t.Inv(), p)
-		input := make([]byte, 1+sha256.Size+sha256.Size)
+		input := make([]byte, 1+len(left)+len(right))
 		input[0] = 0x03
-		// @ invariant 0 <= i && i <= sha256.Size
+		// @ unfold acc(utils.BytesMem(left))
+		// @ unfold acc(utils.BytesMem(right))
+		// @ invariant len(input) == 1+len(left)+len(right)
+		// @ invariant 0 <= i && i <= len(left)
 		// @ invariant acc(input) && acc(left, perm(1/2)) && acc(right, perm(1/2))
-		for i := 0; i < sha256.Size; i++ {
+		for i := 0; i < len(left); i++ {
 			input[1+i] = left[i]
-			input[1+sha256.Size+i] = right[i]
 		}
-		tmp /*@@@*/ := sha256.Sum256(input /*@, perm(1/2) @*/)
-		r = &tmp
+		// @ invariant len(input) == 1+len(left)+len(right)
+		// @ invariant 0 <= i && i <= len(right)
+		// @ invariant acc(input) && acc(left, perm(1/2)) && acc(right, perm(1/2))
+		for i := 0; i < len(right); i++ {
+			input[1+len(left)+i] = right[i]
+		}
+		// @ fold acc(utils.BytesMem(input))
+		r = crypto.Sum(input /*@, perm(1/2) @*/)
 		// @ incl = inclL ++ inclR
 		// @ notIncl = notInclL ++ notInclR
 	}
@@ -416,11 +424,11 @@ func (t *Prefix) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r *pro
 // @ requires 0 <= depth
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
-// @ ensures  err == nil ==> r != nil && acc(r)
+// @ ensures  err == nil ==> r != nil && acc(utils.BytesMem(r))
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
-func (t *Prefix) value( /*@ ghost depth int, ghost p perm @*/ ) (r *[sha256.Size]byte, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
+func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if t != nil {
 		if /*@ unfolding acc(t.Inv(), p) in @*/ t.leaf != nil {
 			// @ unfold acc(t.Inv(), p)
@@ -435,8 +443,8 @@ func (t *Prefix) value( /*@ ghost depth int, ghost p perm @*/ ) (r *[sha256.Size
 		incl = t.Included()
 		notIncl = t.NotIncludedPrefixes(depth)
 		 @*/
-		tmp /*@@@*/ := proofs.NodeValue{}
-		r = &tmp
+		r = make(proofs.NodeValue, sha256.Size)
+		// @ fold acc(utils.BytesMem(r))
 	}
 	return
 }
@@ -445,11 +453,11 @@ func (t *Prefix) value( /*@ ghost depth int, ghost p perm @*/ ) (r *[sha256.Size
 // @ requires t != nil ==> acc(t.Inv(), p)
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
-// @ ensures  err == nil ==> r != nil && acc(r)
+// @ ensures  err == nil ==> r != nil && acc(utils.BytesMem(r))
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
-func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r *proofs.NodeValue, err error) {
+func (t *Tree) Value( /*@ ghost p perm @*/ ) (r proofs.NodeValue, err error) {
 	// @ ghost var incl, notIncl seq[seq[bool]]
 	r, err /*@, incl, notIncl @*/ = t.value( /*@ 0, p @*/ )
 	return
@@ -461,7 +469,7 @@ func (t *Prefix) Value( /*@ ghost p perm @*/ ) (r *proofs.NodeValue, err error) 
 // @ ensures   acc(t.Inv(), p/2)
 // @ ensures   l == nil ==> acc(t.Inv(), p/2)
 // @ ensures   l != nil ==> acc(l.Inv(), p/2)
-func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
+func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
 	// @ unfold acc(t.Inv(), p)
 	if t.leaf != nil || len(searchKey) == 0 {
 		l = t.leaf
@@ -491,12 +499,15 @@ func (t *Prefix) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf,
 
 // @ requires  noPerm < p
 // @ requires  acc(t.Inv(), p)
-// @ preserves acc(searchKey, p)
+// @ preserves acc(utils.BytesMem(searchKey), p)
 // @ ensures   acc(t.Inv(), p/2)
-// @ ensures   r != nil ==> acc(r, p/2)
-func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size]byte, ok bool) {
+// @ ensures   r != nil ==> acc(utils.BytesMem(r), p/2)
+func (t *Tree) Search(searchKey []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
 	// TODO: Cannot return r == nil && ok
-	if leaf, leafOk := t.getLeaf(utils.Bits(searchKey /*@, p @*/) /*@, p @*/); !leafOk {
+	// @ unfold acc(utils.BytesMem(searchKey), p)
+	searchKeyBits := utils.Bits(searchKey /*@, p @*/)
+	// @ fold acc(utils.BytesMem(searchKey), p)
+	if leaf, leafOk := t.getLeaf(searchKeyBits /*@, p @*/); !leafOk {
 		ok = false
 	} else if leaf == nil {
 		ok = true
@@ -507,9 +518,12 @@ func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size
 		} else if leaf.commitment == nil {
 			ok = false
 		} else {
-			c /*@@@*/ := *leaf.commitment
-			r = &c
+			r = utils.Copy(leaf.commitment /*@, p/2 @*/)
+			// @ unfold acc(utils.BytesMem(leaf.searchKey), p/2)
+			// @ unfold acc(utils.BytesMem(searchKey), p)
 			ok = bytes.Equal(leaf.searchKey, searchKey /*@, p/2, p @*/)
+			// @ fold acc(utils.BytesMem(searchKey), p)
+			// @ fold acc(utils.BytesMem(leaf.searchKey), p/2)
 		}
 		// @ fold acc(leaf.Inv(), p/2)
 	}
@@ -521,8 +535,8 @@ func (t *Prefix) Search(searchKey []byte /*@, ghost p perm @*/) (r *[sha256.Size
 // @ requires noPerm < p
 // @ requires acc(prf.Inv(), p)
 // @ ensures  err == nil ==> tree.Inv()
-func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err error) {
-	tree = &Prefix{}
+func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Tree, err error) {
+	tree = &Tree{}
 	// @ fold tree.Inv()
 
 	// @ invariant tree.Inv()
@@ -539,13 +553,16 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 			err = errors.New("missing prefix proof leaf")
 		} else {
 			// @ unfold acc(result.Leaf.Inv(), p)
-			searchKey := make([]byte, len(result.Leaf.Vrf_output))
-			copy(searchKey, result.Leaf.Vrf_output /*@, p @*/)
+			searchKey := utils.Copy(result.Leaf.Vrf_output /*@, p @*/)
+			// @ unfold utils.BytesMem(searchKey)
 			searchKeyBits := utils.Bits(searchKey /*@, perm(1/2) @*/)
+			// @ fold utils.BytesMem(searchKey)
 
-			commitment /*@@@*/ := *result.Leaf.Commitment // Copy commitment
+			l /*@@@*/ := proofs.PrefixLeaf{
+				Vrf_output: searchKey,
+				Commitment: utils.Copy(result.Leaf.Commitment /*@, p @*/),
+			}
 			// @ fold acc(result.Leaf.Inv(), p)
-			l /*@@@*/ := proofs.PrefixLeaf{Vrf_output: searchKey, Commitment: &commitment}
 			// @ fold acc((&l).Inv(), p)
 			// @ assume 0 <= result.Depth && result.Depth <= 255 // help gobra with uint
 			// @ assume int(result.Depth) <= len(searchKeyBits) // TODO: make invariant
@@ -568,10 +585,10 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Prefix, err 
 
 // @ requires 0 <= depth
 // @ preserves t.Inv()
-func (t *Prefix) cutLeaf( /*@ ghost depth int @*/ ) {
+func (t *Tree) cutLeaf( /*@ ghost depth int @*/ ) {
 	// @ unfold t.Inv()
 	if t.leaf != nil {
-		var value /*@@@*/ *proofs.NodeValue
+		var value /*@@@*/ proofs.NodeValue
 		// @ ghost var tmp1, tmp2 seq[seq[bool]]
 		value /*@, tmp1, tmp2 @*/ = t.leaf.Value( /*@ depth, perm(1/2) @*/ )
 		// @ unfold t.leaf.Inv()
@@ -587,15 +604,17 @@ func (t *Prefix) cutLeaf( /*@ ghost depth int @*/ ) {
 // @ requires  noPerm < p
 // @ requires  0 <= depth
 // @ preserves acc(t.Inv())
-// @ preserves acc(searchKey, p)
+// @ preserves acc(utils.BytesMem(searchKey), p)
 // @ preserves acc(searchKeyPath, p)
-func (t *Prefix) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, ghost p perm @*/) (err error) {
+func (t *Tree) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, ghost p perm @*/) (err error) {
 	if /*@ unfolding t.Inv() in @*/ t.leaf != nil {
 		// @ unfold t.Inv()
 		// @ unfold t.leaf.Inv()
 		if t.leaf.searchKey != nil {
 			// @ unfold utils.BytesMem(t.leaf.searchKey)
+			// @ unfold acc(utils.BytesMem(searchKey), p)
 			cut := bytes.Equal(t.leaf.searchKey, searchKey /*@, perm(1/2), p @*/)
+			// @ fold acc(utils.BytesMem(searchKey), p)
 			// @ fold utils.BytesMem(t.leaf.searchKey)
 			// @ fold t.leaf.Inv()
 			// @ fold t.Inv()
@@ -641,13 +660,16 @@ func (t *Prefix) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, gh
 // @ requires  noPerm < p
 // @ preserves t.Inv()
 // @ preserves acc(utils.BytesSliceInv(searchKeys), p)
-func (t *Prefix) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
+func (t *Tree) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
 	// @ invariant 0 <= i && i <= len(searchKeys)
 	// @ invariant t.Inv()
 	// @ invariant acc(utils.BytesSliceInv(searchKeys), p)
 	for i := 0; i < len(searchKeys); i++ {
 		// @ unfold acc(utils.BytesSliceInv(searchKeys), p)
-		t.prune(searchKeys[i], utils.Bits(searchKeys[i] /*@, p @*/), 0 /*@, p @*/)
+		path := utils.Bits(searchKeys[i] /*@, p @*/)
+		// @ fold acc(utils.BytesMem(searchKeys[i]), p)
+		t.prune(searchKeys[i], path, 0 /*@, p @*/)
+		// @ unfold acc(utils.BytesMem(searchKeys[i]), p)
 		// @ fold acc(utils.BytesSliceInv(searchKeys), p)
 	}
 }
@@ -658,18 +680,17 @@ func (t *Prefix) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
 func leafTreeProof(leaf *prefixLeaf, depth uint8 /*@, ghost p perm @*/) (prf *proofs.PrefixProof) {
 	prf = &proofs.PrefixProof{
 		Results:  []*proofs.PrefixSearchResult{},
-		Elements: []*proofs.NodeValue{},
+		Elements: []proofs.NodeValue{},
 	}
 	// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results))
 	// @ fold acc(proofs.NodeValuesInv(prf.Elements))
 
 	// @ unfold acc(leaf.Inv(), p)
 	if leaf.searchKey != nil && leaf.commitment != nil {
-		comm /*@@@*/ := *leaf.commitment
 		searchResult /*@@@*/ := proofs.PrefixSearchResult{
 			Leaf: &proofs.PrefixLeaf{
 				Vrf_output: utils.Copy(leaf.searchKey /*@, p @*/),
-				Commitment: &comm,
+				Commitment: utils.Copy(leaf.commitment /*@, p @*/),
 			},
 			Depth: depth,
 		}
@@ -678,9 +699,8 @@ func leafTreeProof(leaf *prefixLeaf, depth uint8 /*@, ghost p perm @*/) (prf *pr
 		prf.Results = []*proofs.PrefixSearchResult{&searchResult}
 		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results))
 	} else {
-		tmp /*@@@*/ := *leaf.value
-		prf.Elements = []*proofs.NodeValue{&tmp}
-		// @ assert forall i, j int :: {prf.Elements[i], prf.Elements[j]} 0 <= i && i < j && j < len(prf.Elements) ==> &(*prf.Elements[i])[0] != &(*prf.Elements[j])[0] && prf.Elements[i] != prf.Elements[j]
+		prf.Elements = []proofs.NodeValue{utils.Copy(leaf.value /*@, p @*/)}
+		// @ assert forall i, j int :: {prf.Elements[i], prf.Elements[j]} 0 <= i && i < j && j < len(prf.Elements) ==> &prf.Elements[i][0] != &prf.Elements[j][0]
 		// TODO: folding below predicate currently fails. No idea why, above
 		// assertion should be enough
 		// @ inhale proofs.NodeValuesInv(prf.Elements)
@@ -692,11 +712,11 @@ func leafTreeProof(leaf *prefixLeaf, depth uint8 /*@, ghost p perm @*/) (prf *pr
 
 // @ ensures prf.Inv()
 func emptyTreeProof() (prf *proofs.PrefixProof) {
-	val := &proofs.NodeValue{}
 	prf = &proofs.PrefixProof{
 		Results:  []*proofs.PrefixSearchResult{},
-		Elements: []*proofs.NodeValue{val},
+		Elements: []proofs.NodeValue{make(proofs.NodeValue, sha256.Size)},
 	}
+	// @ fold utils.BytesMem(prf.Elements[0])
 	// @ fold proofs.PrefixSearchResultsInv(prf.Results)
 	// TODO: The usual story. Injectivity.
 	// @ inhale proofs.NodeValuesInv(prf.Elements)
@@ -707,7 +727,7 @@ func emptyTreeProof() (prf *proofs.PrefixProof) {
 // @ requires  noPerm < p
 // @ preserves acc(t.Inv(), p)
 // @ ensures prf.Inv()
-func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.PrefixProof) {
+func (t *Tree) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.PrefixProof) {
 	// @ unfold acc(t.Inv(), p)
 	if t.leaf != nil {
 		prf = leafTreeProof(t.leaf, depth /*@, p @*/)
@@ -732,6 +752,6 @@ func (t *Prefix) proofFromTree(depth uint8 /*@, ghost p perm @*/) (prf *proofs.P
 // @ requires  noPerm < p
 // @ preserves acc(t.Inv(), p)
 // @ ensures   prf.Inv()
-func (t *Prefix) ProofFromTree( /*@ ghost p perm @*/ ) (prf *proofs.PrefixProof) {
+func (t *Tree) ProofFromTree( /*@ ghost p perm @*/ ) (prf *proofs.PrefixProof) {
 	return t.proofFromTree(0 /*@, p @*/)
 }

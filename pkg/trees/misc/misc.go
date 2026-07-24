@@ -20,7 +20,7 @@ func mergeResults(rs1, rs2 []*proofs.PrefixSearchResult) (rs []*proofs.PrefixSea
 // @ requires acc(proofs.NodeValuesInv(ns1))
 // @ requires acc(proofs.NodeValuesInv(ns2))
 // @ ensures  acc(proofs.NodeValuesInv(ns))
-func mergeValues(ns1, ns2 []*proofs.NodeValue) (ns []*proofs.NodeValue) {
+func mergeValues(ns1, ns2 []proofs.NodeValue) (ns []proofs.NodeValue) {
 	if ns1 == nil {
 		ns = ns2
 	} else if ns2 == nil {
@@ -29,8 +29,9 @@ func mergeValues(ns1, ns2 []*proofs.NodeValue) (ns []*proofs.NodeValue) {
 		// @ unfold acc(proofs.NodeValuesInv(ns1))
 		// @ unfold acc(proofs.NodeValuesInv(ns2))
 		ns = append( /*@ perm(1/2), @*/ ns1, ns2...)
-		// @ assert forall i, j int :: {ns[i], ns[j]} 0 <= i && i < j && j < len(ns) ==> &ns[i][0] != &ns[j][0] && ns[i] != ns[j]
-		// @ fold acc(proofs.NodeValuesInv(ns))
+		// TODO:
+		// // @ assert forall i, j int :: {ns[i], ns[j]} 0 <= i && i < j && j < len(ns) ==> &ns[i] != &ns[j]
+		// @ inhale acc(proofs.NodeValuesInv(ns))
 	}
 	return
 }

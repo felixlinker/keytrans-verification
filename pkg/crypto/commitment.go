@@ -72,22 +72,28 @@ func (cv *CommitmentValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 	return buf.Bytes()
 }
 
-// @ preserves noPerm < p && acc(commitment, p) && acc(cv.Inv(), p)
+// @ preserves noPerm < p && acc(utils.BytesMem(commitment), p) && acc(cv.Inv(), p)
 func VerifyCommitmentValue(commitment []byte, cv *CommitmentValue /*@, ghost p perm @*/) bool {
 	// TODO: Make package variable, but I don't know how to handle the memory
 	// permission of that
 	// See https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-15.1-8.3.1
 	kc := []byte{0xd8, 0x21, 0xf8, 0x79, 0x0d, 0x97, 0x70, 0x97, 0x96, 0xb4, 0xd7, 0x90, 0x33, 0x57, 0xc3, 0xf5}
 
+	// @ unfold acc(utils.BytesMem(commitment), p)
 	mac := hmac.New(sha256.New, kc /*@, perm(1/2) @*/)
 	mac.Write(cv.Marshal( /*@ p @*/ ) /*@, p @*/)
-	return hmac.Equal(commitment, mac.Sum(nil /*@, noPerm @*/) /*@, p @*/)
+	r := hmac.Equal(commitment, mac.Sum(nil /*@, noPerm @*/) /*@, p @*/)
+	// @ fold acc(utils.BytesMem(commitment), p)
+	return r
 }
 
 // @ requires noPerm < p
-// @ preserves acc(prefix_tree, p)
-// @ ensures acc(r)
-func LogEntryHash(timestamp uint64, prefix_tree *[sha256.Size]byte /*@, ghost p perm @*/) (r []byte) {
-	input := append( /*@ p, @*/ utils.Uint64(timestamp), (*prefix_tree)[:]...)
-	return utils.FromDigest(sha256.Sum256(input /*@, p @*/))
+// @ preserves acc(utils.BytesMem(prefix_tree), p)
+// @ ensures acc(utils.BytesMem(r))
+func LogEntryHash(timestamp uint64, prefix_tree []byte /*@, ghost p perm @*/) (r []byte) {
+	// @ unfold acc(utils.BytesMem(prefix_tree), p)
+	input := append( /*@ p, @*/ utils.Uint64(timestamp), prefix_tree...)
+	// @ fold acc(utils.BytesMem(prefix_tree), p)
+	// @ fold acc(utils.BytesMem(input))
+	return Sum(input /*@, p @*/)
 }

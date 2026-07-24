@@ -2,13 +2,23 @@ package utils
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 )
 
-func AllZero(bs [sha256.Size]byte) bool {
-	return bs == [sha256.Size]byte{}
+// @ requires noPerm < p
+// @ preserves acc(BytesMem(bs), p)
+func AllZero(bs []byte /*@, ghost p perm @*/) (r bool) {
+	r = true
+	// @ unfold acc(BytesMem(bs), p)
+	// @ invariant acc(bs, p) && 0 <= i && i <= len(bs)
+	for i := 0; i < len(bs); i++ {
+		if bs[i] != 0 {
+			r = false
+		}
+	}
+	// @ fold acc(BytesMem(bs), p)
+	return
 }
 
 // @ requires 0 <= lenBytes && lenBytes <= 4

@@ -38,7 +38,7 @@ func ReadUint32(buf *bytes.Buffer) (ui uint32, err error) {
 	return
 }
 
-// @ ensures acc(res)
+// @ ensures acc(res) && 0 < len(res)
 func Uint64(x uint64) (res []byte) {
 	buf := make([]byte, 0, 8)
 	buf = binary.BigEndian.AppendUint64(buf, x)

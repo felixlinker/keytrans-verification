@@ -1,29 +1,29 @@
 package proofs
 
 import (
-	"crypto/sha256"
 	"errors"
 
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
-	// @ "github.com/felixlinker/keytrans-verification/pkg/utils"
+	"github.com/felixlinker/keytrans-verification/pkg/utils"
+	// @ "crypto/sha256"
 )
 
-type NodeValue = [sha256.Size]byte
+type NodeValue = []byte
 
 /*@
-pred NodeValuesInv(vs []*NodeValue) {
-	forall i int :: {vs[i]} 0 <= i && i < len(vs) ==> acc(&vs[i]) && acc(vs[i])
+pred NodeValuesInv(vs []NodeValue) {
+	forall i int :: {vs[i]} 0 <= i && i < len(vs) ==> acc(&vs[i]) && acc(utils.BytesMem(vs[i]))
 }
 @*/
 
 type BinaryLadderStep struct {
-	Proof      []byte             // opaque proof[VRF.Np] — variable length per VRF scheme
-	Commitment *[sha256.Size]byte // optional<HashValue> - only use for versions that should exist
+	Proof      []byte // opaque proof[VRF.Np] — variable length per VRF scheme
+	Commitment []byte // optional<HashValue> - only use for versions that should exist
 }
 
 /*@
 pred (s *BinaryLadderStep) Inv() {
-	acc(s) && acc(utils.BytesMem(s.Proof)) && (s.Commitment != nil ==> acc(s.Commitment))
+	acc(s) && acc(utils.BytesMem(s.Proof)) && (s.Commitment != nil ==> acc(utils.BytesMem(s.Commitment)))
 }
 
 pred BinaryLadderStepsInv(steps []*BinaryLadderStep) {
@@ -32,7 +32,7 @@ pred BinaryLadderStepsInv(steps []*BinaryLadderStep) {
 @*/
 
 type InclusionProof struct {
-	Elements []*NodeValue // HashValue elements — log-tree inclusion/consistency batch proof
+	Elements []NodeValue // HashValue elements — log-tree inclusion/consistency batch proof
 }
 
 /*@
@@ -56,12 +56,12 @@ type PrefixLeaf struct {
 	// Vrf_output for the search key and version pair stored at this leaf.
 	Vrf_output []byte
 	// Commitment to the public key of the search key and version pair.
-	Commitment *[sha256.Size]byte
+	Commitment []byte
 }
 
 /*@
 pred (l *PrefixLeaf) Inv() {
-	acc(l) && acc(utils.BytesMem(l.Vrf_output)) && acc(l.Commitment)
+	acc(l) && acc(utils.BytesMem(l.Vrf_output)) && acc(utils.BytesMem(l.Commitment))
 }
 @*/
 
@@ -83,7 +83,7 @@ pred PrefixSearchResultsInv(rs []*PrefixSearchResult) {
 
 type PrefixProof struct {
 	Results  []*PrefixSearchResult
-	Elements []*NodeValue
+	Elements []NodeValue
 }
 
 /*@
@@ -134,10 +134,10 @@ func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label [
 					err = errors.New("binary ladder misses commitment")
 				} else {
 					// Copy commitment
-					tmp /*@@@*/ := *ladder[i].Commitment
+					// @ fold acc(utils.BytesMem(vrfOutput))
 					leaf /*@@@*/ := PrefixLeaf{
 						Vrf_output: vrfOutput,
-						Commitment: &tmp,
+						Commitment: utils.Copy(ladder[i].Commitment /*@, p @*/),
 					}
 					prf.Results[i].Leaf = &leaf
 					// @ fold acc(prf.Results[i].Leaf.Inv())
@@ -156,7 +156,7 @@ func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label [
 type CombinedTreeProof struct {
 	Timestamps    []uint64
 	Prefix_proofs []*PrefixProof
-	Prefix_roots  []*NodeValue
+	Prefix_roots  []NodeValue
 	Inclusion     *InclusionProof
 }
 

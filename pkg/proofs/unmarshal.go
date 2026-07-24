@@ -10,26 +10,27 @@ import (
 )
 
 // @ ensures err == nil ==> acc(NodeValuesInv(r))
-func UnmarshalNodeValues(buf *bytes.Buffer) (r []*NodeValue, err error) {
+func UnmarshalNodeValues(buf *bytes.Buffer) (r []NodeValue, err error) {
 	if lengthUint16, e := utils.ReadUint16(buf); e != nil {
 		err = e
 	} else {
 		// @ assume 0 <= lengthUint16
 		length := int(lengthUint16)
-		r = make([]*NodeValue, 0, length)
+		r = make([]NodeValue, 0, length)
 		// @ fold acc(NodeValuesInv(r))
 
 		// @ invariant acc(NodeValuesInv(r))
 		for i := 0; i < length && err == nil; i++ {
-			var val /*@@@*/ NodeValue
-			if n, e := buf.Read(val[:]); n != len(val) || e != nil {
+			val := make(NodeValue, sha256.Size)
+			if n, e := buf.Read(val); n != len(val) || e != nil {
 				err = utils.BufferError(e)
 			} else {
 				// @ unfold acc(NodeValuesInv(r))
 				// TODO: When I verify the *package* proofs, below assertion fails. When
 				// I verify this member function only, it succeeds.
 				// // @ assert forall i int :: {r[i], val} 0 <= i && i < len(r) ==> &(*r[i])[0] != &val[0] && r[i] != &val
-				r = append( /*@ perm(1/2), @*/ r, &val)
+				// @ fold acc(utils.BytesMem(val))
+				r = append( /*@ perm(1/2), @*/ r, val)
 				// @ inhale acc(NodeValuesInv(r))
 			}
 		}
@@ -48,12 +49,13 @@ func (s *BinaryLadderStep) Unmarshal(buf *bytes.Buffer, withCommitment bool) (er
 		// @ fold acc(utils.BytesMem(s.Proof))
 		s.Commitment = nil
 		if withCommitment {
-			var commitment /*@@@*/ [sha256.Size]byte
-			if n, e := buf.Read(commitment[:]); n != len(commitment) || e != nil {
+			s.Commitment = make([]byte, sha256.Size)
+			if n, e := buf.Read(s.Commitment); n != len(s.Commitment) || e != nil {
 				return utils.BufferError(e)
 			}
-			s.Commitment = &commitment
-			// @ assert acc(s.Commitment)
+			// @ fold acc(utils.BytesMem(s.Commitment))
+		} else {
+			// @ fold acc(utils.BytesMem(s.Commitment))
 		}
 		// @ fold acc(s.Inv())
 	}
@@ -117,17 +119,16 @@ func (prf *InclusionProof) Unmarshal(buf *bytes.Buffer) (err error) {
 // @ ensures err == nil ==> acc(l.Inv())
 func (l *PrefixLeaf) Unmarshal(buf *bytes.Buffer) (err error) {
 	// length of output is same for all cipher suites
-	output /*@@@*/ := make([]byte, sha256.Size)
-	var commitment /*@@@*/ [sha256.Size]byte
-	if n, e := buf.Read(output); n != len(output) || e != nil {
+	l.Vrf_output = make([]byte, sha256.Size)
+	l.Commitment = make([]byte, sha256.Size)
+	if n, e := buf.Read(l.Vrf_output); n != len(l.Vrf_output) || e != nil {
 		return utils.BufferError(e)
-	} else if n, e := buf.Read(commitment[:]); n != len(commitment) || e != nil {
+	} else if n, e := buf.Read(l.Commitment); n != len(l.Commitment) || e != nil {
 		return utils.BufferError(e)
-	} else {
-		l.Vrf_output = output
-		l.Commitment = &commitment
-		// @ fold acc(l.Inv())
 	}
+	// @ fold acc(utils.BytesMem(l.Vrf_output))
+	// @ fold acc(utils.BytesMem(l.Commitment))
+	// @ fold acc(l.Inv())
 	return
 }
 

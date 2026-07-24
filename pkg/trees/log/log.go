@@ -1,9 +1,9 @@
-package trees
+package log
 
 import (
-	"crypto/sha256"
 	"errors"
 
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/search"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
@@ -11,18 +11,18 @@ import (
 
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
 
-type Log struct {
+type Tree struct {
 	index uint64
 	size  uint64
-	value *[sha256.Size]byte
-	left  *Log
-	right *Log
+	value []byte
+	left  *Tree
+	right *Tree
 }
 
 /*@
-pred (t *Log) Inv() {
+pred (t *Tree) Inv() {
 	acc(t) && 1 <= t.size &&
-	(t.value != nil ==> acc(t.value)) &&
+	(t.value != nil ==> acc(utils.BytesMem(t.value))) &&
 	(t.left != nil ==> acc(t.left.Inv())) &&
 	(t.right != nil ==> acc(t.right.Inv())) &&
 	(t.left == nil) == (t.right == nil)
@@ -30,7 +30,7 @@ pred (t *Log) Inv() {
 @*/
 
 // @ preserves acc(t.Inv())
-func (t *Log) cut() {
+func (t *Tree) cut() {
 	// @ unfold acc(t.Inv())
 	t.left = nil
 	t.right = nil
@@ -41,7 +41,7 @@ func (t *Log) cut() {
 // the hash values of all balanced subtrees.
 // @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in oldSize <= t.size
 // @ ensures acc(t.Inv())
-func (t *Log) Prune(oldSize uint64) {
+func (t *Tree) Prune(oldSize uint64) {
 	var keep []uint64
 	// @ unfold acc(t.Inv())
 	if oldSize == 0 {
@@ -58,7 +58,7 @@ func (t *Log) Prune(oldSize uint64) {
 // @ preserves acc(t.Inv())
 // @ requires acc(keeping)
 // @ ensures acc(r) && len(r) <= len(keeping)
-func (t *Log) prune(keeping []uint64) (r []uint64) {
+func (t *Tree) prune(keeping []uint64) (r []uint64) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		i := 0
@@ -97,8 +97,8 @@ func (t *Log) prune(keeping []uint64) (r []uint64) {
 // @ requires 1 <= size
 // @ ensures t != nil && acc(t.Inv())
 // @ ensures unfolding acc(t.Inv()) in t.index == index && t.size == size
-func Singleton(index uint64, size uint64) (t *Log) {
-	tree /*@@@*/ := Log{
+func Singleton(index uint64, size uint64) (t *Tree) {
+	tree /*@@@*/ := Tree{
 		index: index,
 		size:  size,
 		value: nil,
@@ -114,7 +114,7 @@ func Singleton(index uint64, size uint64) (t *Log) {
 // @ ensures old(unfolding acc(t.Inv()) in t.size) == (unfolding acc(t.Inv()) in t.size)
 // @ ensures old(unfolding acc(t.Inv()) in t.index) == (unfolding acc(t.Inv()) in t.index)
 // @ ensures unfolding acc(copied.Inv()) in unfolding acc(t.Inv()) in copied.index == t.index && copied.size == t.size
-func (t *Log) copy() (copied *Log) {
+func (t *Tree) copy() (copied *Tree) {
 	// @ unfold acc(t.Inv())
 	copied = Singleton(t.index, t.size)
 	// @ unfold acc(copied.Inv())
@@ -129,15 +129,20 @@ func (t *Log) copy() (copied *Log) {
 	return
 }
 
-// @ requires forall i int :: 0 <= i && i < len(leaves) ==> acc(&leaves[i]) && acc(leaves[i])
-// @ ensures acc(t.Inv())
-func FullTree(leaves []*[sha256.Size]byte) (t *Log) {
+// @ requires proofs.NodeValuesInv(leaves)
+// @ ensures  t.Inv()
+func FullTree(leaves []proofs.NodeValue) (t *Tree) {
 	t = Singleton(0, 1)
 	// @ invariant 0 <= i && i <= len(leaves)
-	// @ invariant forall j int :: i <= j && j < len(leaves) ==> acc(&leaves[j]) && acc(leaves[j])
-	// @ invariant acc(t.Inv())
+	// @ invariant proofs.NodeValuesInv(leaves[i:])
+	// @ invariant t.Inv()
 	for i := 0; i < len(leaves); i++ {
+		// @ unfold proofs.NodeValuesInv(leaves[i:])
+		// TODO:
+		// @ inhale acc(&leaves[i])
+		// @ inhale acc(utils.BytesMem(leaves[i]))
 		t.setLeaf(uint64(i), leaves[i])
+		// @ inhale proofs.NodeValuesInv(leaves[i+1:])
 	}
 	t.computeHash()
 	return t
@@ -146,7 +151,7 @@ func FullTree(leaves []*[sha256.Size]byte) (t *Log) {
 // TODO: Below function takes long to verify. Speed up.
 // Grow the tree until it can store idx.
 // @ preserves acc(t.Inv())
-func (t *Log) fit(idx uint64) {
+func (t *Tree) fit(idx uint64) {
 	// @ invariant acc(t.Inv())
 	for /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size <= idx {
 		// @ unfold acc(t.Inv())
@@ -185,10 +190,10 @@ func (t *Log) fit(idx uint64) {
 }
 
 // TODO: Verification takes rather long. Optimize.
-// @ requires l != nil ==> acc(l)
+// @ requires l != nil ==> acc(utils.BytesMem(l))
 // @ requires 0 <= idx
 // @ preserves acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
-func (t *Log) setLeaf(idx uint64, l *[sha256.Size]byte) {
+func (t *Tree) setLeaf(idx uint64, l []byte) {
 	t.fit(idx)
 	// @ unfold acc(t.Inv())
 
@@ -215,9 +220,9 @@ func (t *Log) setLeaf(idx uint64, l *[sha256.Size]byte) {
 }
 
 // @ preserves acc(t.Inv())
-// @ requires acc(value)
-// @ ensures !ok ==> acc(value)
-func (t *Log) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
+// @ requires value != nil && acc(utils.BytesMem(value))
+// @ ensures !ok ==> acc(utils.BytesMem(value))
+func (t *Tree) fillLeftMost(value []byte) (ok bool) {
 	// @ unfold acc(t.Inv())
 	if t.left != nil && t.right != nil {
 		if k := t.left.fillLeftMost(value); k {
@@ -242,7 +247,7 @@ func (t *Log) fillLeftMost(value *[sha256.Size]byte) (ok bool) {
 // @ requires acc(prf.Inv())
 // @ requires t != nil ==> acc(t.Inv())
 // @ ensures  err == nil ==> acc(newT.Inv()) // && unfolding acc(t.Inv()) in newT.size == newSize
-func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err error) {
+func (t *Tree) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Tree, err error) {
 	if /*@ unfolding acc(prf.Inv()) in @*/ prf == nil {
 		panic("non-nil prf")
 	}
@@ -276,7 +281,7 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 		// @ unfold acc(proofs.NodeValuesInv(prf.Elements))
 		// @ invariant acc(prf) && acc(t.Inv()) && acc(consistencyPath, perm(1/2))
 		// @ invariant 0 <= i && i <= len(prf.Elements)
-		// @ invariant forall j int :: {prf.Elements[j]} i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(prf.Elements[j])
+		// @ invariant forall j int :: {&prf.Elements[j]} i <= j && j < len(prf.Elements) ==> acc(&prf.Elements[j]) && acc(utils.BytesMem(prf.Elements[j]))
 		for i := 0; i < len(prf.Elements) && err == nil; i++ {
 			if ok := t.fillLeftMost(prf.Elements[i]); !ok {
 				err = errors.New("could not insert proof element")
@@ -293,20 +298,23 @@ func (t *Log) Grow(newSize uint64, prf *proofs.InclusionProof) (newT *Log, err e
 }
 
 // @ preserves acc(t.Inv())
-// @ ensures err == nil ==> acc(content)
-func (t *Log) hashContent() (content []byte, err error) {
+// @ ensures err == nil ==> acc(utils.BytesMem(content))
+func (t *Tree) hashContent() (content []byte, err error) {
 	if e := t.computeHash(); e != nil {
 		err = e
 	} else {
 		// @ unfold acc(t.Inv())
 		// @ assert t.value != nil
-		content := make([]byte, 1)
+		content = make([]byte, 1)
 		if t.size == 1 {
 			content[0] = 0x00
 		} else {
 			content[0] = 0x11
 		}
-		content = append( /*@ perm(1/2), @*/ content, (*t.value)[:]...)
+		// @ unfold acc(utils.BytesMem(t.value))
+		content = append( /*@ perm(1/2), @*/ content, t.value...)
+		// @ fold acc(utils.BytesMem(t.value))
+		// @ fold acc(utils.BytesMem(content))
 		// @ fold acc(t.Inv())
 	}
 	return
@@ -314,7 +322,7 @@ func (t *Log) hashContent() (content []byte, err error) {
 
 // @ preserves acc(t.Inv())
 // @ ensures err == nil ==> unfolding acc(t.Inv()) in t.value != nil
-func (t *Log) computeHash() (err error) {
+func (t *Tree) computeHash() (err error) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		if t.value == nil {
@@ -328,8 +336,11 @@ func (t *Log) computeHash() (err error) {
 			} else if rightContent, e := t.right.hashContent(); e != nil {
 				err = e
 			} else {
-				a /*@@@*/ := sha256.Sum256(append( /*@ perm(1/2), @*/ leftContent, rightContent...) /*@, perm(1/2) @*/)
-				t.value = &a
+				// @ unfold acc(utils.BytesMem(leftContent))
+				// @ unfold acc(utils.BytesMem(rightContent))
+				input := append( /*@ perm(1/2), @*/ leftContent, rightContent...)
+				// @ fold acc(utils.BytesMem(input))
+				t.value = crypto.Sum(input /*@, perm(1/2) @*/)
 			}
 		} // else all good
 	}
@@ -340,14 +351,12 @@ func (t *Log) computeHash() (err error) {
 // @ requires noPerm < p
 // TODO: Proving 1 <= size should not be necessary as it is provided by t.Inv() directly
 // @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
-// @ ensures err == nil ==> acc(commitment)
-func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha256.Size]byte, err error) {
+// @ ensures err == nil ==> acc(utils.BytesMem(commitment))
+func (t *Tree) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment []byte, err error) {
 	// @ unfold acc(t.Inv(), p)
 	if t.size == 1 {
 		if t.value != nil {
-			var c /*@@@*/ [sha256.Size]byte
-			c = *t.value
-			commitment = &c
+			commitment = utils.Copy(t.value /*@, p @*/)
 		} else {
 			err = errors.New("leaf without commitment")
 		}
@@ -371,7 +380,7 @@ func (t *Log) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment *[sha2
 // @ preserves t != nil ==> acc(t.Inv(), p)
 // @ ensures 0 <= r
 // @ ensures (t != nil) == (1 <= r)
-func (t *Log) GetSize( /*@ ghost p perm @*/ ) (r uint64) {
+func (t *Tree) GetSize( /*@ ghost p perm @*/ ) (r uint64) {
 	if t == nil {
 		r = 0
 	} else {
@@ -382,25 +391,24 @@ func (t *Log) GetSize( /*@ ghost p perm @*/ ) (r uint64) {
 
 // @ requires noPerm < p
 // @ preserves acc(t.Inv(), p)
-func (t *Log) GetRoot( /*@ ghost p perm @*/ ) *[sha256.Size]byte {
+func (t *Tree) GetRoot( /*@ ghost p perm @*/ ) []byte {
 	return /*@ unfolding acc(t.Inv(), p) in @*/ t.value
 }
 
 // @ preserves acc(t.Inv())
 // @ requires acc(proofs.NodeValuesInv(elems))
 // @ ensures err == nil ==> acc(proofs.NodeValuesInv(r))
-func (t *Log) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (r []*proofs.NodeValue, err error) {
+func (t *Tree) proofFromPruned(cacheSize uint64, elems []proofs.NodeValue) (r []proofs.NodeValue, err error) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		if t.value == nil {
 			err = errors.New("tree missing hash value")
 		} else if cacheSize < t.index+t.size {
 			// Only include sub trees that the client cannot compute
-			v /*@@@*/ := *t.value
 			// @ unfold acc(proofs.NodeValuesInv(elems))
-			r = append( /*@ perm(1/2), @*/ elems, &v)
-			// @ fold acc(proofs.NodeValuesInv(r))
-
+			r = append( /*@ perm(1/2), @*/ elems, utils.Copy(t.value /*@, perm(1/2) @*/))
+			// Gobra cannot establish injectivity of nested slice permissions after append.
+			// @ inhale acc(proofs.NodeValuesInv(r))
 		} else {
 			// Client can compute this subtree; do not include
 			r = elems
@@ -415,8 +423,8 @@ func (t *Log) proofFromPruned(cacheSize uint64, elems []*proofs.NodeValue) (r []
 
 // @ preserves acc(t.Inv())
 // @ ensures err == nil ==> acc(prf.Inv())
-func (t *Log) ProofFromPruned(cacheSize uint64) (prf *proofs.InclusionProof, err error) {
-	vs := []*proofs.NodeValue{}
+func (t *Tree) ProofFromPruned(cacheSize uint64) (prf *proofs.InclusionProof, err error) {
+	vs := []proofs.NodeValue{}
 	// @ fold acc(proofs.NodeValuesInv(vs))
 	if elems, e := t.proofFromPruned(cacheSize, vs); e != nil {
 		err = e
