@@ -117,68 +117,59 @@ func (prf *InclusionProof) Unmarshal(buf *bytes.Buffer) (err error) {
 // @ ensures err == nil ==> acc(l.Inv())
 func (l *PrefixLeaf) Unmarshal(buf *bytes.Buffer) (err error) {
 	// length of output is same for all cipher suites
-	l.Vrf_output = make([]byte, sha256.Size)
-	l.Commitment = make([]byte, sha256.Size)
-	if n, e := buf.Read(l.Vrf_output); n != len(l.Vrf_output) || e != nil {
-		return utils.BufferError(e)
-	} else if n, e := buf.Read(l.Commitment); n != len(l.Commitment) || e != nil {
-		return utils.BufferError(e)
+	var depth uint8
+	var value /*@@@*/ []byte
+	var output /*@@@*/ []byte
+	var commitment /*@@@*/ []byte
+	depth, err = buf.ReadByte()
+	if err == nil {
+		value, err = utils.ReadBytesFixedIf(buf, sha256.Size)
 	}
-	// @ fold acc(utils.BytesMem(l.Vrf_output))
-	// @ fold acc(utils.BytesMem(l.Commitment))
-	// @ fold acc(l.Inv())
-	return
-}
-
-// @ requires acc(p)
-// @ ensures err == nil ==> acc(p.Inv())
-func (p *PrefixSearchResult) Unmarshal(buf *bytes.Buffer) (err error) {
-	if resultType, e := buf.ReadByte(); e != nil {
-		err = e
-	} else {
-		p.ResultType = PrefixSearchResultType(resultType)
-		p.Leaf = nil
-		if p.ResultType == NonInclusionLeaf {
-			leaf /*@@@*/ := PrefixLeaf{}
-			if e := leaf.Unmarshal(buf); e != nil {
-				err = e
-			} else {
-				p.Leaf = &leaf
-			}
-		}
-
-		if err == nil {
-			if depth, e := buf.ReadByte(); e != nil {
-				err = e
-			} else {
-				p.Depth = depth
-			}
-		}
-		// @ fold acc(p.Inv())
+	if err == nil {
+		output, err = utils.ReadBytesFixedIf(buf, sha256.Size)
+	}
+	if err == nil {
+		commitment, err = utils.ReadBytesFixedIf(buf, sha256.Size)
+	}
+	if err == nil {
+		l.Depth = depth
+		l.NodeValue = value
+		/*@ ghost if l.NodeValue != nil {
+			fold utils.BytesMem(l.NodeValue)
+		}@*/
+		l.VrfOutput = output
+		/*@ ghost if l.VrfOutput != nil {
+			fold utils.BytesMem(l.VrfOutput)
+		}@*/
+		l.Commitment = commitment
+		/*@ ghost if l.Commitment != nil {
+			fold utils.BytesMem(l.Commitment)
+		}@*/
+		// @ fold acc(l.Inv())
 	}
 	return
 }
 
-// @ ensures err == nil ==> acc(PrefixSearchResultsInv(r))
-func UnmarshalPrefixSearchResults(buf *bytes.Buffer) (r []*PrefixSearchResult, err error) {
+// @ ensures err == nil ==> acc(PrefixLeavesInv(r))
+func UnmarshalPrefixLeaves(buf *bytes.Buffer) (r []*PrefixLeaf, err error) {
 	if lengthByte, e := buf.ReadByte(); e != nil {
 		err = e
 	} else {
 		length := int(uint8(lengthByte))
 		// @ assume 0 <= length
-		r = make([]*PrefixSearchResult, 0, length)
-		// @ fold acc(PrefixSearchResultsInv(r))
+		r = make([]*PrefixLeaf, 0, length)
+		// @ fold acc(PrefixLeavesInv(r))
 
-		// @ invariant acc(PrefixSearchResultsInv(r))
+		// @ invariant acc(PrefixLeavesInv(r))
 		for i := 0; i < length && err == nil; i++ {
-			result /*@@@*/ := PrefixSearchResult{}
+			result /*@@@*/ := PrefixLeaf{}
 			if e := result.Unmarshal(buf); e != nil {
 				err = e
 			} else {
-				// @ unfold acc(PrefixSearchResultsInv(r))
+				// @ unfold acc(PrefixLeavesInv(r))
 				r = append( /*@ perm(1/2), @*/ r, &result)
 				// TODO:
-				// @ inhale acc(PrefixSearchResultsInv(r))
+				// @ inhale acc(PrefixLeavesInv(r))
 			}
 		}
 	}
@@ -188,13 +179,10 @@ func UnmarshalPrefixSearchResults(buf *bytes.Buffer) (r []*PrefixSearchResult, e
 // @ requires acc(p)
 // @ ensures err == nil ==> acc(p.Inv())
 func (p *PrefixProof) Unmarshal(buf *bytes.Buffer) (err error) {
-	if results, e := UnmarshalPrefixSearchResults(buf); e != nil {
-		err = e
-	} else if values, e := UnmarshalNodeValues(buf); e != nil {
+	if leaves, e := UnmarshalPrefixLeaves(buf); e != nil {
 		err = e
 	} else {
-		p.Results = results
-		p.Elements = values
+		p.Leaves = leaves
 		// @ fold acc(p.Inv())
 	}
 	return
