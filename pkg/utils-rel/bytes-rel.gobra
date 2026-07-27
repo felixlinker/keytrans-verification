@@ -10,14 +10,13 @@ import "github.com/felixlinker/keytrans-verification/pkg/utils"
 // the content of the byte slice is low.
 ghost
 requires noPerm < p
-requires acc(utils.BytesMem(s), p)
-requires low(len(s))
-requires unfolding acc(utils.BytesMem(s), p) in forall i int :: { s[i] } 0 <= i && i < len(s) ==> low(s[i])
-ensures  acc(utils.BytesMem(s), p)
-ensures  result == utils.GetBytesContent(s)
-ensures  low(result)
+preserves acc(utils.BytesMem(s), p)
+ensures   result == utils.GetBytesContent(s)
+// NOTE: Wanted to use == below instead of two ==> but get a permission error in that case
+ensures   (low(len(s)) && unfolding acc(utils.BytesMem(s), p) in forall i int :: { s[i] } 0 <= i && i < len(s) ==> low(s[i])) ==> low(result)
+ensures   low(result) ==> (low(len(s)) && unfolding acc(utils.BytesMem(s), p) in forall i int :: { s[i] } 0 <= i && i < len(s) ==> low(s[i]))
 decreases
-func getBytesContentIsLow(s []byte, ghost p perm) (result seq[byte]) {
+func GetBytesContentIsLow(s []byte, ghost p perm) (result seq[byte]) {
   unfold acc(utils.BytesMem(s), p)
   result = getByteContentIsLow(s, 0, p/2)
   fold acc(utils.BytesMem(s), p)
@@ -28,11 +27,9 @@ ghost
 requires noPerm < p
 requires acc(data, p)
 requires 0 <= idx && idx <= len(data)
-requires low(len(data)) && low(idx)
-requires forall i int :: { data[i] } 0 <= i && i < len(data) ==> low(data[i])
 ensures  acc(data, p)
 ensures  result == utils.getBytesContent_Rec(data, idx)
-ensures  low(result)
+ensures  low(idx) ==> ((low(len(data)) && forall i int :: { data[i] } idx <= i && i < len(data) ==> low(data[i])) == low(result))
 decreases len(data) - idx
 func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) {
   if idx == len(data) {
@@ -40,5 +37,6 @@ func getByteContentIsLow(data []byte, idx int, ghost p perm) (result seq[byte]) 
   } else {
     tail := getByteContentIsLow(data, idx + 1, p/2)
     result = seq[byte]{data[idx]} ++ tail
+    assert forall i int :: {tail[i]} 0 <= i && i < len(tail) ==> result[i+1] == tail[i]
   }
 }
