@@ -2,17 +2,21 @@ package utils
 
 ghost
 requires acc(BytesMem(s), _)
+ensures len(s) == len(r)
+ensures unfolding acc(BytesMem(s), _) in forall i int :: {s[i]} {r[i]}  0 <= i && i < len(s) ==> s[i] == r[i]
 decreases
 opaque
-pure func GetBytesContent(s []byte) seq[byte] {
+pure func GetBytesContent(s []byte) (r seq[byte]) {
   return unfolding acc(BytesMem(s), _) in getBytesContent_Rec(s, 0)
 }
 
 ghost
 requires acc(s)
 requires 0 <= idx && idx <= len(s)
+ensures len(r) == len(s) - idx
+ensures forall i int :: {s[idx+i]} {r[i]} 0 <= i && i < len(r) ==> s[idx+i] == r[i]
 decreases len(s) - idx
-pure func getBytesContent_Rec(s []byte, idx int) seq[byte] {
+pure func getBytesContent_Rec(s []byte, idx int) (r seq[byte]) {
   return idx == len(s) ? seq[byte]{} : seq[byte]{s[idx]} ++ getBytesContent_Rec(s, idx + 1)
 }
 
