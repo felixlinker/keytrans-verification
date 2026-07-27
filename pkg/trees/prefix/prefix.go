@@ -26,7 +26,7 @@ pred (l *prefixLeaf) Inv() {
 	// Either value is not nil, or search key AND commitment are not nil
 	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
 	(l.value != nil ==> acc(utils.BytesMem(l.value))) &&
-	(l.searchKey != nil ==> acc(utils.BytesMem(l.searchKey))) &&
+	(l.searchKey != nil ==> len(l.searchKey) == 32 && acc(utils.BytesMem(l.searchKey))) &&
 	(l.commitment != nil ==> acc(utils.BytesMem(l.commitment)))
 }
 @*/
