@@ -9,6 +9,7 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/trees/misc"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
+	utilsrel "github.com/felixlinker/keytrans-verification/pkg/utils-rel"
 )
 
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
@@ -34,7 +35,8 @@ pred (l *prefixLeaf) Inv() {
 // @ requires  0 <= depth
 // @ preserves acc(l.Inv(), p)
 // @ ensures   v != nil && acc(utils.BytesMem(v))
-// // @ ensures   low(*v) ==> true
+// TODO: I should have all ingredients to prove below ensures, but I get permission errors
+// // @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> (low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))))
 func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
 		// @ unfold acc(l.Inv(), p)
@@ -46,19 +48,24 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// @ notIncl = NotIncl{}
 	} else {
 		// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
-		input := []byte{0x02}
 		// @ unfold acc(l.Inv(), p)
+		input1 := []byte{0x02}
+		// @ fold utils.BytesMem(input1)
+		// @ assert low(utils.GetBytesContent(input1))
+		input2 := utilsrel.Concat(l.searchKey, l.commitment /*@, p @*/)
+		// @ assert low(utils.GetBytesContent(input2)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
+		input := utilsrel.Concat(input1, input2 /*@, perm(1/2) @*/)
+		// @ assert low(utils.GetBytesContent(input)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
+
 		// @ unfold acc(utils.BytesMem(l.searchKey), p)
-		input = append( /*@ p, @*/ input, l.searchKey...)
-		// @ unfold acc(utils.BytesMem(l.commitment), p)
-		input = append( /*@ p, @*/ input, l.commitment...)
-		// @ fold acc(utils.BytesMem(l.commitment), p)
 		// @ incl = Incl{ utils.Bits_Pure(l.searchKey) }
 		// @ notIncl = utils.FlippedTailsPure(utils.Bits_Pure(l.searchKey), depth)
 		// @ fold acc(utils.BytesMem(l.searchKey), p)
-		// @ fold acc(l.Inv(), p)
-		// @ fold acc(utils.BytesMem(input))
+
 		v = crypto.Sum(input /*@, perm(1/2) @*/)
+		// @ ghost pureV := utilsrel.GetBytesContentIsLow(v, perm(1/2))
+		// @ assert low(utils.GetBytesContent(v)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
+		// @ fold acc(l.Inv(), p)
 	}
 	return
 }
