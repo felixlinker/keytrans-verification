@@ -22,7 +22,7 @@ func encode(label []byte, version uint64 /*@, ghost p perm @*/) (res []byte) {
 
 // @ requires noPerm < p
 // @ preserves acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p) && acc(utils.BytesMem(prf), p)
-// @ ensures ok ==> utils.BytesMem(r)
+// @ ensures ok ==> utils.BytesMem(r) && len(r) == 32
 func VRF_verify(pk []byte, label []byte, version uint64, prf []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
 	// @ unfold acc(utils.BytesMem(pk), p)
 	// @ unfold acc(utils.BytesMem(label), p)
