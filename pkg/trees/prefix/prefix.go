@@ -38,6 +38,7 @@ pred (l *prefixLeaf) Inv() {
 // NOTE: ensures below is only to convince Gobra that permissions for final
 // ensures suffice
 // @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> low(l.searchKey != nil) && low(l.commitment != nil))
+// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> (low(utils.GetBytesContent(l.searchKey)) && low(depth)) == (low(incl) && low(notIncl)))
 // @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> (low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))))
 func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
@@ -59,12 +60,12 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		input := utilsrel.Concat(input1, input2 /*@, perm(1/2) @*/)
 		// @ assert low(utils.GetBytesContent(input)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 
-		// @ unfold acc(utils.BytesMem(l.searchKey), p)
-		// @ incl = Incl{ utils.Bits_Pure(l.searchKey) }
-		// @ notIncl = utils.FlippedTailsPure(utils.Bits_Pure(l.searchKey), depth)
-		// @ fold acc(utils.BytesMem(l.searchKey), p)
+		// @ ghost searchKeySeq := utils.GetBytesContent(l.searchKey)
+		// @ incl = Incl{ utils.BitsSeq(searchKeySeq) }
+		// @ notIncl = utils.FlippedTailsPure(utils.BitsSeq(searchKeySeq), depth)
 
 		v = crypto.Sum(input /*@, perm(1/2) @*/)
+		// @ assert (low(utils.GetBytesContent(l.searchKey)) && low(depth)) == (low(incl) && low(notIncl))
 		// @ assert low(utils.GetBytesContent(v)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 		// @ fold acc(l.Inv(), p)
 	}
@@ -350,7 +351,7 @@ pure func (t *Tree) Included() (r Incl) {
 		Incl{} :
 		(unfolding acc(t.Inv(), _) in (t.leaf != nil ?
 			(unfolding acc(t.leaf.Inv(), _) in t.leaf.searchKey != nil ?
-				unfolding acc(utils.BytesMem(t.leaf.searchKey), _) in Incl{ utils.Bits_Pure(t.leaf.searchKey) } :
+				Incl{ utils.BitsSeq(utils.GetBytesContent(t.leaf.searchKey)) } :
 				Incl{}) :
 			(t.left.Included() ++ t.right.Included()))))
 }
@@ -367,12 +368,12 @@ pure func (t *Tree) NotIncludedPrefixes(depth int) (r NotIncl) {
 		NotIncl{ seq[bool]{} } :
 		(unfolding acc(t.Inv(), _) in (t.leaf != nil ?
 			// A leaf proves the non-inclusion of no suffix
-			(unfolding acc(t.leaf.Inv(), _) in (t.leaf.searchKey != nil ?
+			(unfolding acc(t.leaf.Inv(), _) in (t.leaf.searchKey == nil ?
 				// No search key proves the non-inclusion of nothing; we are only given a hash
 				NotIncl{} :
 				// A search key proves the non-inclusion of every intermediate infix with the last bit respectively flipped
 				// TODO: Below does not require unfolding of BytesMem, which suggests this branch is unreachable and erroneous
-				utils.FlippedTailsPure(utils.Bits_Pure(t.leaf.searchKey), depth))) :
+				utils.FlippedTailsPure(utils.BitsSeq(utils.GetBytesContent(t.leaf.searchKey)), depth))) :
 			(	let left := utils.PrependAll(t.left.NotIncludedPrefixes(depth+1), false) in
 				let right := utils.PrependAll(t.right.NotIncludedPrefixes(depth+1), true) in
 				left ++ right))))

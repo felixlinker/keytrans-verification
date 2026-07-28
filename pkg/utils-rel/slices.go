@@ -14,6 +14,9 @@ func CopyLow(x []byte /*@, ghost p perm @*/) (r []byte) {
 	return
 }
 
+// Concatenate two byte slices and prove that if the length of the first byte
+// slice is low, then the resulting byte slices is low if and only if both
+// arguments are low.
 // @ requires noPerm < p
 // @ preserves acc(utils.BytesMem(bs1), p) && acc(utils.BytesMem(bs2), p)
 // @ ensures len(r) == len(bs1) + len(bs2)
