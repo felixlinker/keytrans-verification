@@ -132,10 +132,13 @@ func buildPrefixTree(t *testing.T, rng *rand.Rand, commitments [][]byte) *Tree {
 	for 0 < len(tmp) {
 		i := rng.Intn(len(tmp))
 		commitment := tmp[i]
-		leaf := commitmentLeaf(&proofs.PrefixLeaf{
-			Vrf_output: commitment,
+		leaf, err := mkLeaf(&proofs.PrefixLeaf{
+			VrfOutput:  commitment,
 			Commitment: commitment,
 		})
+		if err != nil {
+			t.Fatalf("mkLeaf(%x): %v", commitment, err)
+		}
 		if err := tree.Insert(leaf); err != nil {
 			t.Fatalf("Insert(%x): %v", commitment, err)
 		}

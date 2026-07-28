@@ -32,21 +32,31 @@ pred (l *prefixLeaf) Inv() {
 
 // @ requires noPerm < p
 // @ preserves acc(proofLeaf.Inv(), p)
-// @ ensures err == nil ==> l.Inv()
+// @ ensures l != nil ==> l.Inv()
 func mkLeaf(proofLeaf *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf, err error) {
-	l = &prefixLeaf{}
 	// @ unfold acc(proofLeaf.Inv(), p)
-	if proofLeaf.NodeValue == nil {
+	if proofLeaf.NodeValue != nil {
+		if proofLeaf.VrfOutput != nil || proofLeaf.Commitment != nil {
+			err = errors.New("ambiguous leaf")
+		} else {
+			l = &prefixLeaf{
+				value: utils.Copy(proofLeaf.NodeValue /*@, p @*/),
+			}
+			// @ fold l.Inv()
+		}
+	} else if proofLeaf.VrfOutput == nil && proofLeaf.Commitment == nil {
+		// An empty proof leaf represents the zero-valued empty subtree.
+		l = nil
+	} else {
 		if proofLeaf.VrfOutput == nil || proofLeaf.Commitment == nil {
 			err = errors.New("incomplete leaf")
 		} else {
-			l.searchKey = utils.Copy(proofLeaf.VrfOutput /*@, p @*/)
-			l.commitment = utils.Copy(proofLeaf.Commitment /*@, p @*/)
+			l = &prefixLeaf{
+				searchKey:  utils.Copy(proofLeaf.VrfOutput /*@, p @*/),
+				commitment: utils.Copy(proofLeaf.Commitment /*@, p @*/),
+			}
 			// @ fold l.Inv()
 		}
-	} else {
-		l.value = utils.Copy(proofLeaf.NodeValue /*@, p @*/)
-		// @ fold l.Inv()
 	}
 	// @ fold acc(proofLeaf.Inv(), p)
 	return
@@ -351,6 +361,12 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 			// @ unfold acc(t.Inv(), p)
 			r /*@, incl, notIncl @*/ = t.leaf.Value( /*@ depth, p @*/ )
 			// @ fold acc(t.Inv(), p)
+		} else if /*@ unfolding acc(t.Inv(), p) in @*/ t.left == nil && t.right == nil {
+			// An allocated empty tree has the same value as a nil subtree.
+			// @ incl = t.Included()
+			// @ notIncl = t.NotIncludedPrefixes(depth)
+			r = make(proofs.NodeValue, sha256.Size)
+			// @ fold acc(utils.BytesMem(r))
 		} else {
 			r, err /*@, incl, notIncl @*/ = t.innerNodeValue( /*@ depth, p @*/ )
 		}
@@ -461,14 +477,18 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Tree, err er
 		if l, e := mkLeaf(prf.Leaves[0] /*@, p @*/); e != nil {
 			err = e
 		} else {
-			_, err = tree.mkPrefix(l, prf.Leaves[0].Depth, prf.Leaves[1:], 0 /*@, p @*/)
+			var remaining []*proofs.PrefixLeaf
+			remaining, err = tree.mkPrefix(l, prf.Leaves[0].Depth, prf.Leaves[1:], 0 /*@, p @*/)
+			if err == nil && len(remaining) != 0 {
+				err = errors.New("too many leafs")
+			}
 		}
 	}
 	return
 }
 
 // @ requires noPerm < p
-// @ requires acc(l.Inv(), p)
+// @ requires l != nil ==> acc(l.Inv(), p)
 // @ requires acc(proofs.PrefixLeavesInv(prf), p)
 // @ preserves t.Inv()
 // @ ensures acc(proofs.PrefixLeavesInv(r), p)
@@ -476,11 +496,15 @@ func (t *Tree) mkPrefix(l *prefixLeaf, leafDepth uint8, prf []*proofs.PrefixLeaf
 	r = prf
 	// @ unfold t.Inv()
 	if leafDepth == depth {
-		if t.leaf == nil {
+		if l == nil {
+			// The empty subtree is already represented by the empty tree.
+		} else if t.leaf == nil {
 			t.leaf = l
 		} else {
 			err = errors.New("leaf already present")
 		}
+	} else if leafDepth < depth {
+		err = errors.New("invalid leaf depth")
 	} else {
 		if t.left == nil {
 			t.left = mkTree()
@@ -489,14 +513,16 @@ func (t *Tree) mkPrefix(l *prefixLeaf, leafDepth uint8, prf []*proofs.PrefixLeaf
 			t.right = mkTree()
 		}
 		r, err = t.left.mkPrefix(l, leafDepth, prf, depth+1 /*@, p @*/)
-		if len(r) == 0 {
+		if err != nil {
+			// Propagate the error from the left subtree.
+		} else if len(r) == 0 {
 			err = errors.New("too few leafs")
 		} else {
-			l, err = mkLeaf(prf[0] /*@, perm(1/2) @*/)
-			leafDepth = prf[0].Depth
+			l, err = mkLeaf(r[0] /*@, perm(1/2) @*/)
+			leafDepth = r[0].Depth
 		}
 		if err == nil {
-			r, err = t.right.mkPrefix(l, leafDepth, prf, depth+1 /*@, p @*/)
+			r, err = t.right.mkPrefix(l, leafDepth, r[1:], depth+1 /*@, p @*/)
 		}
 	}
 	// @ fold t.Inv()
