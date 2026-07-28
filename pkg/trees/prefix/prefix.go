@@ -32,7 +32,7 @@ pred (l *prefixLeaf) Inv() {
 @*/
 
 // @ requires  noPerm < p
-// @ requires  0 <= depth
+// @ requires  0 <= depth && depth < 32
 // @ preserves acc(l.Inv(), p)
 // @ ensures   v != nil && acc(utils.BytesMem(v))
 // NOTE: ensures below is only to convince Gobra that permissions for final
@@ -49,6 +49,8 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// A hash value proves nothing about inclusion or non-inclusion
 		// @ incl = Incl{}
 		// @ notIncl = NotIncl{}
+		// TODO: Cannot fold InclChar here; if I do, fold in else branch fails
+		// // @ fold InclChar(incl, notIncl)
 	} else {
 		// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
 		// @ unfold acc(l.Inv(), p)
@@ -62,7 +64,8 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 
 		// @ ghost searchKeySeq := utils.GetBytesContent(l.searchKey)
 		// @ incl = Incl{ utils.BitsSeq(searchKeySeq) }
-		// @ notIncl = utils.FlippedTailsPure(utils.BitsSeq(searchKeySeq), depth)
+		// @ notIncl = NotIncl{depth}
+		// @ fold InclChar(incl, notIncl)
 
 		v = crypto.Sum(input /*@, perm(1/2) @*/)
 		// @ assert (low(utils.GetBytesContent(l.searchKey)) && low(depth)) == (low(incl) && low(notIncl))
@@ -341,47 +344,10 @@ pure func (t *Tree) depth() (r uint64) {
 }
 
 ghost type Incl = seq[seq[bool]]
+ghost type NotIncl = seq[int]
 
-ghost
-requires  t != nil ==> acc(t.Inv(), _)
-decreases t.depth()
-pure func (t *Tree) Included() (r Incl) {
-	return (t == nil ?
-		// The empty leaf proves inclusion of no prefix
-		Incl{} :
-		(unfolding acc(t.Inv(), _) in (t.leaf != nil ?
-			(unfolding acc(t.leaf.Inv(), _) in t.leaf.searchKey != nil ?
-				Incl{ utils.BitsSeq(utils.GetBytesContent(t.leaf.searchKey)) } :
-				Incl{}) :
-			(t.left.Included() ++ t.right.Included()))))
-}
-
-ghost type NotIncl = seq[seq[bool]]
-
-ghost
-requires  t != nil ==> acc(t.Inv(), _)
-requires  0 <= depth
-decreases t.depth()
-pure func (t *Tree) NotIncludedPrefixes(depth int) (r NotIncl) {
-	return (t == nil ?
-		// The empty leaf proves non-inclusion of every suffix
-		NotIncl{ seq[bool]{} } :
-		(unfolding acc(t.Inv(), _) in (t.leaf != nil ?
-			// A leaf proves the non-inclusion of no suffix
-			(unfolding acc(t.leaf.Inv(), _) in (t.leaf.searchKey == nil ?
-				// No search key proves the non-inclusion of nothing; we are only given a hash
-				NotIncl{} :
-				// A search key proves the non-inclusion of every intermediate infix with the last bit respectively flipped
-				// TODO: Below does not require unfolding of BytesMem, which suggests this branch is unreachable and erroneous
-				utils.FlippedTailsPure(utils.BitsSeq(utils.GetBytesContent(t.leaf.searchKey)), depth))) :
-			(	let left := utils.PrependAll(t.left.NotIncludedPrefixes(depth+1), false) in
-				let right := utils.PrependAll(t.right.NotIncludedPrefixes(depth+1), true) in
-				left ++ right))))
-}
-
-pred NoPrefixMatches(prefixes NotIncl, values Incl) {
-	forall i, j int :: 0 <= i && i < len(prefixes) && 0 <= j && j < len(values) ==>
-		(len(values[j]) < len(prefixes[i]) || prefixes[i] != values[j][:len(prefixes[i])])
+pred InclChar(incl seq[seq[bool]], idx seq[int]) {
+	len(incl) == len(idx) && (forall i int :: {incl[i]} {idx[i]} 0 <= i && i < len(incl) ==> 0 <= idx[i] && idx[i] < len(incl[i]))
 }
 @*/
 
@@ -445,11 +411,6 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 			r, err /*@, incl, notIncl @*/ = t.innerNodeValue( /*@ depth, p @*/ )
 		}
 	} else { // t == nil
-		/*@
-		ghost
-		incl = t.Included()
-		notIncl = t.NotIncludedPrefixes(depth)
-		 @*/
 		r = make(proofs.NodeValue, sha256.Size)
 		// @ fold acc(utils.BytesMem(r))
 	}
@@ -465,7 +426,8 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
 func (t *Tree) Value( /*@ ghost p perm @*/ ) (r proofs.NodeValue, err error) {
-	// @ ghost var incl, notIncl seq[seq[bool]]
+	// @ ghost var incl seq[seq[bool]]
+	// @ ghost var notIncl seq[int]
 	r, err /*@, incl, notIncl @*/ = t.value( /*@ 0, p @*/ )
 	return
 }
@@ -596,7 +558,8 @@ func (t *Tree) cutLeaf( /*@ ghost depth int @*/ ) {
 	// @ unfold t.Inv()
 	if t.leaf != nil {
 		var value /*@@@*/ proofs.NodeValue
-		// @ ghost var tmp1, tmp2 seq[seq[bool]]
+		// @ ghost var tmp1 seq[seq[bool]]
+		// @ ghost var tmp2 seq[int]
 		value /*@, tmp1, tmp2 @*/ = t.leaf.Value( /*@ depth, perm(1/2) @*/ )
 		// @ unfold t.leaf.Inv()
 		t.leaf.value = value
