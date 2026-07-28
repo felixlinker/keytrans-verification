@@ -11,22 +11,6 @@ pure func GetBytesContent(s []byte) (r seq[byte]) {
 }
 
 ghost
-requires noPerm < p
-requires acc(out) && acc(left, p) && acc(right, p) &&
-  out != nil && left != nil && right != nil &&
-  len(out) == len(left) + len(right) &&
-  (forall i int :: {out[i]} {left[i]} 0 <= i && i < len(left) ==> out[i] == left[i]) &&
-  (forall j int :: {out[len(left)+j]} {right[j]} 0 <= j && j < len(right) ==> out[len(left)+j] == right[j])
-ensures BytesMem(out) && acc(BytesMem(left), p) && acc(BytesMem(right), p)
-ensures GetBytesContent(out) == GetBytesContent(left) ++ GetBytesContent(right)
-decreases
-func GetConcatContent(out []byte, left []byte, right []byte, ghost p perm) {
-  fold BytesMem(out)
-  fold acc(BytesMem(left), p)
-  fold acc(BytesMem(right), p)
-}
-
-ghost
 requires acc(s)
 requires 0 <= idx && idx <= len(s)
 ensures len(r) == len(s) - idx

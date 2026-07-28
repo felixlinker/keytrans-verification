@@ -35,8 +35,10 @@ pred (l *prefixLeaf) Inv() {
 // @ requires  0 <= depth
 // @ preserves acc(l.Inv(), p)
 // @ ensures   v != nil && acc(utils.BytesMem(v))
-// TODO: I should have all ingredients to prove below ensures, but I get permission errors
-// // @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> (low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))))
+// NOTE: ensures below is only to convince Gobra that permissions for final
+// ensures suffice
+// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> low(l.searchKey != nil) && low(l.commitment != nil))
+// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> (low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))))
 func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
 		// @ unfold acc(l.Inv(), p)
@@ -63,7 +65,6 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// @ fold acc(utils.BytesMem(l.searchKey), p)
 
 		v = crypto.Sum(input /*@, perm(1/2) @*/)
-		// @ ghost pureV := utilsrel.GetBytesContentIsLow(v, perm(1/2))
 		// @ assert low(utils.GetBytesContent(v)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 		// @ fold acc(l.Inv(), p)
 	}
