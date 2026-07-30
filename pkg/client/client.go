@@ -169,7 +169,7 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 		}
 		// @ fold acc(cv.Inv())
 		// @ ghost var p perm
-		_, err /*@, p @*/ = VerifyLatestKey(&cv, lookups, pts /*@, perm(1/2) @*/)
+		_, err = VerifyLatestKey(&cv, lookups, pts /*@, perm(1/2) @*/)
 		// @ unfold acc(cv.Inv())
 	}
 
@@ -188,9 +188,7 @@ type MonitoringMapEntry struct {
 // @ requires  noPerm < p
 // @ preserves acc(cv.Inv(), p)
 // @ preserves acc(lookups.Inv(), p)
-// @ requires acc(prefix.PrefixesInv(prefixTrees), p)
-// @ ensures noPerm < rp
-// @ ensures acc(prefix.PrefixesInv(prefixTrees), rp)
+// @ preserves acc(prefix.PrefixesInv(prefixTrees), p)
 // @ requires  0 < len(prefixTrees) // && len(prefixTrees) <= math.MaxUint64
 // hyper-postcondition:
 // // @ ensures   err == nil &&
@@ -199,15 +197,13 @@ type MonitoringMapEntry struct {
 // // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefixTrees []*prefix.Tree /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error /*@, ghost rp perm @*/) {
+func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefixTrees []*prefix.Tree /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
 	// we use `err` to skip loop iterations instead of
 	// returning early, which is not yet supported by Gobra's hypermode.
 
 	var commitment []byte
-	// @ ghost rp = p
-	// @ invariant noPerm < rp && rp <= p
 	// @ invariant acc(cv.Inv(), p) && acc(lookups.Inv(), p)
-	// @ invariant acc(prefix.PrefixesInv(prefixTrees), rp)
+	// @ invariant acc(prefix.PrefixesInv(prefixTrees), p)
 	// @ invariant 0 <= idx && idx <= len(prefixTrees)
 	// hyper-invariants:
 	// // @ invariant low(len(prefixTrees)) ==> low(idx)
@@ -218,14 +214,14 @@ func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefix
 	// // @ decreases len(prefixTrees) - idx
 	for idx := 0; idx < len(prefixTrees) && err == nil; idx++ {
 		// TODO: Check monitoring
-		//@ unfold acc(prefix.PrefixesInv(prefixTrees), rp)
-		commitment, err /*@, rp @*/ = lookups.CheckPrefixTree(prefixTrees[idx] /*@, rp @*/)
+		// @ unfold acc(prefix.PrefixesInv(prefixTrees), p)
+		commitment, err = lookups.CheckPrefixTree(prefixTrees[idx] /*@, p @*/)
 		if commitment != nil && err != nil {
-			if !crypto.VerifyCommitmentValue(commitment, cv /*@, rp @*/) {
+			if !crypto.VerifyCommitmentValue(commitment, cv /*@, p @*/) {
 				err = errors.New("commitments did not match")
 			}
 		}
-		//@ fold acc(prefix.PrefixesInv(prefixTrees), rp)
+		// @ fold acc(prefix.PrefixesInv(prefixTrees), p)
 	}
 
 	if commitment == nil {
