@@ -449,12 +449,13 @@ func (t *Tree) Value( /*@ ghost p perm @*/ ) (r proofs.NodeValue, err error) {
 }
 
 // @ requires  noPerm < p
+// @ requires 0 <= depth && depth <= len(searchKey)
 // @ preserves acc(utils.BitsMem(searchKey), p)
 // @ preserves acc(t.Inv(), p)
 // @ ensures   l != nil ==> l.Inv()
-func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
+func (t *Tree) getLeaf(searchKey []bool, depth int /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
 	// @ unfold acc(t.Inv(), p)
-	if t.leaf != nil || len(searchKey) == 0 {
+	if t.leaf != nil || depth == len(searchKey) {
 		if t.leaf == nil {
 			l = nil
 		} else {
@@ -462,21 +463,19 @@ func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, o
 		}
 		ok = t.leaf != nil
 	} else {
-		rec := searchKey[1:]
-		// @ assert forall i int :: {&rec[i]} 0 <= i && i < len(rec) ==> &rec[i] == &searchKey[i+1]
-		if searchKey[0] {
+		if /*@ unfolding acc(utils.BitsMem(searchKey), p) in @*/ searchKey[depth] {
 			if t.right == nil {
 				l = nil
 				ok = true
 			} else {
-				l, ok = t.right.getLeaf(rec /*@, p @*/)
+				l, ok = t.right.getLeaf(searchKey, depth+1 /*@, p @*/)
 			}
 		} else {
 			if t.left == nil {
 				l = nil
 				ok = true
 			} else {
-				l, ok = t.left.getLeaf(rec /*@, p @*/)
+				l, ok = t.left.getLeaf(searchKey, depth+1 /*@, p @*/)
 			}
 		}
 	}
@@ -491,7 +490,7 @@ func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, o
 func (t *Tree) Search(searchKey []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
 	// TODO: Cannot return r == nil && ok
 	searchKeyBits := utils.Bits(searchKey /*@, p @*/)
-	if leaf, leafOk := t.getLeaf(searchKeyBits /*@, p @*/); !leafOk {
+	if leaf, leafOk := t.getLeaf(searchKeyBits, 0 /*@, p @*/); !leafOk {
 		ok = false
 	} else if leaf == nil {
 		ok = true
