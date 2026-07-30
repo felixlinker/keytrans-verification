@@ -56,7 +56,7 @@ func (resp *SearchResponse) Unmarshal(buf *bytes.Buffer, version *uint64) (err e
 	if e := fth.Unmarshal(buf); e != nil {
 		err = e
 	} else {
-		resp.Version = nil
+		resp.Version = version
 		if version == nil {
 			if ver /*@@@*/, e := utils.ReadUint32(buf); e != nil {
 				err = e
@@ -70,20 +70,20 @@ func (resp *SearchResponse) Unmarshal(buf *bytes.Buffer, version *uint64) (err e
 
 		if err == nil {
 			// @ assert version != nil
-			if ladder, e := proofs.UnmarshalBinaryLadderSteps(buf, *version); e != nil {
-				err = e
-			} else if e := search.Unmarshal(buf); e != nil {
-				err = e
-			} else if n, e := buf.Read(opening); n != len(opening) || e != nil {
+			if n, e := buf.Read(opening); n != len(opening) || e != nil {
 				err = utils.BufferError(e)
 			} else if e := value.Unmarshal(buf); e != nil {
 				err = e
+			} else if ladder, e := proofs.UnmarshalBinaryLadderSteps(buf, *version); e != nil {
+				err = e
+			} else if e := search.Unmarshal(buf); e != nil {
+				err = e
 			} else {
 				resp.Full_tree_head = &fth
-				resp.Binary_ladder = ladder
-				resp.Search = &search
 				resp.Opening = opening
 				resp.Value = &value
+				resp.Binary_ladder = ladder
+				resp.Search = &search
 				// @ fold utils.BytesMem(resp.Opening)
 				// @ fold resp.Inv()
 			}

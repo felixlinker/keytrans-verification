@@ -9,13 +9,12 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
+// @ requires 1 <= lenBytes && lenBytes <= 4
 // @ ensures err == nil ==> acc(NodeValuesInv(r))
-func UnmarshalNodeValues(buf *bytes.Buffer) (r []NodeValue, err error) {
-	if lengthUint16, e := utils.ReadUint16(buf); e != nil {
+func UnmarshalNodeValues(buf *bytes.Buffer, lenBytes int) (r []NodeValue, err error) {
+	if length, e := utils.ReadLen(buf, lenBytes); e != nil {
 		err = e
 	} else {
-		// @ assume 0 <= lengthUint16
-		length := int(lengthUint16)
 		r = make([]NodeValue, 0, length)
 		// @ fold acc(NodeValuesInv(r))
 
@@ -40,22 +39,27 @@ func UnmarshalNodeValues(buf *bytes.Buffer) (r []NodeValue, err error) {
 
 // @ requires acc(s)
 // @ ensures err == nil ==> acc(s.Inv())
-func (s *BinaryLadderStep) Unmarshal(buf *bytes.Buffer, withCommitment bool) (err error) {
-	prf := make([]byte, 64)
+func (s *BinaryLadderStep) Unmarshal(buf *bytes.Buffer) (err error) {
+	// Np is 80 for the Ed25519 ciphersuite supported by this verifier.
+	prf := make([]byte, 80)
 	if n, e := buf.Read(prf); n != len(prf) || e != nil {
 		err = utils.BufferError(e)
+	} else if present, e := buf.ReadByte(); e != nil {
+		err = e
 	} else {
 		s.Proof = prf
 		// @ fold acc(utils.BytesMem(s.Proof))
 		s.Commitment = nil
-		if withCommitment {
+		if present == 1 {
 			s.Commitment = make([]byte, sha256.Size)
 			if n, e := buf.Read(s.Commitment); n != len(s.Commitment) || e != nil {
 				return utils.BufferError(e)
 			}
 			// @ fold acc(utils.BytesMem(s.Commitment))
 		}
-		// @ fold acc(s.Inv())
+		if err == nil {
+			// @ fold acc(s.Inv())
+		}
 	}
 	return
 }
@@ -84,7 +88,7 @@ func UnmarshalBinaryLadderSteps(buf *bytes.Buffer, version uint64) (r []*BinaryL
 		for i := 0; i < len(ladder) && err == nil; i++ {
 			step /*@@@*/ := BinaryLadderStep{}
 			// @ unfold BinaryLadderInv(ladder)
-			if e := step.Unmarshal(buf, ladder[i] <= version); e != nil {
+			if e := step.Unmarshal(buf); e != nil {
 				err = e
 			} else {
 				// @ assert acc(step.Inv())
@@ -104,7 +108,7 @@ func UnmarshalBinaryLadderSteps(buf *bytes.Buffer, version uint64) (r []*BinaryL
 // @ requires acc(prf)
 // @ ensures err == nil ==> acc(prf.Inv())
 func (prf *InclusionProof) Unmarshal(buf *bytes.Buffer) (err error) {
-	if values, e := UnmarshalNodeValues(buf); e != nil {
+	if values, e := UnmarshalNodeValues(buf, 2); e != nil {
 		err = e
 	} else {
 		prf.Elements = values
@@ -190,7 +194,7 @@ func UnmarshalPrefixSearchResults(buf *bytes.Buffer) (r []*PrefixSearchResult, e
 func (p *PrefixProof) Unmarshal(buf *bytes.Buffer) (err error) {
 	if results, e := UnmarshalPrefixSearchResults(buf); e != nil {
 		err = e
-	} else if values, e := UnmarshalNodeValues(buf); e != nil {
+	} else if values, e := UnmarshalNodeValues(buf, 2); e != nil {
 		err = e
 	} else {
 		p.Results = results
@@ -234,7 +238,7 @@ func (c *CombinedTreeProof) Unmarshal(buf *bytes.Buffer) (err error) {
 		err = e
 	} else if prefixProofs, e := UnmarshalPrefixProofs(buf); e != nil {
 		err = e
-	} else if prefixRoots, e := UnmarshalNodeValues(buf); e != nil {
+	} else if prefixRoots, e := UnmarshalNodeValues(buf, 1); e != nil {
 		err = e
 	} else if e := incPrf.Unmarshal(buf); e != nil {
 		err = e

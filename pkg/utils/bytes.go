@@ -21,26 +21,41 @@ func AllZero(bs []byte /*@, ghost p perm @*/) (r bool) {
 	return
 }
 
-// @ requires 0 <= lenBytes && lenBytes <= 4
-// @ ensures p != nil ==> acc(p)
-func ReadBytes(buf *bytes.Buffer, lenBytes int) (p []byte, err error) {
+// @ requires 1 <= lenBytes && lenBytes <= 4
+// @ ensures 0 <= length
+func ReadLen(buf *bytes.Buffer, lenBytes int) (length int, err error) {
 	lenBuf := make([]byte, lenBytes)
 	// @ assert acc(lenBuf)
-	if n, e := buf.Read(lenBuf); n != len(lenBuf) || e != nil {
+	if n, e := buf.Read(lenBuf); n != lenBytes || e != nil {
 		if e == nil {
 			err = errors.New("wrong amount of bytes read")
 		} else {
 			err = e
 		}
 	} else {
-		length := binary.BigEndian.Uint32(lenBuf /*@, perm(1/2) @*/)
+		if len(lenBuf) < 4 {
+			pad := make([]byte, 4-len(lenBuf))
+			lenBuf = append( /*@ perm(1/2), @*/ pad, lenBuf...)
+		}
+		length = int(binary.BigEndian.Uint32(lenBuf /*@, perm(1/2) @*/))
 		// @ assume 0 <= length
-		p = make([]byte, int(length))
+	}
+	return
+}
+
+// @ requires 1 <= lenBytes && lenBytes <= 4
+// @ ensures p != nil ==> acc(p)
+func ReadBytes(buf *bytes.Buffer, lenBytes int) (p []byte, err error) {
+	if length, e := ReadLen(buf, lenBytes); e != nil {
+		err = e
+	} else {
+		// @ assume 0 <= length
+		p = make([]byte, length)
 		if n, e := buf.Read(p); n != len(p) || e != nil {
 			if e == nil {
 				err = errors.New("wrong amount of bytes read")
 			} else {
-				e = err
+				err = e
 			}
 		}
 	}

@@ -73,10 +73,10 @@ type SearchResponse struct {
 	// compatibility.
 	Full_tree_head *FullTreeHead
 	Version        *uint64
-	Binary_ladder  []*proofs.BinaryLadderStep
-	Search         *proofs.CombinedTreeProof
 	Opening        []byte
 	Value          *crypto.UpdateValue // value associated with queried label
+	Binary_ladder  []*proofs.BinaryLadderStep
+	Search         *proofs.CombinedTreeProof
 }
 
 /*@
