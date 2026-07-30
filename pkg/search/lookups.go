@@ -90,10 +90,9 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 // key is committed to by the respectively returned value.
 // @ requires noPerm < p
 // @ preserves acc(ls.Inv(), p)
-// @ requires acc(t.Inv(), p)
-// @ ensures noPerm < tp && tp <= p && acc(t.Inv(), tp)
-// @ ensures r != nil && err != nil ==> acc(utils.BytesMem(r), tp)
-func (ls *Lookups) CheckPrefixTree(t *prefix.Tree /*@, ghost p perm @*/) (r []byte, err error /*@, ghost tp perm @*/) {
+// @ preserves acc(t.Inv(), p)
+// @ ensures r != nil && err != nil ==> utils.BytesMem(r)
+func (ls *Lookups) CheckPrefixTree(t *prefix.Tree /*@, ghost p perm @*/) (r []byte, err error) {
 	// @ unfold acc(ls.Inv(), p)
 	// @ assume 0 <= ls.version
 	steps /*@, idx @*/ := proofs.FullBinaryLadderSteps(ls.version /*@, ls.version @*/)
@@ -101,17 +100,16 @@ func (ls *Lookups) CheckPrefixTree(t *prefix.Tree /*@, ghost p perm @*/) (r []by
 	// @ unfold acc(proofs.BinaryLadderInv(steps))
 
 	done := false
-	// @ ghost tp = p
 	// @ invariant 0 <= i && i <= len(steps)
-	// @ invariant acc(steps) && acc(ls.Inv(), p) && noPerm < tp && tp <= p && acc(t.Inv(), tp)
-	// @ invariant r != nil ==> acc(utils.BytesMem(r), tp)
+	// @ invariant acc(steps) && acc(ls.Inv(), p) && acc(t.Inv(), p)
+	// @ invariant r != nil ==> utils.BytesMem(r)
 	for i := 0; i < len(steps) && err == nil && !done; i++ {
 		lookup := steps[i]
 		// @ unfold acc(ls.Inv(), p)
 		if searchKey, ok := misc.MapGet(ls.vrfOutputs, lookup /*@, p @*/); !ok {
 			err = errors.New("vrfOutputs incomplete")
 		} else {
-			if c, ok := t.Search(searchKey /*@, tp @*/); !ok {
+			if c, ok := t.Search(searchKey /*@, p @*/); !ok {
 				err = errors.New("failed expected prefix tree lookup")
 			} else {
 				if lookup <= ls.version {
@@ -125,9 +123,9 @@ func (ls *Lookups) CheckPrefixTree(t *prefix.Tree /*@, ghost p perm @*/) (r []by
 						err = errors.New("commitments incomplete")
 					} else {
 						// @ unfold acc(utils.BytesMem(cExpected), p)
-						// @ unfold acc(utils.BytesMem(c), tp/2)
-						equal := bytes.Equal(cExpected, c /*@, p, tp/2 @*/)
-						// @ fold acc(utils.BytesMem(c), tp/2)
+						// @ unfold acc(utils.BytesMem(c), perm(1/2))
+						equal := bytes.Equal(cExpected, c /*@, p, perm(1/2) @*/)
+						// @ fold acc(utils.BytesMem(c), perm(1/2))
 						// @ fold acc(utils.BytesMem(cExpected), p)
 						if !equal {
 							err = errors.New("failed expected prefix tree lookup")
@@ -140,7 +138,6 @@ func (ls *Lookups) CheckPrefixTree(t *prefix.Tree /*@, ghost p perm @*/) (r []by
 				}
 			}
 		}
-		// @ tp = tp/2
 		// @ fold acc(ls.Inv(), p)
 	}
 	return

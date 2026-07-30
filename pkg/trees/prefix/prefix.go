@@ -31,6 +31,24 @@ pred (l *prefixLeaf) Inv() {
 }
 @*/
 
+// @ requires noPerm < p
+// @ preserves acc(l.Inv(), p)
+// @ ensures r.Inv()
+func (l *prefixLeaf) copy( /*@ ghost p perm @*/ ) (r *prefixLeaf) {
+	r = &prefixLeaf{}
+	// @ unfold acc(l.Inv(), p)
+	if l.value != nil {
+		r.value = utils.Copy(l.value /*@, p @*/)
+		// @ fold r.Inv()
+	} else {
+		r.searchKey = utils.Copy(l.searchKey /*@, p @*/)
+		r.commitment = utils.Copy(l.commitment /*@, p @*/)
+		// @ fold r.Inv()
+	}
+	// @ fold acc(l.Inv(), p)
+	return
+}
+
 // @ requires  noPerm < p
 // @ requires  0 <= depth
 // @ preserves acc(l.Inv(), p)
@@ -433,14 +451,16 @@ func (t *Tree) Value( /*@ ghost p perm @*/ ) (r proofs.NodeValue, err error) {
 
 // @ requires  noPerm < p
 // @ preserves acc(searchKey, p)
-// @ requires  acc(t.Inv(), p)
-// @ ensures   acc(t.Inv(), p/2)
-// @ ensures   l == nil ==> acc(t.Inv(), p/2)
-// @ ensures   l != nil ==> acc(l.Inv(), p/2)
+// @ preserves acc(t.Inv(), p)
+// @ ensures   l != nil ==> l.Inv()
 func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
 	// @ unfold acc(t.Inv(), p)
 	if t.leaf != nil || len(searchKey) == 0 {
-		l = t.leaf
+		if t.leaf == nil {
+			l = nil
+		} else {
+			l = t.leaf.copy( /*@ p @*/ )
+		}
 		ok = t.leaf != nil
 	} else {
 		rec := searchKey[1:]
@@ -461,15 +481,14 @@ func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, o
 			}
 		}
 	}
-	// @ fold acc(t.Inv(), l == nil ? p : p/2)
+	// @ fold acc(t.Inv(), p)
 	return
 }
 
 // @ requires  noPerm < p && p <= writePerm
-// @ requires  acc(t.Inv(), p)
+// @ preserves acc(t.Inv(), p)
 // @ preserves acc(utils.BytesMem(searchKey), p)
-// @ ensures   acc(t.Inv(), p/2)
-// @ ensures   r != nil ==> acc(utils.BytesMem(r), p/2)
+// @ ensures   r != nil ==> utils.BytesMem(r)
 func (t *Tree) Search(searchKey []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
 	// TODO: Cannot return r == nil && ok
 	searchKeyBits := utils.Bits(searchKey /*@, p @*/)
@@ -478,20 +497,20 @@ func (t *Tree) Search(searchKey []byte /*@, ghost p perm @*/) (r []byte, ok bool
 	} else if leaf == nil {
 		ok = true
 	} else {
-		// @ unfold acc(leaf.Inv(), p/2)
+		// @ unfold acc(leaf.Inv(), perm(1/2))
 		if leaf.searchKey == nil {
 			ok = false
 		} else if leaf.commitment == nil {
 			ok = false
 		} else {
-			r = utils.Copy(leaf.commitment /*@, p/2 @*/)
-			// @ unfold acc(utils.BytesMem(leaf.searchKey), p/2)
+			r = utils.Copy(leaf.commitment /*@, perm(1/2) @*/)
+			// @ unfold acc(utils.BytesMem(leaf.searchKey), perm(1/2))
 			// @ unfold acc(utils.BytesMem(searchKey), p)
-			ok = bytes.Equal(leaf.searchKey, searchKey /*@, p/2, p @*/)
+			ok = bytes.Equal(leaf.searchKey, searchKey /*@, perm(1/2), p @*/)
 			// @ fold acc(utils.BytesMem(searchKey), p)
-			// @ fold acc(utils.BytesMem(leaf.searchKey), p/2)
+			// @ fold acc(utils.BytesMem(leaf.searchKey), perm(1/2))
 		}
-		// @ fold acc(leaf.Inv(), p/2)
+		// @ fold acc(leaf.Inv(), perm(1/2))
 	}
 	return
 }
