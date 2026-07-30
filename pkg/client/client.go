@@ -8,6 +8,7 @@ import (
 	//@ "github.com/felixlinker/keytrans-verification/pkg/arb"
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
+	"github.com/felixlinker/keytrans-verification/pkg/search"
 	"github.com/felixlinker/keytrans-verification/pkg/trees/prefix"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 	//@ utilsrel "github.com/felixlinker/keytrans-verification/pkg/utils-rel"
@@ -143,11 +144,11 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	}
 
 	// Phase 3: Build prefix pts
-	var lookups *prefix.Lookups
+	var lookups *search.Lookups
 	if err == nil {
 		// @ unfold acc(st.Inv())
 		// @ unfold acc(st.Config.Inv())
-		lookups, err = prefix.MkLookups(label, *resp.Version, st.Config.VrfPublicKey, resp.Binary_ladder /*@, perm(1/2) @*/)
+		lookups, err = search.MkLookups(label, *resp.Version, st.Config.VrfPublicKey, resp.Binary_ladder /*@, perm(1/2) @*/)
 		// @ fold acc(st.Config.Inv())
 		// @ fold acc(st.Inv())
 	}
@@ -198,7 +199,7 @@ type MonitoringMapEntry struct {
 // // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *prefix.Lookups, prefixTrees []*prefix.Tree /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error /*@, ghost rp perm @*/) {
+func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefixTrees []*prefix.Tree /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error /*@, ghost rp perm @*/) {
 	// we use `err` to skip loop iterations instead of
 	// returning early, which is not yet supported by Gobra's hypermode.
 

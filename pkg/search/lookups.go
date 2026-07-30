@@ -1,4 +1,4 @@
-package prefix
+package search
 
 import (
 	"bytes"
@@ -7,10 +7,11 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/trees/misc"
+	"github.com/felixlinker/keytrans-verification/pkg/trees/prefix"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
-// ##(--hyperMode extended --enableExperimentalHyperFeatures)
+// ##(--hyperMode extended)
 
 type Lookups struct {
 	label       []byte
@@ -90,7 +91,7 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 // @ requires acc(t.Inv(), p)
 // @ ensures noPerm < tp && tp <= p && acc(t.Inv(), tp)
 // @ ensures r != nil && err != nil ==> acc(utils.BytesMem(r), tp)
-func (ls *Lookups) CheckPrefixTree(t *Tree /*@, ghost p perm @*/) (r []byte, err error /*@, ghost tp perm @*/) {
+func (ls *Lookups) CheckPrefixTree(t *prefix.Tree /*@, ghost p perm @*/) (r []byte, err error /*@, ghost tp perm @*/) {
 	// @ unfold acc(ls.Inv(), p)
 	// @ assume 0 <= ls.version
 	steps /*@, idx @*/ := proofs.FullBinaryLadderSteps(ls.version /*@, ls.version @*/)
