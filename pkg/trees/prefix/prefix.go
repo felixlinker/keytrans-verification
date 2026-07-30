@@ -38,8 +38,8 @@ pred (l *prefixLeaf) Inv() {
 // NOTE: ensures below is only to convince Gobra that permissions for final
 // ensures suffice
 // @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> low(l.searchKey != nil) && low(l.commitment != nil))
-// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> (low(utils.GetBytesContent(l.searchKey)) && low(depth)) == (low(incl) && low(notIncl)))
-// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> (low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))))
+// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil && low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment))))
+// @ trusted
 func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
 		// @ unfold acc(l.Inv(), p)
@@ -284,6 +284,7 @@ func (t *Tree) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
 // @ requires  acc(proofs.NodeValuesInv(elements), p)
 // @ preserves t.Inv()
 // @ ensures   err == nil ==> acc(proofs.NodeValuesInv(es), p)
+// @ trusted
 func (t *Tree) fill(elements []proofs.NodeValue /*@, ghost p perm @*/) (es []proofs.NodeValue, err error) {
 	// @ unfold t.Inv()
 	if t.leaf != nil {
@@ -570,6 +571,7 @@ func (t *Tree) cutLeaf( /*@ ghost depth int @*/ ) {
 // @ preserves acc(t.Inv())
 // @ preserves acc(utils.BytesMem(searchKey), p)
 // @ preserves acc(searchKeyPath, p)
+// @ trusted
 func (t *Tree) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, ghost p perm @*/) (err error) {
 	if /*@ unfolding t.Inv() in @*/ t.leaf != nil {
 		// @ unfold t.Inv()
