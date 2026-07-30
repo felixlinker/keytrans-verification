@@ -142,7 +142,7 @@ func mkTree() (t *Tree) {
 }
 
 // @ requires  noPerm < p
-// @ requires  acc(path, p)
+// @ preserves acc(utils.BitsMem(path), p)
 // @ requires  0 <= depth
 // @ requires  leaf.Inv()
 // @ preserves t.Inv()
@@ -150,7 +150,7 @@ func (t *Tree) insertAtChild(path []bool, depth int, leaf *prefixLeaf /*@, ghost
 	// @ unfold t.Inv()
 	if depth >= len(path) {
 		err = errors.New("path too short for tree depth")
-	} else if path[depth] {
+	} else if /*@ unfolding acc(utils.BitsMem(path), p) in @*/ path[depth] {
 		if t.right == nil {
 			t.right = mkTree()
 		}
@@ -188,9 +188,9 @@ func (t *Tree) extend(depth int) (err error) {
 }
 
 // @ requires  noPerm < p
-// @ requires  acc(path, p)
 // @ requires  0 <= depth
 // @ requires  leaf.Inv()
+// @ preserves acc(utils.BitsMem(path), p)
 // @ preserves t.Inv()
 func (t *Tree) insert(path []bool, depth int, leaf *prefixLeaf /*@, ghost p perm @*/) (err error) {
 	if /*@ unfolding t.Inv() in @*/ t.leaf == nil && t.left == nil && t.right == nil {
@@ -270,28 +270,27 @@ func nodeValueLeaf(nodeValue proofs.NodeValue /*@, ghost p perm @*/) (t *Tree) {
 }
 
 // @ requires  0 <= depth && depth <= len(steps)
+// @ requires  depth <= targetDepth && targetDepth <= len(steps)
 // @ requires  t.Inv() && leaf.Inv()
-// @ preserves acc(steps)
+// @ preserves utils.BitsMem(steps)
 // @ ensures   t.Inv()
-func (t *Tree) setLeaf(steps []bool, depth int, leaf *prefixLeaf) {
+func (t *Tree) setLeaf(steps []bool, depth, targetDepth int, leaf *prefixLeaf) {
 	// @ unfold t.Inv()
-	if depth == 0 {
+	if depth == targetDepth {
 		t.leaf = leaf
 		t.left = nil
 		t.right = nil
 	} else {
-		stepsRec := steps[1:]
-		// @ assert forall i int :: {&stepsRec[i]} 0 <= i && i < len(stepsRec) ==> &stepsRec[i] == &steps[i+1]
-		if steps[0] {
+		if /*@ unfolding utils.BitsMem(steps) in @*/ steps[depth] {
 			if t.right == nil {
 				t.right = mkTree()
 			}
-			t.right.setLeaf(stepsRec, depth-1, leaf)
+			t.right.setLeaf(steps, depth+1, targetDepth, leaf)
 		} else {
 			if t.left == nil {
 				t.left = mkTree()
 			}
-			t.left.setLeaf(stepsRec, depth-1, leaf)
+			t.left.setLeaf(steps, depth+1, targetDepth, leaf)
 		}
 	}
 	// @ fold t.Inv()
@@ -450,7 +449,7 @@ func (t *Tree) Value( /*@ ghost p perm @*/ ) (r proofs.NodeValue, err error) {
 }
 
 // @ requires  noPerm < p
-// @ preserves acc(searchKey, p)
+// @ preserves acc(utils.BitsMem(searchKey), p)
 // @ preserves acc(t.Inv(), p)
 // @ ensures   l != nil ==> l.Inv()
 func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, ok bool) {
@@ -549,8 +548,7 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Tree, err er
 			// @ fold acc((&l).Inv(), p)
 			// @ assume 0 <= result.Depth && result.Depth <= 255 // help gobra with uint
 			// @ assume int(result.Depth) <= len(searchKeyBits) // TODO: make invariant
-			tree.setLeaf(searchKeyBits, int(result.Depth), commitmentLeaf(&l /*@, p @*/))
-
+			tree.setLeaf(searchKeyBits, 0, int(result.Depth), commitmentLeaf(&l /*@, p @*/))
 		}
 		// @ fold acc(prf.Results[i].Inv(), p)
 		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results), p)
@@ -589,7 +587,7 @@ func (t *Tree) cutLeaf( /*@ ghost depth int @*/ ) {
 // @ requires  0 <= depth
 // @ preserves acc(t.Inv())
 // @ preserves acc(utils.BytesMem(searchKey), p)
-// @ preserves acc(searchKeyPath, p)
+// @ preserves acc(utils.BitsMem(searchKeyPath), p)
 // @ trusted
 func (t *Tree) prune(searchKey []byte, searchKeyPath []bool, depth int /*@, ghost p perm @*/) (err error) {
 	if /*@ unfolding t.Inv() in @*/ t.leaf != nil {

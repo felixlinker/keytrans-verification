@@ -40,19 +40,19 @@ pure func getUint64sContent_Rec(s []uint64, idx int) (r seq[uint64]) {
 }
 
 ghost
-requires acc(bs, _)
+requires acc(BitsMem(bs), _)
 requires 0 <= i && i <= len(bs)
 ensures len(r) == len(bs)-i
-ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[i+j]
+ensures unfolding acc(BitsMem(bs), _) in forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[i+j]
 decreases len(bs)-i
 pure func getBitsContent_Rec(bs []bool, i int) (r seq[bool]) {
-	return len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ getBitsContent_Rec(bs, i+1))
+	return unfolding acc(BitsMem(bs), _) in len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ getBitsContent_Rec(bs, i+1))
 }
 
 ghost
-requires acc(bs, _)
+requires acc(BitsMem(bs), _)
 ensures len(bs) == len(r)
-ensures forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[j]
+ensures unfolding acc(BitsMem(bs), _) in forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[j]
 decreases
 pure func GetBitsContent(bs []bool) (r seq[bool]) {
 	return getBitsContent_Rec(bs, 0)
