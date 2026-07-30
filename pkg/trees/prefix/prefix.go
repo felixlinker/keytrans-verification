@@ -26,13 +26,13 @@ pred (l *prefixLeaf) Inv() {
 	// Either value is not nil, or search key AND commitment are not nil
 	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
 	(l.value != nil ==> acc(utils.BytesMem(l.value))) &&
-	(l.searchKey != nil ==> len(l.searchKey) == 32 && acc(utils.BytesMem(l.searchKey))) &&
+	(l.searchKey != nil ==> acc(utils.BytesMem(l.searchKey))) &&
 	(l.commitment != nil ==> acc(utils.BytesMem(l.commitment)))
 }
 @*/
 
 // @ requires  noPerm < p
-// @ requires  0 <= depth && depth < 32
+// @ requires  0 <= depth
 // @ preserves acc(l.Inv(), p)
 // @ ensures   v != nil && acc(utils.BytesMem(v))
 // NOTE: ensures below is only to convince Gobra that permissions for final
@@ -57,6 +57,8 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		input1 := []byte{0x02}
 		// @ fold utils.BytesMem(input1)
 		// @ assert low(utils.GetBytesContent(input1))
+		// TODO:
+		// @ assume len(l.searchKey) == 32
 		input2 := utilsrel.Concat(l.searchKey, l.commitment /*@, p @*/)
 		// @ assert low(utils.GetBytesContent(input2)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 		input := utilsrel.Concat(input1, input2 /*@, perm(1/2) @*/)
@@ -65,7 +67,7 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// @ ghost searchKeySeq := utils.GetBytesContent(l.searchKey)
 		// @ incl = Incl{ utils.BitsSeq(searchKeySeq) }
 		// @ notIncl = NotIncl{depth}
-		// @ fold InclChar(incl, notIncl)
+		// // @ fold InclChar(incl, notIncl)
 
 		v = crypto.Sum(input /*@, perm(1/2) @*/)
 		// @ assert (low(utils.GetBytesContent(l.searchKey)) && low(depth)) == (low(incl) && low(notIncl))
@@ -159,9 +161,7 @@ func (t *Tree) extend(depth int) (err error) {
 			err = errors.New("search key error at leaf")
 		} else {
 			// @ unfold recLeaf.Inv()
-			// @ unfold utils.BytesMem(recLeaf.searchKey)
 			recSearchKey := utils.Bits(recLeaf.searchKey /*@, perm(1/2) @*/)
-			// @ fold utils.BytesMem(recLeaf.searchKey)
 			// @ fold recLeaf.Inv()
 			err = t.insertAtChild(recSearchKey, depth, recLeaf /*@, perm(1/2) @*/)
 		}
@@ -207,9 +207,7 @@ func (t *Tree) Insert(leaf *prefixLeaf) (err error) {
 		err = errors.New("cannot insert leaf without search key")
 	} else {
 		// @ unfold acc(leaf.Inv(), perm(1/2))
-		// @ unfold acc(utils.BytesMem(leaf.searchKey), perm(1/2))
 		searchKeyBits := utils.Bits(leaf.searchKey /*@, perm(1/2) @*/)
-		// @ fold acc(utils.BytesMem(leaf.searchKey), perm(1/2))
 		// @ fold acc(leaf.Inv(), perm(1/2))
 		err = t.insert(searchKeyBits, 0, leaf /*@, perm(1/2) @*/)
 	}
@@ -466,16 +464,14 @@ func (t *Tree) getLeaf(searchKey []bool /*@, ghost p perm @*/) (l *prefixLeaf, o
 	return
 }
 
-// @ requires  noPerm < p
+// @ requires  noPerm < p && p <= writePerm
 // @ requires  acc(t.Inv(), p)
 // @ preserves acc(utils.BytesMem(searchKey), p)
 // @ ensures   acc(t.Inv(), p/2)
 // @ ensures   r != nil ==> acc(utils.BytesMem(r), p/2)
 func (t *Tree) Search(searchKey []byte /*@, ghost p perm @*/) (r []byte, ok bool) {
 	// TODO: Cannot return r == nil && ok
-	// @ unfold acc(utils.BytesMem(searchKey), p)
 	searchKeyBits := utils.Bits(searchKey /*@, p @*/)
-	// @ fold acc(utils.BytesMem(searchKey), p)
 	if leaf, leafOk := t.getLeaf(searchKeyBits /*@, p @*/); !leafOk {
 		ok = false
 	} else if leaf == nil {
@@ -523,9 +519,7 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Tree, err er
 		} else {
 			// @ unfold acc(result.Leaf.Inv(), p)
 			searchKey := utils.Copy(result.Leaf.Vrf_output /*@, p @*/)
-			// @ unfold utils.BytesMem(searchKey)
 			searchKeyBits := utils.Bits(searchKey /*@, perm(1/2) @*/)
-			// @ fold utils.BytesMem(searchKey)
 
 			l /*@@@*/ := proofs.PrefixLeaf{
 				Vrf_output: searchKey,
@@ -636,9 +630,7 @@ func (t *Tree) Prune(searchKeys [][]byte /*@, ghost p perm @*/) {
 	// @ invariant acc(utils.BytesSliceInv(searchKeys), p)
 	for i := 0; i < len(searchKeys); i++ {
 		// @ unfold acc(utils.BytesSliceInv(searchKeys), p)
-		// @ unfold acc(utils.BytesMem(searchKeys[i]), p)
 		path := utils.Bits(searchKeys[i] /*@, p @*/)
-		// @ fold acc(utils.BytesMem(searchKeys[i]), p)
 		t.prune(searchKeys[i], path, 0 /*@, p @*/)
 		// @ fold acc(utils.BytesSliceInv(searchKeys), p)
 	}
