@@ -1,5 +1,7 @@
 package search
 
+// TODO: Move this module to proofs
+
 import (
 	"bytes"
 	"errors"
