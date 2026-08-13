@@ -84,10 +84,13 @@ func (t *Tree) prune(keeping []uint64) (r []uint64) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		i := 0
+		// Read the bound before folding, so that the loop guard does not have to
+		// unfold the invariant on every iteration.
+		end := t.index + t.size
 		// @ fold acc(t.Inv())
 		// @ invariant 0 <= i && i <= len(keeping)
 		// @ invariant acc(keeping) && acc(t.Inv())
-		for ; i < len(keeping) && keeping[i] < /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size; i++ {
+		for ; i < len(keeping) && keeping[i] < end; i++ {
 		}
 		// Help gobra realize the relation between keeping and its subslice
 		// @ assert forall j int :: {&keeping[i:][j]} 0 <= j && j < len(keeping[i:]) ==> &keeping[i:][j] == &keeping[i+j]
@@ -177,6 +180,9 @@ func (t *Tree) fit(idx uint64) {
 	for /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size <= idx {
 		// @ unfold acc(t.Inv())
 		lsp := utils.LargestSmallerPower(t.size)
+		// `copy` preserves index and size, so remembering them here avoids having
+		// to unfold the copy's invariant again below.
+		end := t.index + t.size
 		if lsp == t.size && (t.value != nil || (t.left != nil && t.right != nil)) {
 			// Tree is already fully balanced; move both children into left child if
 			// they exist.
@@ -186,8 +192,8 @@ func (t *Tree) fit(idx uint64) {
 			t.left = newLeft
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
-			t.right = Singleton( /*@ unfolding acc(newLeft.Inv()) in @*/ newLeft.index+newLeft.size, 1)
-			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
+			t.right = Singleton(end, 1)
+			// @ assert t.left != nil && t.right != nil
 		}
 
 		// Clear hash value; must be done in any case
@@ -203,7 +209,7 @@ func (t *Tree) fit(idx uint64) {
 		// Grow right subtree; left subtree will already be balanced or nil
 		if t.right != nil {
 			// set right to be full-balanced subtree
-			t.right.fit( /*@ unfolding acc(t.left.Inv()) in @*/ t.index + t.size - 1)
+			t.right.fit(t.index + t.size - 1)
 		}
 
 		// @ fold acc(t.Inv())
@@ -228,7 +234,9 @@ func (t *Tree) setLeaf(idx uint64, l []byte) {
 			// @ assert t.left == nil && t.right == nil
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
 			t.left = Singleton(t.index, sizeLeft)
-			t.right = Singleton( /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size, t.size-sizeLeft)
+			// Singleton's postcondition already pins the new child's index and
+			// size, so there is no need to unfold its invariant here.
+			t.right = Singleton(t.index+sizeLeft, t.size-sizeLeft)
 		}
 
 		if idx < /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size {
