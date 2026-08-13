@@ -125,10 +125,14 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	// @ unfold acc(resp.Inv())
 	// @ unfold acc(resp.Search.Inv())
 
-	if /*@ unfolding acc(resp.Full_tree_head.Inv()) in @*/ resp.Full_tree_head.Tree_head != nil {
-		newTreeSize := /*@ unfolding acc(resp.Full_tree_head.Inv()) in unfolding acc(resp.Full_tree_head.Tree_head.Inv()) in @*/ resp.Full_tree_head.Tree_head.Tree_size
+	// @ unfold acc(resp.Full_tree_head.Inv())
+	if resp.Full_tree_head.Tree_head != nil {
+		newTreeSize := /*@ unfolding acc(resp.Full_tree_head.Tree_head.Inv()) in @*/ resp.Full_tree_head.Tree_head.Tree_size
+		// @ fold acc(resp.Full_tree_head.Inv())
 		err = st.UpdateView(newTreeSize, resp.Search.Timestamps, resp.Search.Inclusion /*@, perm(1/2) @*/)
-	}
+	} /*@ else {
+		fold acc(resp.Full_tree_head.Inv())
+	} @*/
 
 	// Phase 2: Validation checks (resp.Inv() still unfolded)
 	if err == nil && resp.Version == nil {
