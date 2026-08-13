@@ -27,6 +27,28 @@ pred (t *Tree) Inv() {
 	(t.right != nil ==> acc(t.right.Inv())) &&
 	(t.left == nil) == (t.right == nil)
 }
+
+// Ghost accessors for the two fields that specifications talk about. Writing a
+// contract as `t.Size()` rather than `unfolding acc(t.Inv()) in t.size` means
+// the unfolding is elaborated once, inside the accessor, instead of at every
+// mention. `Size` additionally exports `1 <= r`, which callers would otherwise
+// have to re-derive by unfolding the invariant themselves.
+// Note that `GetSize` below is the executable counterpart of `Size`; it also
+// accepts a nil receiver, for which it returns 0.
+ghost
+requires acc(t.Inv(), _)
+ensures  1 <= r
+decreases
+pure func (t *Tree) Size() (r uint64) {
+	return unfolding acc(t.Inv(), _) in t.size
+}
+
+ghost
+requires acc(t.Inv(), _)
+decreases
+pure func (t *Tree) Index() (r uint64) {
+	return unfolding acc(t.Inv(), _) in t.index
+}
 @*/
 
 // @ preserves acc(t.Inv())
@@ -39,7 +61,7 @@ func (t *Tree) cut() {
 
 // Remove all nodes from the tree that are not on the frontier, and memorize
 // the hash values of all balanced subtrees.
-// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in oldSize <= t.size
+// @ requires acc(t.Inv()) && oldSize <= t.Size()
 // @ ensures acc(t.Inv())
 func (t *Tree) Prune(oldSize uint64) {
 	var keep []uint64
@@ -96,7 +118,7 @@ func (t *Tree) prune(keeping []uint64) (r []uint64) {
 
 // @ requires 1 <= size
 // @ ensures t != nil && acc(t.Inv())
-// @ ensures unfolding acc(t.Inv()) in t.index == index && t.size == size
+// @ ensures t.Index() == index && t.Size() == size
 func Singleton(index uint64, size uint64) (t *Tree) {
 	tree /*@@@*/ := Tree{
 		index: index,
@@ -111,9 +133,8 @@ func Singleton(index uint64, size uint64) (t *Tree) {
 
 // @ preserves acc(t.Inv())
 // @ ensures copied != nil && acc(copied.Inv())
-// @ ensures old(unfolding acc(t.Inv()) in t.size) == (unfolding acc(t.Inv()) in t.size)
-// @ ensures old(unfolding acc(t.Inv()) in t.index) == (unfolding acc(t.Inv()) in t.index)
-// @ ensures unfolding acc(copied.Inv()) in unfolding acc(t.Inv()) in copied.index == t.index && copied.size == t.size
+// @ ensures old(t.Size()) == t.Size() && old(t.Index()) == t.Index()
+// @ ensures copied.Index() == t.Index() && copied.Size() == t.Size()
 func (t *Tree) copy() (copied *Tree) {
 	// @ unfold acc(t.Inv())
 	copied = Singleton(t.index, t.size)
@@ -192,7 +213,7 @@ func (t *Tree) fit(idx uint64) {
 // TODO: Verification takes rather long. Optimize.
 // @ requires l != nil ==> acc(utils.BytesMem(l))
 // @ requires 0 <= idx
-// @ preserves acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
+// @ preserves acc(t.Inv())
 func (t *Tree) setLeaf(idx uint64, l []byte) {
 	t.fit(idx)
 	// @ unfold acc(t.Inv())
@@ -348,8 +369,7 @@ func (t *Tree) computeHash() (err error) {
 }
 
 // @ requires noPerm < p
-// TODO: Proving 1 <= size should not be necessary as it is provided by t.Inv() directly
-// @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
+// @ preserves acc(t.Inv(), p)
 // @ ensures err == nil ==> acc(utils.BytesMem(commitment))
 func (t *Tree) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment []byte, err error) {
 	// @ unfold acc(t.Inv(), p)
