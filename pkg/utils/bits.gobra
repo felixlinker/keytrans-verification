@@ -1,0 +1,5 @@
+package utils
+
+pred BitsMem(bs []bool) {
+  acc(bs) && bs != nil
+}
