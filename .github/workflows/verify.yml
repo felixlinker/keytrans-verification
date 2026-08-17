@@ -28,7 +28,13 @@ jobs:
       - name: Create stats dir
         run: mkdir .gobra-unary .gobra-hyper
 
+      # --packageTimeout is PER PACKAGE: a package hitting it times out
+      # INSIDE Gobra, which reports its members as 'did not terminate' and
+      # still writes stats.json at the end of the run. However, if too many
+      # packages hit the timeout, the step is killed and no stats.json file
+      # is written.
       - name: Verify packages (without hyperMode)
+        timeout-minutes: 15
         run: |
           java -jar -Xss128m /gobra/gobra.jar \
             --gobraDirectory .gobra-unary \
@@ -38,6 +44,7 @@ jobs:
             --include "." ".verification" \
             --checkConsistency \
             --parallelizeBranches \
+            --packageTimeout 10m \
             --includePackages ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
@@ -48,6 +55,7 @@ jobs:
           path: .gobra-unary/stats.json
 
       - name: Verify packages (with hyperMode)
+        timeout-minutes: 50
         run: |
           java -jar -Xss128m /gobra/gobra.jar \
             --gobraDirectory .gobra-hyper \
@@ -57,6 +65,7 @@ jobs:
             --include "." ".verification" \
             --checkConsistency \
             --parallelizeBranches \
+            --packageTimeout 15m \
             --excludePackages ${{ env.EXCLUDE_PKGS }} ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
