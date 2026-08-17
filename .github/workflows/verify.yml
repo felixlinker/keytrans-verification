@@ -79,3 +79,86 @@ jobs:
 
       - name: Test all packages
         run: go test ./...
+
+
+  visualize-times:
+    runs-on: ubuntu-latest
+    needs: verify-packages
+    if: ${{ always() }}
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download unary statistics
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: unary-stats.json
+          path: stats/unary
+
+      - name: Download hyper statistics
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: hyper-stats.json
+          path: stats/hyper
+
+      - name: Check for downloaded statistics
+        id: stats
+        run: |
+          if find stats -name stats.json -print -quit 2>/dev/null | grep -q .; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No stats.json artifacts were downloaded; skipping visualization."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate visualization
+        if: ${{ steps.stats.outputs.skip != 'true' }}
+        run: |
+          python3 tooling/visualize-verification.py stats \
+            -o verification-times.html \
+            --summary summary.md \
+            --title "Verification times ${GITHUB_SHA::7}"
+
+      - name: Append summary to job summary
+        if: ${{ steps.stats.outputs.skip != 'true' }}
+        run: cat summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload visualization
+        if: ${{ steps.stats.outputs.skip != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-times
+          path: verification-times.html
+
+      # Sticky PR comment: update the existing comment carrying the marker
+      # instead of posting a new one on every run. Fork PRs lack write
+      # permission, hence continue-on-error.
+      - name: Post or update PR comment
+        if: ${{ github.event_name == 'pull_request' && steps.stats.outputs.skip != 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # JSON-encode the comment body safely (no string interpolation).
+          jq -Rs '{body: .}' summary.md > "$RUNNER_TEMP/body.json"
+          # --paginate walks all pages; --jq is applied per page, so ids from
+          # every page are emitted and head -n 1 picks the first match.
+          comment_id="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | contains("<!-- verification-times -->")) | .id' \
+            | head -n 1)"
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              --input "$RUNNER_TEMP/body.json"
+          else
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --input "$RUNNER_TEMP/body.json"
+          fi
