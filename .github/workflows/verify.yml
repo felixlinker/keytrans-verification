@@ -37,6 +37,7 @@ jobs:
             --recursive \
             --include "." ".verification" \
             --checkConsistency \
+            --parallelizeBranches \
             --includePackages ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
@@ -55,6 +56,7 @@ jobs:
             --recursive \
             --include "." ".verification" \
             --checkConsistency \
+            --parallelizeBranches \
             --excludePackages ${{ env.EXCLUDE_PKGS }} ${{ env.UNARY_MODE_PKGS }}
 
       - name: Upload Gobra statistics
