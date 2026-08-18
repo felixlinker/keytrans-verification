@@ -28,11 +28,6 @@ pred (t *Tree) Inv() {
 	(t.left == nil) == (t.right == nil)
 }
 
-// Ghost accessors for the two fields that specifications talk about. Writing a
-// contract as `t.Size()` rather than `unfolding acc(t.Inv()) in t.size` means
-// the unfolding is elaborated once, inside the accessor, instead of at every
-// mention. `Size` additionally exports `1 <= r`, which callers would otherwise
-// have to re-derive by unfolding the invariant themselves.
 // Note that `GetSize` below is the executable counterpart of `Size`; it also
 // accepts a nil receiver, for which it returns 0.
 ghost
@@ -84,8 +79,6 @@ func (t *Tree) prune(keeping []uint64) (r []uint64) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		i := 0
-		// Read the bound before folding, so that the loop guard does not have to
-		// unfold the invariant on every iteration.
 		end := t.index + t.size
 		// @ fold acc(t.Inv())
 		// @ invariant 0 <= i && i <= len(keeping)
@@ -233,8 +226,6 @@ func (t *Tree) setLeaf(idx uint64, l []byte) {
 			// @ assert t.left == nil && t.right == nil
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
 			t.left = Singleton(t.index, sizeLeft)
-			// Singleton's postcondition already pins the new child's index and
-			// size, so there is no need to unfold its invariant here.
 			t.right = Singleton(t.index+sizeLeft, t.size-sizeLeft)
 		}
 

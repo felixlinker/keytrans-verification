@@ -56,8 +56,6 @@ pred (s *UserState) Inv() {
 	acc(s) && (s.Tree != nil ==> acc(s.Tree.Inv())) && acc(utils.Monotonic(s.Frontier_timestamps)) && acc(s.Config.Inv())
 }
 
-// Ghost accessors, so that loop invariants can mention these two properties
-// without re-elaborating the unfolding on every iteration.
 ghost
 requires acc(s.Inv(), _)
 ensures  0 <= r
