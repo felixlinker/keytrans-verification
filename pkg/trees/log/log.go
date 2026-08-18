@@ -182,7 +182,6 @@ func (t *Tree) fit(idx uint64) {
 		lsp := utils.LargestSmallerPower(t.size)
 		// `copy` preserves index and size, so remembering them here avoids having
 		// to unfold the copy's invariant again below.
-		end := t.index + t.size
 		if lsp == t.size && (t.value != nil || (t.left != nil && t.right != nil)) {
 			// Tree is already fully balanced; move both children into left child if
 			// they exist.
@@ -192,7 +191,7 @@ func (t *Tree) fit(idx uint64) {
 			t.left = newLeft
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
-			t.right = Singleton(end, 1)
+			t.right = Singleton( /*@ unfolding newLeft.Inv() in @*/ newLeft.index+newLeft.size, 1)
 			// @ assert t.left != nil && t.right != nil
 		}
 
