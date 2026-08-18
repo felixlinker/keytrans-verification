@@ -405,8 +405,7 @@ func (t *Tree) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment []byt
 
 // @ requires noPerm < p
 // @ preserves t != nil ==> acc(t.Inv(), p)
-// @ ensures 0 <= r
-// @ ensures (t != nil) == (1 <= r)
+// @ ensures r == (t == nil ? 0 : t.Size())
 func (t *Tree) GetSize( /*@ ghost p perm @*/ ) (r uint64) {
 	if t == nil {
 		r = 0
