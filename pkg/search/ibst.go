@@ -79,9 +79,10 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
-	// @ assert front[0] == fromRoot[0]
-	// @ assert front[len(front)-1] == size - 1
-	// @ assert fromRoot[len(fromRoot)-1] == n
+	// note that the following equations hold:
+	// 		front[0] == fromRoot[0]
+	// 		front[len(front)-1] == size - 1
+	// 		fromRoot[len(fromRoot)-1] == n
 
 	i := 0
 	diffFound := false
