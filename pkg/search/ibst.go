@@ -70,7 +70,7 @@ func pathToRoot(n uint64, min, max uint64) (r []uint64) {
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
 // @ decreases
 func PathToNode(n uint64, size uint64) (r []uint64) {
-	return utils.Reverse(pathToRoot(n, 0, size-1))
+	return utils.Reverse(pathToRoot(n, 0, size-1), 0)
 }
 
 // @ requires 0 <= n && n < size
@@ -98,11 +98,7 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 
 	// @ assert diffFound ==> 2 <= i // as `i != 1`` due to `front[0] == fromRoot[0]`
 
-	// note that the following assert stmt leads to an invalid trigger (see Gobra issue #1030)
-	// assert forall j int :: { &fromRoot[i-1:][j] } 0 <= j && j < len(fromRoot[i-1:]) ==> &fromRoot[i-1:][j] == &fromRoot[i-1+j]
-	fromRootSuffix := fromRoot[i-1:]
-	// @ assert forall j int :: { &fromRootSuffix[j] } 0 <= j && j < len(fromRootSuffix) ==> &fromRootSuffix[j] == &fromRoot[i-1+j]
-	r = utils.Reverse(fromRootSuffix)
+	r = utils.Reverse(fromRoot, i-1)
 	// @ assert r[0] == n
 
 	tmp := r // workaround for Gobra issue #1029
