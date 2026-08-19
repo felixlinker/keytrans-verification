@@ -101,25 +101,22 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	r = utils.Reverse(fromRoot, i-1)
 	// @ assert r[0] == n
 
-	tmp := r // workaround for Gobra issue #1029
-
 	// @ requires  forall i int :: { &front[i] } 0 <= i && i < len(front) ==> acc(&front[i]) && 0 <= front[i] && front[i] < size
 	// @ requires  0 <= i && i <= len(front)
 	// @ requires  diffFound ==> 2 <= i
-	// @ preserves forall i int :: { &tmp[i] } 0 <= i && i < len(tmp) ==> acc(&tmp[i]) && 0 <= tmp[i] && tmp[i] < size
-	// @ preserves 0 < len(tmp) && tmp[0] == n
+	// @ preserves forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && 0 <= r[i] && r[i] < size
+	// @ preserves 0 < len(r) && r[0] == n
 	// @ outline (
 	if diffFound {
 		subFront := front[i-2:]
 		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i-2+j]
-		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+		r = append( /*@ perm(1/2), @*/ r, subFront...)
 	} else {
 		subFront := front[i:]
 		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i+j]
-		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+		r = append( /*@ perm(1/2), @*/ r, subFront...)
 	}
 	// @ )
-	r = tmp // workaround for Gobra issue #1029
 	return
 }
 
