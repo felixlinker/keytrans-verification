@@ -108,7 +108,7 @@ jobs:
           name: hyper-stats.json
           path: stats/hyper
 
-      - name: Check for downloaded statistics
+      - name: Check that at least one stats file was downloaded
         id: stats
         run: |
           if find stats -name stats.json -print -quit 2>/dev/null | grep -q .; then
