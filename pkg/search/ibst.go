@@ -70,7 +70,7 @@ func pathToRoot(n uint64, min, max uint64) (r []uint64) {
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 <= r[i] && r[i] < size
 // @ decreases
 func PathToNode(n uint64, size uint64) (r []uint64) {
-	return utils.Reverse(pathToRoot(n, 0, size-1))
+	return utils.Reverse(pathToRoot(n, 0, size-1), 0)
 }
 
 // @ requires 0 <= n && n < size
@@ -79,16 +79,16 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
-	// @ assert front[0] == fromRoot[0]
-	// @ assert front[len(front)-1] == size - 1
-	// @ assert fromRoot[len(fromRoot)-1] == n
+	// note that the following equations hold:
+	// 		front[0] == fromRoot[0]
+	// 		front[len(front)-1] == size - 1
+	// 		fromRoot[len(fromRoot)-1] == n
 
 	i := 0
 	diffFound := false
 	// @ invariant 0 <= i && i <= len(front) && i <= len(fromRoot)
 	// @ invariant acc(front, 1/2) && acc(fromRoot, 1/2)
-	// @ invariant !diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i ==> front[j] == fromRoot[j])
-	// @ invariant diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i - 1 ==> front[j] == fromRoot[j])
+	// @ invariant forall j int :: { &front[j] } 0 <= j && j < i && (diffFound ==> j < i - 1) ==> front[j] == fromRoot[j]
 	// @ invariant diffFound ==> 0 < i && front[i-1] != fromRoot[i-1]
 	for ; !diffFound && i < len(front) && i < len(fromRoot); i++ {
 		if front[i] != fromRoot[i] {
@@ -96,34 +96,24 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 		}
 	}
 
-	// @ assert diffFound ==> 2 <= i // as `i != 1`` due to `front[0] == fromRoot[0]`
-
-	// note that the following assert stmt leads to an invalid trigger (see Gobra issue #1030)
-	// assert forall j int :: { &fromRoot[i-1:][j] } 0 <= j && j < len(fromRoot[i-1:]) ==> &fromRoot[i-1:][j] == &fromRoot[i-1+j]
-	fromRootSuffix := fromRoot[i-1:]
-	// @ assert forall j int :: { &fromRootSuffix[j] } 0 <= j && j < len(fromRootSuffix) ==> &fromRootSuffix[j] == &fromRoot[i-1+j]
-	r = utils.Reverse(fromRootSuffix)
-	// @ assert r[0] == n
-
-	tmp := r // workaround for Gobra issue #1029
+	r = utils.Reverse(fromRoot, i-1)
 
 	// @ requires  forall i int :: { &front[i] } 0 <= i && i < len(front) ==> acc(&front[i]) && 0 <= front[i] && front[i] < size
 	// @ requires  0 <= i && i <= len(front)
 	// @ requires  diffFound ==> 2 <= i
-	// @ preserves forall i int :: { &tmp[i] } 0 <= i && i < len(tmp) ==> acc(&tmp[i]) && 0 <= tmp[i] && tmp[i] < size
-	// @ preserves 0 < len(tmp) && tmp[0] == n
+	// @ preserves forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && 0 <= r[i] && r[i] < size
+	// @ preserves 0 < len(r) && r[0] == n
 	// @ outline (
 	if diffFound {
 		subFront := front[i-2:]
 		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i-2+j]
-		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+		r = append( /*@ perm(1/2), @*/ r, subFront...)
 	} else {
 		subFront := front[i:]
 		// @ assert forall j int :: { &subFront[j] } 0 <= j && j < len(subFront) ==> &subFront[j] == &front[i+j]
-		tmp = append( /*@ perm(1/2), @*/ tmp, subFront...)
+		r = append( /*@ perm(1/2), @*/ r, subFront...)
 	}
 	// @ )
-	r = tmp // workaround for Gobra issue #1029
 	return
 }
 
