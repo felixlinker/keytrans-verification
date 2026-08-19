@@ -358,6 +358,9 @@ section {{ background:var(--surface); border:1px solid var(--grid);
   margin-left:6px; border:1px solid var(--grid); border-radius:999px;
   color:var(--sec); vertical-align:1px; white-space:nowrap; }}
 .chip.fail {{ border-color:var(--fail); color:var(--fail); font-weight:600; }}
+.warnbanner {{ border:1px solid var(--fail); border-left-width:4px;
+  border-radius:4px; padding:.6rem .8rem; margin:.9rem 0; color:var(--ink);
+  background:var(--surface); }}
 .chip.lead {{ margin-left:0; margin-right:6px; }}
 .chip.nn {{ color:var(--muted); }}
 details {{ border-top:1px solid var(--grid); padding:8px 0; }}
@@ -436,7 +439,7 @@ def member_tooltip(r):
     return tip
 
 
-def render_html(report, title, n_files):
+def render_html(report, title, n_files, missing=""):
     r = report
     out = ["<!doctype html>", '<html lang="en"><head><meta charset="utf-8">',
            '<meta name="viewport" content="width=device-width, initial-scale=1">',
@@ -456,6 +459,13 @@ def render_html(report, title, n_files):
         meta += " · %d member%s failed" % (len(r["failed"]),
                                                 "s" if len(r["failed"]) != 1 else "")
     out.append('<p class="meta">%s</p>' % esc(meta))
+
+    if missing:
+        out.append(
+            '<p class="warnbanner"><strong>Statistics for the %s phase are '
+            'missing.</strong> This report covers the remaining phase only; '
+            'the packages verified by the missing phase are absent below, '
+            'not fast.</p>' % esc(missing))
 
     if r["max_n"] > 1:  # per-iteration package totals
         out.append('<section><h2>Per-run package totals</h2><div class="tblwrap">')
@@ -537,11 +547,21 @@ def render_html(report, title, n_files):
 # ---------------------------------------------------------------------------
 # Markdown output
 
-def render_markdown(report, title, n_files):
+def render_markdown(report, title, n_files, missing=""):
     r = report
 
     def assemble(failed_limit, slowest_limit, pkg_limit):
         lines = [MD_MARKER, "", "# %s" % title, ""]
+        if missing:
+            # Placed before everything else: a report missing a phase lists
+            # only the packages of the phases that ran, which otherwise looks
+            # like a fast, healthy verification.
+            lines.append("> [!WARNING]")
+            lines.append("> Statistics for the **%s** phase are missing, so "
+                         "this report covers the remaining phase only. The "
+                         "packages verified by the missing phase are absent "
+                         "below, not fast." % missing)
+            lines.append("")
         lines.append("_%d stats.json file%s · %d package%s · %d members "
                      "· up to %d iteration%s per package%s_"
                      % (n_files, "s" if n_files != 1 else "", len(r["pkg_rows"]),
@@ -633,6 +653,10 @@ def main(argv=None):
                     help="write GitHub-flavored markdown summary")
     ap.add_argument("--title", default="Gobra verification times",
                     help="report title")
+    ap.add_argument("--missing", metavar="PHASES", default="",
+                    help="comma-separated phases whose statistics are absent "
+                         "(e.g. \"hyper\"); rendered as a prominent warning so "
+                         "a partial report is not mistaken for a complete one")
     args = ap.parse_args(argv)
 
     if not args.html and not args.summary:
@@ -657,12 +681,14 @@ def main(argv=None):
     report = build_report(aggregate(parsed))
 
     if args.html:
-        Path(args.html).write_text(render_html(report, args.title, len(parsed)),
-                                   encoding="utf-8")
+        Path(args.html).write_text(
+            render_html(report, args.title, len(parsed), args.missing),
+            encoding="utf-8")
         print("wrote %s" % args.html)
     if args.summary:
         Path(args.summary).write_text(
-            render_markdown(report, args.title, len(parsed)), encoding="utf-8")
+            render_markdown(report, args.title, len(parsed), args.missing),
+            encoding="utf-8")
         print("wrote %s" % args.summary)
     return 0
 
