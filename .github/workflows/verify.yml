@@ -108,23 +108,37 @@ jobs:
           name: hyper-stats.json
           path: stats/hyper
 
+      # Phases are checked individually: a run whose hyper phase died still
+      # yields a unary report, but that report has to say so -- otherwise it
+      # lists only the two cheap packages and looks deceptively healthy.
       - name: Check that at least one stats file was downloaded
         id: stats
         run: |
-          if find stats -name stats.json -print -quit 2>/dev/null | grep -q .; then
+          missing=""
+          [ -f stats/unary/stats.json ] || missing="unary"
+          [ -f stats/hyper/stats.json ] || missing="${missing:+$missing, }hyper"
+          if [ -z "$missing" ]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
+            echo "missing=" >> "$GITHUB_OUTPUT"
+          elif [ "$missing" = "unary, hyper" ]; then
             echo "::notice::No stats.json artifacts were downloaded; skipping visualization."
             echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Statistics for the $missing phase are missing; the report covers the remaining phase only."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "missing=$missing" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate visualization
         if: ${{ steps.stats.outputs.skip != 'true' }}
+        env:
+          MISSING: ${{ steps.stats.outputs.missing }}
         run: |
           python3 tooling/visualize-verification.py stats \
             -o verification-times.html \
             --summary summary.md \
-            --title "Verification times ${GITHUB_SHA::7}"
+            --title "Verification times ${GITHUB_SHA::7}" \
+            ${MISSING:+--missing "$MISSING"}
 
       - name: Append summary to job summary
         if: ${{ steps.stats.outputs.skip != 'true' }}
