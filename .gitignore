@@ -1,3 +1,4 @@
 **/.DS_Store
 logger.log
 agent/
+.verify-runs/
