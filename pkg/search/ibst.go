@@ -87,8 +87,7 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	diffFound := false
 	// @ invariant 0 <= i && i <= len(front) && i <= len(fromRoot)
 	// @ invariant acc(front, 1/2) && acc(fromRoot, 1/2)
-	// @ invariant !diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i ==> front[j] == fromRoot[j])
-	// @ invariant diffFound ==> (forall j int :: { front[j] } 0 <= j && j < i - 1 ==> front[j] == fromRoot[j])
+	// @ invariant forall j int :: { &front[j] } 0 <= j && j < i && (diffFound ==> j < i - 1) ==> front[j] == fromRoot[j]
 	// @ invariant diffFound ==> 0 < i && front[i-1] != fromRoot[i-1]
 	for ; !diffFound && i < len(front) && i < len(fromRoot); i++ {
 		if front[i] != fromRoot[i] {
