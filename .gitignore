@@ -3,5 +3,3 @@ logger.log
 agent/
 .verify-runs/
 .gobra*/
-.verify-viz/
-keytrans-verify/
