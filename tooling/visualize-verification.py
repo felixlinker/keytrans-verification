@@ -624,13 +624,12 @@ def render_markdown(report, title, n_files, missing=""):
         if rest:
             # Summarise the truncated tail rather than just counting it: the
             # combined time answers "is anything meaningful hiding down here?".
-            # The two cells carry different aggregations, so both are labelled:
-            # the total is a sum of medians, the range is the spread of
-            # individual members (not of iterations, as in the rows above).
-            meds = [m["st"]["med"] for m in rest]
-            lines.append("| … and %d more | – | %s combined | %s – %s per member |"
-                         % (len(rest), fmt_ms(sum(meds)),
-                            fmt_ms(min(meds)), fmt_ms(max(meds))))
+            total = sum(m["st"]["med"] for m in rest)
+            lo = sum(m["st"]["min"] for m in rest)
+            hi = sum(m["st"]["max"] for m in rest)
+            rng = "–" if lo == hi else "%s – %s" % (fmt_ms(lo), fmt_ms(hi))
+            lines.append("| … and %d more | – | %s combined | %s |"
+                         % (len(rest), fmt_ms(total), rng))
         lines.append("")
         return "\n".join(lines)
 
