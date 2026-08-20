@@ -281,11 +281,15 @@ def parse_args(argv):
 
 def main(argv=None):
     args = parse_args(argv)
-    # --packages selects the packages explicitly, so running both phases would
-    # verify each of them twice, once per hyperMode. That is not just wasteful:
-    # a file carrying its own `##(--hyperMode extended)` option fails under
-    # `--hyperMode off`. Default such a run to the hyper phase, which is what CI
-    # uses for every package except proofs/utils; --phase still overrides.
+    # --packages names the packages directly, so with the default --phase both
+    # each one would be verified twice, once per hyperMode. That is not merely
+    # redundant: most sources here select a hyper mode themselves with an
+    # in-file `// ##(--hyperMode extended ...)` option, and Gobra refuses to
+    # reconcile that with --hyperMode off, aborting the whole run with
+    #   "Unable to merge differing hyper modes from in-file configuration
+    #    options, got Disabled and EnabledExtended"
+    # So pick one phase: hyper, the mode CI uses for every package except
+    # proofs and utils. Pass --phase explicitly to override.
     if args.packages and args.phase == "both":
         phases = ["hyper"]
         print("note: --packages given without --phase; verifying in the hyper "

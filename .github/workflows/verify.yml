@@ -21,9 +21,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # The Gobra invocation -- module, JVM flags, include/exclude package sets
-      # -- lives solely in tooling/verify.py, so CI and local runs cannot drift
-      # apart. Change verification parameters there, not here.
       - name: Verify packages (without hyperMode)
         run: python3 tooling/verify.py --phase unary --out "$RUNNER_TEMP/unary" --no-summary
 
