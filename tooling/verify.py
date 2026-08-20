@@ -17,7 +17,7 @@ Usage:
     tooling/verify.py --timeout 3000          # cap each phase at 50 minutes
     tooling/verify.py --dry-run               # print the commands, run nothing
 
-Output layout (all under --out, which defaults OUTSIDE the repository):
+Output layout (all under --out, which defaults to .verify-runs/<UTC stamp>):
 
     iter<i>/<phase>/stats.json   Gobra's own statistics, written by Gobra
     iter<i>/<phase>.log          combined stdout+stderr of that invocation
@@ -255,7 +255,8 @@ def parse_args(argv):
                          "it as timed out; the run continues")
     ap.add_argument("-o", "--out", metavar="DIR", type=Path,
                     help="output directory (default: a UTC-stamped directory "
-                         "under $TMPDIR/keytrans-verify, outside the repo)")
+                         "under .verify-runs/ in the worktree, which is "
+                         "gitignored)")
     ap.add_argument("--jar", metavar="PATH", type=Path,
                     default=Path(os.environ.get("GOBRA_JAR", "/gobra/gobra.jar")),
                     help="path to gobra.jar (default: $GOBRA_JAR or "
@@ -274,7 +275,7 @@ def parse_args(argv):
         ap.error("--timeout must be positive")
     if args.out is None:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        args.out = Path(os.environ.get("TMPDIR", "/tmp")) / "keytrans-verify" / stamp
+        args.out = REPO / ".verify-runs" / stamp
     return args
 
 
@@ -293,9 +294,8 @@ def main(argv=None):
         phases = ["unary", "hyper"] if args.phase == "both" else [args.phase]
     out = args.out.expanduser().resolve()
 
-    # The default output directory is outside the repository so a plain run
-    # cannot leave measurement data in the working tree; any explicit --out is
-    # honoured as given, and .gitignore covers the directories runs create.
+    # Runs default into .verify-runs/ in the worktree, which .gitignore covers,
+    # so results sit next to the sources they describe without being committable.
 
     if args.dry_run:
         print("out:  %s" % out)
