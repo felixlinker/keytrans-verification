@@ -534,6 +534,13 @@ def render_html(report, title, n_files, missing=""):
         out.append(html_bar_row(label, m["st"], slow_scale,
                                 failed=bool(m["fails"]), chips=trail,
                                 dim=m["imported"], tooltip=member_tooltip(m)))
+    rest = r["slowest"][len(top):]
+    if rest:
+        meds = [m["st"]["med"] for m in rest]
+        out.append('<p class="meta">… and %d more members, %s combined '
+                   '(%s – %s per member).</p>'
+                   % (len(rest), esc(fmt_ms(sum(meds))),
+                      esc(fmt_ms(min(meds))), esc(fmt_ms(max(meds)))))
     out.append("</section>")
 
     out.append("<footer>Generated %s by visualize-verification.py · times "
@@ -613,9 +620,17 @@ def render_markdown(report, title, n_files, missing=""):
             lines.append("| %s | %s | %s | %s |"
                          % (md_code(m["name"]), md_code(m["pkg_label"]),
                             fmt_ms(m["st"]["med"]), rng))
-        if len(r["slowest"]) > len(shown):
-            lines.append("| … and %d more | | | |"
-                         % (len(r["slowest"]) - len(shown)))
+        rest = r["slowest"][len(shown):]
+        if rest:
+            # Summarise the truncated tail rather than just counting it: the
+            # combined time answers "is anything meaningful hiding down here?".
+            # The two cells carry different aggregations, so both are labelled:
+            # the total is a sum of medians, the range is the spread of
+            # individual members (not of iterations, as in the rows above).
+            meds = [m["st"]["med"] for m in rest]
+            lines.append("| … and %d more | – | %s combined | %s – %s per member |"
+                         % (len(rest), fmt_ms(sum(meds)),
+                            fmt_ms(min(meds)), fmt_ms(max(meds))))
         lines.append("")
         return "\n".join(lines)
 
