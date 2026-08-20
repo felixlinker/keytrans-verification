@@ -97,9 +97,10 @@ sides with -n >= 3 for that marker to mean anything.
 
 Robustness: a missing/null time counts as 0; an entry with an empty or
 absent viperMembers list is skipped but counted (reported in the header);
-an unparseable file is a warning on stderr, not an error; duplicate
-(taskName, id) pairs inside one file are merged (times summed). Exit 2 only
-when no stats.json was found at all or none could be parsed.
+duplicate (taskName, id) pairs inside one file are merged (times summed).
+An unparseable stats.json is an ERROR (exit 2): skipping it would silently
+drop a phase or an iteration and understate every total that follows. Exit 2
+likewise when no stats.json was found at all.
 """
 
 import argparse
@@ -109,6 +110,10 @@ import re
 import sys
 from pathlib import Path
 from statistics import median, stdev
+
+class StatsError(Exception):
+    """An input file could not be used; the report would be wrong without it."""
+
 
 MD_MARKER = "<!-- verification-times -->"
 MD_CHAR_BUDGET = 59000  # stay safely under the 65536 PR-comment limit
@@ -193,17 +198,19 @@ def find_timings_files(inputs):
 def parse_stats_file(path):
     """Parse one stats.json.
 
-    Returns {"members": {(task, id): obs}, "skipped": int} or None on error.
-    obs = {"name", "time", "cached", "imported", "failed"}.
+    Returns {"members": {(task, id): obs}, "skipped": int}.
+
+    Raises StatsError if the file cannot be read or is not a Gobra stats
+    array. Skipping it would silently drop a phase or an iteration and
+    understate every total that follows, so a damaged input is fatal.
     """
     try:
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
         if not isinstance(data, list):
             raise ValueError("top-level JSON value is not an array")
-    except Exception as exc:  # noqa: BLE001 - warn and continue per contract
-        print("warning: cannot parse %s: %s" % (path, exc), file=sys.stderr)
-        return None
+    except Exception as exc:  # noqa: BLE001 - re-raised as StatsError
+        raise StatsError("cannot parse %s: %s" % (path, exc))
 
     members = {}
     skipped = 0
@@ -512,11 +519,7 @@ def load_run(inputs, label):
 
     Returns {"label", "report" (or None), "n_files", "timings"}.
     """
-    parsed = []
-    for f in find_stats_files(inputs):
-        p = parse_stats_file(f)
-        if p is not None:
-            parsed.append((f, p))
+    parsed = [(f, parse_stats_file(f)) for f in find_stats_files(inputs)]
     rows = []
     for f in find_timings_files(inputs):
         rows.extend(parse_timings_file(f))
@@ -836,19 +839,23 @@ def main(argv=None):
                          "significance marker")
     args = ap.parse_args(argv)
 
-    run = load_run(args.inputs, ", ".join(args.inputs))
+    try:
+        run = load_run(args.inputs, ", ".join(args.inputs))
+        baseline = (load_run([args.baseline], args.baseline)
+                    if args.baseline else None)
+    except StatsError as exc:
+        print("error: %s" % exc, file=sys.stderr)
+        return 2
     if run["report"] is None:
         print("error: no parsable stats.json found under: %s"
               % ", ".join(args.inputs), file=sys.stderr)
         return 2
 
-    baseline = None
-    if args.baseline:
-        baseline = load_run([args.baseline], args.baseline)
-        if baseline["report"] is None and not baseline["timings"]:
-            print("warning: baseline %s has no stats.json and no timings.tsv; "
-                  "no comparison is shown" % args.baseline, file=sys.stderr)
-            baseline = None
+    if baseline is not None and baseline["report"] is None \
+            and not baseline["timings"]:
+        print("warning: baseline %s has no stats.json and no timings.tsv; "
+              "no comparison is shown" % args.baseline, file=sys.stderr)
+        baseline = None
 
     md = render_markdown(run["report"], args.title, run["n_files"],
                          args.missing, run["timings"], baseline)
