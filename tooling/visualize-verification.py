@@ -578,10 +578,15 @@ def render_markdown(report, title, n_files, missing=""):
                          % r["skipped"]) if r["skipped"] else ""))
         lines.append("")
 
+        # With one measurement per member there is no median to take and no
+        # spread to show, so the Range column would be "–" in every row.
+        multi = r["max_n"] > 1
+        time_hdr = "Median" if multi else "Time"
+
         if r["failed"]:
             lines.append("## ✕ Failed members")
             lines.append("")
-            lines.append("| Member | Package | Failures | Median |")
+            lines.append("| Member | Package | Failures | %s |" % time_hdr)
             lines.append("| --- | --- | ---: | ---: |")
             for m in r["failed"][:failed_limit]:
                 lines.append("| %s | %s | %d/%d | %s |"
@@ -595,31 +600,50 @@ def render_markdown(report, title, n_files, missing=""):
         pkg_scale = max((row["st"]["med"] for row in r["pkg_rows"]), default=0)
         lines.append("## Package totals")
         lines.append("")
-        lines.append("| Package | n | Median | Range | Failures | Bar |")
-        lines.append("| --- | ---: | ---: | ---: | ---: | :-- |")
+        if multi:
+            lines.append("| Package | n | %s | Range | Failures | Bar |" % time_hdr)
+            lines.append("| --- | ---: | ---: | ---: | ---: | :-- |")
+        else:
+            lines.append("| Package | %s | Failures | Bar |" % time_hdr)
+            lines.append("| --- | ---: | ---: | :-- |")
         for row in r["pkg_rows"][:pkg_limit]:
-            rng = fmt_range(row["st"]) if row["st"]["n"] > 1 else "–"
             fails = ("%d/%d" % (row["fail_files"], row["st"]["n"])
                      if row["fail_files"] else "–")
-            lines.append("| %s | %d | %s | %s | %s | %s |"
-                         % (md_code(row["label"]), row["st"]["n"],
-                            fmt_ms(row["st"]["med"]), rng, fails,
-                            block_bar(row["st"]["med"], pkg_scale)))
+            bar = block_bar(row["st"]["med"], pkg_scale)
+            if multi:
+                rng = fmt_range(row["st"]) if row["st"]["n"] > 1 else "–"
+                lines.append("| %s | %d | %s | %s | %s | %s |"
+                             % (md_code(row["label"]), row["st"]["n"],
+                                fmt_ms(row["st"]["med"]), rng, fails, bar))
+            else:
+                lines.append("| %s | %s | %s | %s |"
+                             % (md_code(row["label"]),
+                                fmt_ms(row["st"]["med"]), fails, bar))
         if len(r["pkg_rows"]) > pkg_limit:
-            lines.append("| … and %d more | | | | | |"
-                         % (len(r["pkg_rows"]) - pkg_limit))
+            lines.append("| … and %d more |%s"
+                         % (len(r["pkg_rows"]) - pkg_limit,
+                            " | | | | |" if multi else " | | |"))
         lines.append("")
 
         lines.append("## Slowest members")
         lines.append("")
-        lines.append("| Member | Package | Median | Range |")
-        lines.append("| --- | --- | ---: | ---: |")
+        if multi:
+            lines.append("| Member | Package | %s | Range |" % time_hdr)
+            lines.append("| --- | --- | ---: | ---: |")
+        else:
+            lines.append("| Member | Package | %s |" % time_hdr)
+            lines.append("| --- | --- | ---: |")
         shown = r["slowest"][:slowest_limit]
         for m in shown:
-            rng = fmt_range(m["st"]) if m["st"]["n"] > 1 else "–"
-            lines.append("| %s | %s | %s | %s |"
-                         % (md_code(m["name"]), md_code(m["pkg_label"]),
-                            fmt_ms(m["st"]["med"]), rng))
+            if multi:
+                rng = fmt_range(m["st"]) if m["st"]["n"] > 1 else "–"
+                lines.append("| %s | %s | %s | %s |"
+                             % (md_code(m["name"]), md_code(m["pkg_label"]),
+                                fmt_ms(m["st"]["med"]), rng))
+            else:
+                lines.append("| %s | %s | %s |"
+                             % (md_code(m["name"]), md_code(m["pkg_label"]),
+                                fmt_ms(m["st"]["med"])))
         rest = r["slowest"][len(shown):]
         if rest:
             # Summarise the truncated tail rather than just counting it: the
@@ -627,9 +651,13 @@ def render_markdown(report, title, n_files, missing=""):
             total = sum(m["st"]["med"] for m in rest)
             lo = sum(m["st"]["min"] for m in rest)
             hi = sum(m["st"]["max"] for m in rest)
-            rng = "–" if lo == hi else "%s – %s" % (fmt_ms(lo), fmt_ms(hi))
-            lines.append("| … and %d more | – | %s combined | %s |"
-                         % (len(rest), fmt_ms(total), rng))
+            if multi:
+                rng = "–" if lo == hi else "%s – %s" % (fmt_ms(lo), fmt_ms(hi))
+                lines.append("| … and %d more | – | %s combined | %s |"
+                             % (len(rest), fmt_ms(total), rng))
+            else:
+                lines.append("| … and %d more | – | %s combined |"
+                             % (len(rest), fmt_ms(total)))
         lines.append("")
         return "\n".join(lines)
 
