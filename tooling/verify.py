@@ -293,13 +293,9 @@ def main(argv=None):
         phases = ["unary", "hyper"] if args.phase == "both" else [args.phase]
     out = args.out.expanduser().resolve()
 
-    # The default output directory is outside the repository so a run cannot
-    # leave measurement data lying in the working tree by accident. An explicit
-    # --out inside it is allowed (CI writes into the checkout); .gitignore keeps
-    # the results from being committed.
-    if out == REPO or REPO in out.parents:
-        print("note: --out %s is inside the repository; results are ignored by "
-              "git but do not commit them." % out)
+    # The default output directory is outside the repository so a plain run
+    # cannot leave measurement data in the working tree; any explicit --out is
+    # honoured as given, and .gitignore covers the directories runs create.
 
     if args.dry_run:
         print("out:  %s" % out)
