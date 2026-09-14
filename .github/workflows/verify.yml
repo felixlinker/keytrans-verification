@@ -41,12 +41,12 @@ jobs:
           # exceeds any reasonable timeout. In parallel the wall time is the slowest
           # single package, and one pathological package cannot starve the rest.
           matrix='[
-            {"id": "unary",  "args": "--phase unary",                   "minutes": 15},
-            {"id": "search", "args": "--phase hyper --packages search", "minutes": 45},
-            {"id": "prefix", "args": "--phase hyper --packages prefix", "minutes": 45},
-            {"id": "log",    "args": "--phase hyper --packages log",    "minutes": 45},
-            {"id": "client", "args": "--phase hyper --packages client", "minutes": 45},
-            {"id": "rest",   "args": "--phase hyper --exclude search prefix log client", "minutes": 30}
+            {"id": "unary",  "name": "unary",           "args": "--phase unary",                   "minutes": 15},
+            {"id": "search", "name": "hyper - search",  "args": "--phase hyper --packages search", "minutes": 45},
+            {"id": "prefix", "name": "hyper - prefix",  "args": "--phase hyper --packages prefix", "minutes": 45},
+            {"id": "log",    "name": "hyper - log",     "args": "--phase hyper --packages log",    "minutes": 45},
+            {"id": "client", "name": "hyper - client",  "args": "--phase hyper --packages client", "minutes": 45},
+            {"id": "rest",   "name": "hyper - rest",    "args": "--phase hyper --exclude search prefix log client", "minutes": 30}
           ]'
           echo "matrix=$(jq -c . <<<"$matrix")" >> "$GITHUB_OUTPUT"
           echo "ids=$(jq -r '[.[].id] | join(" ")' <<<"$matrix")" >> "$GITHUB_OUTPUT"
@@ -58,7 +58,7 @@ jobs:
       fail-fast: false        # one slow package must not cancel the others
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
-    name: verify (${{ matrix.id }})
+    name: verify (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.minutes }}
     container:
