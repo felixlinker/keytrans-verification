@@ -12,50 +12,58 @@ on:
   workflow_dispatch: # allow to manually trigger this workflow
 
 jobs:
-  # The heavy packages are verified in parallel jobs: run sequentially they
-  # sum to well over an hour and the job timeout cuts the run off part-way
-  # (search alone took 12m18s and prefix over 15m on a runner). Split this way
-  # the wall time is the slowest single package, each gets its own timeout,
-  # and one pathological package no longer starves the rest.
-  #
-  # The Gobra invocation itself lives in tooling/verify.py, so CI and local
-  # runs cannot drift apart. Change verification parameters there, not here.
+  test-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Test all packages
+        run: go test ./...
+
+
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      ids: ${{ steps.plan.outputs.ids }}
+    steps:
+      - name: Define the verification split
+        id: plan
+        run: |
+          # The heavy packages get a job each: run sequentially the hyper phase
+          # exceeds any reasonable timeout. In parallel the wall time is the slowest
+          # single package, and one pathological package cannot starve the rest.
+          matrix='[
+            {"id": "unary",  "args": "--phase unary",                   "minutes": 15},
+            {"id": "search", "args": "--phase hyper --packages search", "minutes": 45},
+            {"id": "prefix", "args": "--phase hyper --packages prefix", "minutes": 45},
+            {"id": "log",    "args": "--phase hyper --packages log",    "minutes": 45},
+            {"id": "client", "args": "--phase hyper --packages client", "minutes": 45},
+            {"id": "rest",   "args": "--phase hyper --exclude search prefix log client", "minutes": 30}
+          ]'
+          echo "matrix=$(jq -c . <<<"$matrix")" >> "$GITHUB_OUTPUT"
+          echo "ids=$(jq -r '[.[].id] | join(" ")' <<<"$matrix")" >> "$GITHUB_OUTPUT"
+
+
   verify-packages:
+    needs: plan
     strategy:
       fail-fast: false        # one slow package must not cancel the others
       matrix:
-        include:
-          - id: unary
-            args: --phase unary
-            minutes: 15
-          - id: search
-            args: --phase hyper --packages search
-            minutes: 45
-          - id: prefix
-            args: --phase hyper --packages prefix
-            minutes: 45
-          - id: log
-            args: --phase hyper --packages log
-            minutes: 45
-          - id: client
-            args: --phase hyper --packages client
-            minutes: 45
-          - id: rest
-            args: --phase hyper --exclude search prefix log client
-            minutes: 30
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     name: verify (${{ matrix.id }})
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.minutes }}
     container:
       image: ghcr.io/viperproject/gobra:sha-06cbbe8
     steps:
-      # actions/setup-python cannot be used here: it fetches an interpreter
-      # built for the runner host (Ubuntu 24.04, glibc 2.39) into the tool
-      # cache, but these steps execute inside the Gobra container, whose glibc
-      # is older -- the binary fails to load with "GLIBC_2.38 not found".
-      # The container's own package manager gives one linked against its glibc.
-      # tooling/*.py are stdlib-only and target 3.9+, so the distro's python3
-      # is new enough whatever the base image ships.
       - name: Install Python
         run: apt-get update && apt-get install -y --no-install-recommends python3
 
@@ -76,32 +84,16 @@ jobs:
           if-no-files-found: ignore
 
 
-  test-packages:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
-      - name: Test all packages
-        run: go test ./...
-
-
   visualize-times:
     runs-on: ubuntu-latest
-    needs: verify-packages
+    needs: [plan, verify-packages]
     if: ${{ always() }}
     permissions:
       pull-requests: write
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # One artifact per matrix job; keep them in separate directories so the
       # stats.json files do not overwrite each other.
@@ -119,7 +111,7 @@ jobs:
         id: stats
         run: |
           missing=""
-          for id in unary search prefix log client rest; do
+          for id in ${{ needs.plan.outputs.ids }}; do
             [ -f "stats/stats-$id/stats.json" ] || missing="${missing:+$missing,}$id"
           done
           if [ -z "$(find stats -name stats.json 2>/dev/null)" ]; then
