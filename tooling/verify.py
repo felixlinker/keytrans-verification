@@ -57,6 +57,7 @@ import resource
 import shlex
 import signal
 import subprocess
+import threading
 import sys
 import time
 from datetime import datetime, timezone
@@ -185,15 +186,36 @@ def label(phase, packages):
     return "%s:%s" % (kind, ",".join(pkgs))
 
 
-def run_phase(cmd, log_path, timeout):
-    """Run one Gobra invocation. Returns (status, wall_s, cpu_s, exit_code)."""
+def run_phase(cmd, log_path, timeout, echo=True):
+    """Run one Gobra invocation. Returns (status, wall_s, cpu_s, exit_code).
+
+    Gobra's output always goes to log_path; with echo it is also copied to
+    stdout as it arrives. CI needs that copy -- a phase that fails is
+    undiagnosable if the only record is a file inside the runner -- while a
+    repeated local benchmark is quieter without it.
+    """
     cpu0 = resource.getrusage(resource.RUSAGE_CHILDREN)
     start = time.monotonic()
     timed_out = False
     with open(log_path, "wb") as log:
         # Own session, so a timeout can kill java *and* everything it spawns.
-        proc = subprocess.Popen(cmd, cwd=str(REPO), stdout=log,
+        out = subprocess.PIPE if echo else log
+        proc = subprocess.Popen(cmd, cwd=str(REPO), stdout=out,
                                 stderr=subprocess.STDOUT, start_new_session=True)
+        # The tee runs on its own thread: reading the pipe to EOF in this
+        # thread would block past the deadline and silently disable --timeout,
+        # which is what keeps a hung phase from leaking its JVM.
+        pump = None
+        if echo:
+            def tee(stream, sink):
+                for line in iter(stream.readline, b""):
+                    sys.stdout.buffer.write(line)
+                    sys.stdout.flush()
+                    sink.write(line)
+                stream.close()
+            pump = threading.Thread(target=tee, args=(proc.stdout, log),
+                                    daemon=True)
+            pump.start()
         try:
             rc = proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -203,6 +225,9 @@ def run_phase(cmd, log_path, timeout):
         except BaseException:          # Ctrl-C must never orphan a JVM
             kill_group(proc)
             raise
+        finally:
+            if pump is not None:       # drain what the child already wrote
+                pump.join(timeout=5)
     wall = time.monotonic() - start
     cpu1 = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu = (cpu1.ru_utime - cpu0.ru_utime) + (cpu1.ru_stime - cpu0.ru_stime)
@@ -264,6 +289,9 @@ def parse_args(argv):
     ap.add_argument("--summary", action=argparse.BooleanOptionalAction,
                     default=True, help="render summary.md at the end "
                                        "(default: --summary)")
+    ap.add_argument("--quiet", action="store_true",
+                    help="do not echo Gobra's output; it is still written to "
+                         "the per-phase log (useful with -n > 1)")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the Gobra commands and exit without running "
                          "anything")
@@ -340,7 +368,8 @@ def main(argv=None):
                 cmd = command(args.jar, phase, gobra_dir, args.packages)
                 print("\n==> iter %d/%d, phase %s (log: %s)"
                       % (i, args.iterations, phase, log))
-                status, wall, cpu, rc = run_phase(cmd, log, args.timeout)
+                status, wall, cpu, rc = run_phase(cmd, log, args.timeout,
+                                                  echo=not args.quiet)
                 tsv.write("%d\t%s\t%s\t%s\t%.1f\t%.1f\t%d\n"
                           % (i, phase, label(phase, args.packages), status,
                              wall, cpu, rc))
