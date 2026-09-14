@@ -162,17 +162,28 @@ def on_terminate(_signum, _frame):
     raise KeyboardInterrupt
 
 
-def selection(phase, packages):
-    """(selector flag, packages) for a phase; --packages overrides the phase."""
+def selection(phase, packages, exclude=()):
+    """(selector flag, packages) for a phase.
+
+    --packages replaces the phase's selection outright; --exclude narrows it.
+    Excluding from an include-list removes entries; excluding from the hyper
+    phase's exclude-list appends to it. Both are used by the CI matrix, which
+    verifies the heavy packages in parallel jobs and the remainder in one.
+    """
     _, flag, pkgs = PHASES[phase]
     if packages:
-        return "--includePackages", list(packages)
+        flag, pkgs = "--includePackages", list(packages)
+    if exclude:
+        if flag == "--includePackages":
+            pkgs = [p for p in pkgs if p not in exclude]
+        else:
+            pkgs = pkgs + [p for p in exclude if p not in pkgs]
     return flag, pkgs
 
 
-def command(jar, phase, gobra_dir, packages):
+def command(jar, phase, gobra_dir, packages, exclude=()):
     mode = PHASES[phase][0]
-    flag, pkgs = selection(phase, packages)
+    flag, pkgs = selection(phase, packages, exclude)
     return ["java", *JVM_ARGS, "-jar", str(jar),
             "--gobraDirectory", str(gobra_dir),
             "--module", MODULE,
@@ -180,8 +191,8 @@ def command(jar, phase, gobra_dir, packages):
             *COMMON, flag, *pkgs]
 
 
-def label(phase, packages):
-    flag, pkgs = selection(phase, packages)
+def label(phase, packages, exclude=()):
+    flag, pkgs = selection(phase, packages, exclude)
     kind = "include" if flag == "--includePackages" else "exclude"
     return "%s:%s" % (kind, ",".join(pkgs))
 
@@ -289,6 +300,10 @@ def parse_args(argv):
     ap.add_argument("--summary", action=argparse.BooleanOptionalAction,
                     default=True, help="render summary.md at the end "
                                        "(default: --summary)")
+    ap.add_argument("--exclude", nargs="+", metavar="P", default=[],
+                    help="packages to leave out, on top of the phase's own "
+                         "selection (the CI matrix uses this for the "
+                         "'everything else' job)")
     ap.add_argument("--quiet", action="store_true",
                     help="do not echo Gobra's output; it is still written to "
                          "the per-phase log (useful with -n > 1)")
@@ -336,9 +351,9 @@ def main(argv=None):
         for i in range(1, args.iterations + 1):
             for phase in phases:
                 cmd = command(args.jar, phase, out / ("iter%d" % i) / phase,
-                              args.packages)
+                              args.packages, args.exclude)
                 print("\niter %d, %s  [%s]\n  %s"
-                      % (i, phase, label(phase, args.packages), shlex.join(cmd)))
+                      % (i, phase, label(phase, args.packages, args.exclude), shlex.join(cmd)))
         return 0
 
     if not args.jar.is_file():
@@ -365,13 +380,14 @@ def main(argv=None):
                 gobra_dir = out / ("iter%d" % i) / phase
                 gobra_dir.mkdir(parents=True, exist_ok=True)
                 log = out / ("iter%d" % i) / ("%s.log" % phase)
-                cmd = command(args.jar, phase, gobra_dir, args.packages)
+                cmd = command(args.jar, phase, gobra_dir, args.packages,
+                              args.exclude)
                 print("\n==> iter %d/%d, phase %s (log: %s)"
                       % (i, args.iterations, phase, log))
                 status, wall, cpu, rc = run_phase(cmd, log, args.timeout,
                                                   echo=not args.quiet)
                 tsv.write("%d\t%s\t%s\t%s\t%.1f\t%.1f\t%d\n"
-                          % (i, phase, label(phase, args.packages), status,
+                          % (i, phase, label(phase, args.packages, args.exclude), status,
                              wall, cpu, rc))
                 print("==> iter %d, phase %s %s (%.0fs wall, %.0fs cpu, exit %d)"
                       % (i, phase, status.upper(), wall, cpu, rc))

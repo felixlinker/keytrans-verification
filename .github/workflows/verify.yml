@@ -12,37 +12,68 @@ on:
   workflow_dispatch: # allow to manually trigger this workflow
 
 jobs:
+  # The heavy packages are verified in parallel jobs: run sequentially they
+  # sum to well over an hour and the job timeout cuts the run off part-way
+  # (search alone took 12m18s and prefix over 15m on a runner). Split this way
+  # the wall time is the slowest single package, each gets its own timeout,
+  # and one pathological package no longer starves the rest.
+  #
+  # The Gobra invocation itself lives in tooling/verify.py, so CI and local
+  # runs cannot drift apart. Change verification parameters there, not here.
   verify-packages:
+    strategy:
+      fail-fast: false        # one slow package must not cancel the others
+      matrix:
+        include:
+          - id: unary
+            args: --phase unary
+            minutes: 15
+          - id: search
+            args: --phase hyper --packages search
+            minutes: 45
+          - id: prefix
+            args: --phase hyper --packages prefix
+            minutes: 45
+          - id: log
+            args: --phase hyper --packages log
+            minutes: 45
+          - id: client
+            args: --phase hyper --packages client
+            minutes: 45
+          - id: rest
+            args: --phase hyper --exclude search prefix log client
+            minutes: 30
+    name: verify (${{ matrix.id }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.minutes }}
     container:
       image: ghcr.io/viperproject/gobra:sha-06cbbe8
     steps:
+      # actions/setup-python cannot be used here: it fetches an interpreter
+      # built for the runner host (Ubuntu 24.04, glibc 2.39) into the tool
+      # cache, but these steps execute inside the Gobra container, whose glibc
+      # is older -- the binary fails to load with "GLIBC_2.38 not found".
+      # The container's own package manager gives one linked against its glibc.
+      # tooling/*.py are stdlib-only and target 3.9+, so the distro's python3
+      # is new enough whatever the base image ships.
       - name: Install Python
         run: apt-get update && apt-get install -y --no-install-recommends python3
 
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Verify packages (without hyperMode)
-        run: python3 tooling/verify.py --phase unary --out "$RUNNER_TEMP/unary" --no-summary
+      - name: Verify
+        run: |
+          python3 tooling/verify.py ${{ matrix.args }} \
+            --out "$RUNNER_TEMP/out" --no-summary
 
       - name: Upload Gobra statistics
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: unary-stats.json
-          path: ${{ runner.temp }}/unary/iter1/unary/stats.json
-
-      - name: Verify packages (with hyperMode)
-        run: python3 tooling/verify.py --phase hyper --out "$RUNNER_TEMP/hyper" --no-summary
-
-      - name: Upload Gobra statistics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: hyper-stats.json
-          path: ${{ runner.temp }}/hyper/iter1/hyper/stats.json
+          name: stats-${{ matrix.id }}
+          path: ${{ runner.temp }}/out/iter1/*/stats.json
+          if-no-files-found: ignore
 
 
   test-packages:
@@ -72,37 +103,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Download unary statistics
+      # One artifact per matrix job; keep them in separate directories so the
+      # stats.json files do not overwrite each other.
+      - name: Download statistics
         uses: actions/download-artifact@v7
         continue-on-error: true
         with:
-          name: unary-stats.json
-          path: stats/unary
+          pattern: stats-*
+          path: stats
 
-      - name: Download hyper statistics
-        uses: actions/download-artifact@v7
-        continue-on-error: true
-        with:
-          name: hyper-stats.json
-          path: stats/hyper
-
-      # Phases are checked individually: a run whose hyper phase died still
-      # yields a unary report, but that report has to say so -- otherwise it
-      # lists only the two cheap packages and looks deceptively healthy.
-      - name: Check that at least one stats file was downloaded
+      # A job that timed out or crashed uploads nothing, and its packages then
+      # simply do not appear in the report -- which reads as a fast, healthy
+      # run rather than a truncated one. Name the absentees instead.
+      - name: Check which statistics arrived
         id: stats
         run: |
           missing=""
-          [ -f stats/unary/stats.json ] || missing="unary"
-          [ -f stats/hyper/stats.json ] || missing="${missing:+$missing, }hyper"
-          if [ -z "$missing" ]; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "missing=" >> "$GITHUB_OUTPUT"
-          elif [ "$missing" = "unary, hyper" ]; then
-            echo "::notice::No stats.json artifacts were downloaded; skipping visualization."
+          for id in unary search prefix log client rest; do
+            [ -f "stats/stats-$id/stats.json" ] || missing="${missing:+$missing,}$id"
+          done
+          if [ -z "$(find stats -name stats.json 2>/dev/null)" ]; then
+            echo "::notice::No statistics were produced; skipping the report."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::Statistics for the $missing phase are missing; the report covers the remaining phase only."
+            [ -n "$missing" ] && echo "::warning::No statistics from: $missing; the report covers the rest only."
             echo "skip=false" >> "$GITHUB_OUTPUT"
             echo "missing=$missing" >> "$GITHUB_OUTPUT"
           fi
