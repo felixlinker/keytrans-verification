@@ -9,7 +9,6 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/trees/misc"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
-	utilsrel "github.com/felixlinker/keytrans-verification/pkg/utils-rel"
 )
 
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
@@ -77,9 +76,9 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// @ assert low(utils.GetBytesContent(input1))
 		// TODO:
 		// @ assume len(l.searchKey) == 32
-		input2 := utilsrel.Concat(l.searchKey, l.commitment /*@, p @*/)
+		input2 := utils.Concat(l.searchKey, l.commitment /*@, p @*/)
 		// @ assert low(utils.GetBytesContent(input2)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
-		input := utilsrel.Concat(input1, input2 /*@, perm(1/2) @*/)
+		input := utils.Concat(input1, input2 /*@, perm(1/2) @*/)
 		// @ assert low(utils.GetBytesContent(input)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 
 		// @ ghost searchKeySeq := utils.GetBytesContent(l.searchKey)
@@ -387,7 +386,7 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 		// Spec: parent.value = Hash(0x03 || left.value || right.value)
 		prefixByte := []byte{0x03}
 		// @ fold utils.BytesMem(prefixByte)
-		input := utilsrel.Concat(prefixByte, utilsrel.Concat(left, right /*@, perm(1/2) @*/) /*@, perm(1/2) @*/)
+		input := utils.Concat(prefixByte, utils.Concat(left, right /*@, perm(1/2) @*/) /*@, perm(1/2) @*/)
 		r = crypto.Sum(input /*@, perm(1/2) @*/)
 		// @ incl = inclL ++ inclR
 		// @ notIncl = notInclL ++ notInclR

@@ -79,10 +79,14 @@ func Reverse(r_in []uint64, offset int) (r_out []uint64) {
 // This lives in utils, not utils-rel, deliberately. The postcondition below is
 // a unary fact, but proving it inside a package verified with --hyperMode
 // extended costs enormously: the product construction proves it twice and
-// relates the copies. Measured on this function, exposing it from utils-rel
-// took the package from seconds to over twelve minutes, while the identical
-// proof in unary mode takes three seconds. utils-rel.Concat therefore delegates
-// here for the computation and adds only the relational facts on top.
+// relates the copies. Measured on this function, the identical proof took over
+// twelve minutes in hyper mode against three seconds in unary mode.
+//
+// No relational counterpart is needed. Callers that reason about lowness get
+// it from this postcondition alone: the equality holds in each execution, so
+// low(content(r)) follows from low of both parts, and -- given low(len(bs1)),
+// which fixes the split point -- the converse follows too. pkg/trees/prefix
+// relies on exactly that and verifies unchanged.
 // @ requires noPerm < p
 // @ preserves acc(BytesMem(bs1), p) && acc(BytesMem(bs2), p)
 // @ ensures  r != nil && BytesMem(r)
