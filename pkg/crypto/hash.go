@@ -20,33 +20,20 @@ func sum(input []byte /*@, ghost p perm @*/) (output []byte) {
 }
 
 /*@
-// HashOf is the pure, uninterpreted model of the hash function. Being a
-// function, it is deterministic by construction: equal inputs give equal
-// outputs, so `low(x) ==> low(HashOf(x))` holds for free and needs no
-// assumption. The converse is not assumed at all: see IsCollision below.
+// Pure model of the hash. Being a function, low(x) ==> low(HashOf(x)).
 ghost
 decreases
 pure func HashOf(input seq[byte]) (output seq[byte])
 
-// A collision: two distinct inputs with the same digest. Real hash functions
-// have collisions -- the domain is unbounded and digests are fixed width --
-// so a development may not assume they do not exist. Instead theorems are
-// conditioned on no collision having occurred, which is the standard
-// game-based phrasing and is honest about what is being claimed.
+// Two distinct inputs with the same digest. Theorems that need equal digests
+// to imply equal preimages are conditioned on this not holding.
 ghost
 decreases
 pure func IsCollision(a seq[byte], b seq[byte]) bool {
 	return a != b && HashOf(a) == HashOf(b)
 }
 
-// Equal digests and no collision give equal preimages.
-//
-// This is a tautology, not an assumption: !IsCollision(a, b) unfolds to
-// !(a != b && HashOf(a) == HashOf(b)), which together with the equal digests
-// forces a == b. Nothing here claims the hash is injective, so there is no
-// cardinality claim for the pigeonhole principle to contradict -- unlike an
-// assumed `HashOf(a) == HashOf(b) ==> a == b`, which is inconsistent with any
-// bound on the digest width and would make every proof resting on it vacuous.
+// Tautology; no injectivity is assumed.
 ghost
 ensures HashOf(a) == HashOf(b) && !IsCollision(a, b) ==> a == b
 decreases
@@ -59,7 +46,6 @@ func NoCollisionMeansEqual(a seq[byte], b seq[byte]) {
 // @ ensures  output != nil && utils.BytesMem(output)
 // @ ensures  utils.GetBytesContent(output) == HashOf(utils.GetBytesContent(input))
 func Sum(input []byte /*@, ghost p perm @*/) (output []byte) {
-	// Call sum, whose result is modelled by the pure function HashOf.
 	output = sum(input /*@, p @*/)
 	// @ assume utils.GetBytesContent(output) == HashOf(utils.GetBytesContent(input))
 	return
