@@ -1,0 +1,115 @@
+// Pure model of a prefix tree's hashed content.
+//
+// The implementation computes a root hash by walking the heap structure and
+// calling crypto.Sum. Reasoning about that directly in a relational setting is
+// awkward: it needs an inductive two-execution argument over a mutable,
+// permission-carrying structure. Instead we mirror the hashing in a pure
+// function over an algebraic description of the tree:
+//
+//   - `Content()` projects a *Tree onto a TreeContent (see prefix.go),
+//   - `RootHashOf` computes the root hash of a TreeContent,
+//   - `Tree.value()` is proven to return exactly RootHashOf(Content()).
+//
+// Two properties then come cheaply. "Same content implies same root hash" is
+// free: RootHashOf is a function, so Gobra's hyper mode propagates lowness
+// through it without any assumption. The converse -- "same root hash implies
+// same content" -- is injectivity, proven by induction from the single
+// cryptographic assumption crypto.AssumeCollisionResistance, entirely in the
+// pure world with no permissions and no rel() in sight.
+package prefix
+
+import (
+	"github.com/felixlinker/keytrans-verification/pkg/crypto"
+	"github.com/felixlinker/keytrans-verification/pkg/utils"
+)
+
+// An algebraic description of a prefix tree, carrying exactly what the hash
+// depends on. The four cases mirror Tree.value():
+//   emptyTree  - a nil subtree, hashed as a run of zero bytes
+//   opaqueLeaf - a leaf holding a precomputed hash; its preimage is unknown
+//   keyLeaf    - a leaf holding a search key and a commitment
+//   innerNode  - an inner node, hashed from its two children
+ghost type TreeContent adt {
+	emptyTree{}
+
+	opaqueLeaf{
+		hash seq[byte]
+	}
+
+	keyLeaf{
+		searchKey  seq[byte]
+		commitment seq[byte]
+	}
+
+	innerNode{
+		left  TreeContent
+		right TreeContent
+	}
+}
+
+// The value of an absent subtree: sha256.Size zero bytes. Left uninterpreted
+// apart from its length; no proof here depends on the particular bytes.
+ghost
+ensures len(r) == 32
+decreases
+pure func ZeroHash() (r seq[byte])
+
+// Domain separation tags, matching the byte literals in Tree.value().
+ghost
+decreases
+pure func leafTag() seq[byte] { return seq[byte]{ byte(0x02) } }
+
+ghost
+decreases
+pure func innerTag() seq[byte] { return seq[byte]{ byte(0x03) } }
+
+// The root hash of a tree content, mirroring Tree.value() exactly.
+ghost
+decreases len(c)
+pure func RootHashOf(c TreeContent) seq[byte] {
+	return match c {
+		case emptyTree{}:
+			ZeroHash()
+		case opaqueLeaf{?h}:
+			h
+		case keyLeaf{?sk, ?cm}:
+			crypto.HashOf(leafTag() ++ sk ++ cm)
+		case innerNode{?l, ?r}:
+			crypto.HashOf(innerTag() ++ RootHashOf(l) ++ RootHashOf(r))
+	}
+}
+
+// The content of a leaf. The two cases mirror prefixLeaf.Value(): a leaf
+// holding a precomputed value hashes to that value, otherwise it hashes its
+// search key and commitment. prefixLeaf.Inv() guarantees exactly one of the
+// two holds, so the match is total.
+ghost
+requires l != nil ==> acc(l.Inv(), _)
+decreases
+pure func (l *prefixLeaf) Content() (r TreeContent) {
+	return l == nil ? emptyTree{} :
+		unfolding acc(l.Inv(), _) in
+			l.value != nil ?
+				opaqueLeaf{ utils.GetBytesContent(l.value) } :
+				keyLeaf{ utils.GetBytesContent(l.searchKey),
+					utils.GetBytesContent(l.commitment) }
+}
+
+// The content of a tree, mirroring Tree.value(): a nil tree is empty, a tree
+// carrying a leaf takes the leaf's content, and any other tree is an inner
+// node over its two children.
+ghost
+requires t != nil ==> acc(t.Inv(), _)
+decreases acc(t.Inv(), _)
+pure func (t *Tree) Content() (r TreeContent) {
+	// The nil children are guarded before recursing rather than relying on
+	// Content()'s own nil case: the termination measure acc(t.Inv(), _) cannot
+	// be evaluated for a nil receiver. Tree.depth() guards for the same reason.
+	return t == nil ? emptyTree{} :
+		unfolding acc(t.Inv(), _) in
+			t.leaf != nil ?
+				t.leaf.Content() :
+				innerNode{
+					t.left == nil ? emptyTree{} : t.left.Content(),
+					t.right == nil ? emptyTree{} : t.right.Content() }
+}
