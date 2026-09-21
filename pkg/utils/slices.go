@@ -73,3 +73,35 @@ func Reverse(r_in []uint64, offset int) (r_out []uint64) {
 	}
 	return r_out
 }
+
+// Concatenate two byte slices.
+//
+// This lives in utils, not utils-rel, deliberately. The postcondition below is
+// a unary fact, but proving it inside a package verified with --hyperMode
+// extended costs enormously: the product construction proves it twice and
+// relates the copies. Measured on this function, exposing it from utils-rel
+// took the package from seconds to over twelve minutes, while the identical
+// proof in unary mode takes three seconds. utils-rel.Concat therefore delegates
+// here for the computation and adds only the relational facts on top.
+// @ requires noPerm < p
+// @ preserves acc(BytesMem(bs1), p) && acc(BytesMem(bs2), p)
+// @ ensures  r != nil && BytesMem(r)
+// @ ensures  len(r) == len(bs1) + len(bs2)
+// @ ensures  GetBytesContent(r) == GetBytesContent(bs1) ++ GetBytesContent(bs2)
+func Concat(bs1 []byte, bs2 []byte /*@, ghost p perm @*/) (r []byte) {
+	r = Copy(bs1 /*@, p @*/)
+
+	// @ invariant 0 <= i && i <= len(bs2)
+	// @ invariant len(r) == len(bs1) + i
+	// @ invariant BytesMem(r) && r != nil
+	// @ invariant acc(BytesMem(bs1), p) && acc(BytesMem(bs2), p)
+	// @ invariant GetBytesContent(r) == GetBytesContent(bs1) ++ GetBytesContent(bs2)[:i]
+	for i := 0; i < len(bs2); i++ {
+		// @ unfold BytesMem(r)
+		// @ unfold acc(BytesMem(bs2), p)
+		r = append( /*@ perm(1/2), @*/ r, bs2[i])
+		// @ fold acc(BytesMem(bs2), p)
+		// @ fold BytesMem(r)
+	}
+	return
+}
