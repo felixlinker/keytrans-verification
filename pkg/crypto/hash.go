@@ -35,6 +35,22 @@ pure func HashOf(input seq[byte]) (output seq[byte])
 // could exhibit a collision would invalidate the proofs that rest on this.
 // Stated over the pure model rather than assumed inside Sum, so that it is
 // greppable, citable, and used only where a proof explicitly invokes it.
+//
+// TWO THINGS MUST NOT CHANGE, or the axioms become contradictory and every
+// proof resting on them turns vacuous:
+//
+//  1. This stays a LEMMA taking the two sequences, never a global
+//     `forall a, b :: HashOf(a) == HashOf(b) ==> a == b`. Injectivity of a
+//     function from an unbounded domain into fixed-width digests is false by
+//     pigeonhole; keeping it per-instance means the solver never holds the
+//     quantified form and cannot run that argument.
+//  2. HashOf gets NO postcondition about the length of its output, for the
+//     same reason -- the cardinality argument needs a bound on the codomain.
+//
+// Checked: with both facts supplied to the solver for a single pair, `false`
+// is still not provable. It would be with the quantified form. Note also that
+// Z3 is not a cardinality reasoner, so an inconsistency introduced here may
+// stay latent and surface unpredictably rather than failing loudly.
 ghost
 ensures HashOf(a) == HashOf(b) ==> a == b
 decreases
