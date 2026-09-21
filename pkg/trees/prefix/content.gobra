@@ -13,9 +13,10 @@
 // Two properties then come cheaply. "Same content implies same root hash" is
 // free: RootHashOf is a function, so Gobra's hyper mode propagates lowness
 // through it without any assumption. The converse -- "same root hash implies
-// same content" -- is injectivity, proven by induction from the single
-// cryptographic assumption crypto.AssumeCollisionResistance, entirely in the
-// pure world with no permissions and no rel() in sight.
+// same content" -- holds only where no hash collision occurred, and is proven
+// by induction under that hypothesis (see crypto.IsCollision), entirely in the
+// pure world with no permissions and no rel() in sight. Nothing assumes the
+// hash is injective, which would be inconsistent with a fixed digest width.
 package prefix
 
 import (
