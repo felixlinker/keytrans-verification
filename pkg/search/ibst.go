@@ -76,7 +76,7 @@ func PathToNode(n uint64, size uint64) (r []uint64) {
 // @ requires 0 <= n && n < size
 // @ ensures  forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && 0 <= r[i] && r[i] < size
 // @ ensures  0 < len(r) && r[0] == n
-func PathToMostRecent(n uint64, size uint64) (r []uint64, k int) {
+func PathToMostRecent(n uint64, size uint64) (r []uint64) {
 	front := Frontier(size)
 	fromRoot := PathToNode(n, size)
 	// @ assert front[0] == fromRoot[0]
@@ -104,7 +104,6 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64, k int) {
 	// @ assert forall j int :: { &fromRootSuffix[j] } 0 <= j && j < len(fromRootSuffix) ==> &fromRootSuffix[j] == &fromRoot[i-1+j]
 	r = utils.Reverse(fromRootSuffix)
 	// @ assert r[0] == n
-	k = len(r) // index where frontier elements start in r
 
 	tmp := r // workaround for Gobra issue #1029
 
@@ -131,51 +130,48 @@ func PathToMostRecent(n uint64, size uint64) (r []uint64, k int) {
 // @ requires 0 <= n && n < size
 // @ ensures  acc(r)
 // @ ensures  forall i int :: { r[i] } 0 <= i && i < len(r) ==> n < r[i] && r[i] < size
-func YoungerToMostRecent(n uint64, size uint64) (r []uint64, k int) {
-	path, j := PathToMostRecent(n, size)
+func YoungerToMostRecent(n uint64, size uint64) (r []uint64) {
+	path := PathToMostRecent(n, size)
 	r = make([]uint64, 0)
-	k = j
 	// @ invariant 0 <= i && i <= len(path)
 	// @ invariant forall i int :: { &path[i] } 0 <= i && i < len(path) ==> acc(&path[i], 1/2) && 0 <= path[i] && path[i] < size
 	// @ invariant forall i int :: { &r[i] } 0 <= i && i < len(r) ==> acc(&r[i]) && n < r[i] && r[i] < size
 	for i := 0; i < len(path); i++ {
 		if n < path[i] {
 			r = append( /*@ perm(1/2), @*/ r, path[i])
-		} else if i <= k {
-			// We're dropping an element that occurs before k, i.e., decrement k
-			k--
 		}
 	}
-	return r, k
+	return r
 }
 
 // Below is effectively a partial implementation of: https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-6.1-2
+// @ requires noPerm < p
 // @ requires 0 < rmw
-// @ requires noPerm < p && p < writePerm
 // @ requires 0 < len(timestamps)
-// @ requires acc(timestamps, p) &&
-// @   forall i int :: 0 <= i && i < len(timestamps) ==> 0 <= timestamps[i] &&
-// @   forall i, j int :: 0 <= i && i < j && j < len(timestamps) ==> timestamps[i] < timestamps[j]
-// @ ensures acc(timestamps, p)
+// @ preserves acc(utils.Monotonic(timestamps), p)
 // @ ensures 0 <= i && i < len(timestamps)
-// @ ensures low(utils.getUint64sContent(timestamps)) && low(rmw) ==> low(i)
+// @ ensures unfolding acc(utils.Monotonic(timestamps), p) in low(utils.GetUint64sContent(timestamps)) && low(rmw) ==> low(i)
 func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @*/) (i int) {
 	var t uint64 = 0 // left timestamp in recursive algorithm from spec
-	// @ ghost pureTimestamps := utils.getUint64sContent(timestamps)
+	// @ unfold acc(utils.Monotonic(timestamps), p)
+	// @ pureTimestamps := utils.GetUint64sContent(timestamps)
 	rightMost := timestamps[len(timestamps)-1] // right timestamp in recursive algorithm from spec
-	i = 0
+	// @ assume 0 <= rightMost
+	// @ fold acc(utils.Monotonic(timestamps), p)
 	done := false
-	// @ invariant 0 <= t && t <= rightMost
+	// @ invariant t <= rightMost
 	// @ invariant 0 <= i && i <= len(timestamps)
-	// @ invariant acc(timestamps, p) && p < writePerm
-	// @ invariant forall j int :: 0 <= j && j < len(timestamps) ==> 0 <= timestamps[j] && timestamps[j] <= rightMost && timestamps[j] == pureTimestamps[j]
+	// @ invariant acc(utils.Monotonic(timestamps), p)
+	// @ invariant unfolding acc(utils.Monotonic(timestamps), p) in forall j int :: 0 <= j && j < len(timestamps) ==> timestamps[j] <= rightMost && timestamps[j] == pureTimestamps[j]
 	// @ invariant done ==> 0 < i
 	// @ invariant low(pureTimestamps) && low(rmw) ==> low(rightMost) && low(done) && low(t) && low(i)
 	for ; !done && i < len(timestamps); i++ {
 		if rightMost-t < rmw {
 			done = true
 		} else {
+			// @ unfold acc(utils.Monotonic(timestamps), p)
 			t = timestamps[i]
+			// @ fold acc(utils.Monotonic(timestamps), p)
 			// @ assert t == pureTimestamps[i]
 		}
 	}
@@ -185,5 +181,6 @@ func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @
 	} else {
 		i = 0
 	}
+
 	return
 }

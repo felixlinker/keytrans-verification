@@ -16,3 +16,8 @@ func (b *Buffer) Bytes() (r []byte)
 func (b *Buffer) WriteByte(c byte) error
 
 func (b *Buffer) Write(p []byte) (n int, err error)
+
+preserves acc(p)
+func (b *Buffer) Read(p []byte) (n int, err error)
+
+func (b *Buffer) ReadByte() (byt byte, err error)

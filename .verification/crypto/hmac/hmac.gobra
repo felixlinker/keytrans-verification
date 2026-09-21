@@ -1,0 +1,12 @@
+package hmac
+
+import "hash"
+
+requires noPerm < p
+preserves acc(key, p)
+ensures r != nil
+func New(h func() hash.Hash, key []byte, ghost p perm) (r hash.Hash)
+
+preserves mac1 != nil ==> noPerm < p && acc(mac1, p)
+preserves mac2 != nil ==> noPerm < p && acc(mac2, p)
+func Equal(mac1, mac2 []byte, ghost p perm) (ok bool)

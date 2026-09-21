@@ -115,3 +115,40 @@ func TrueLargestSmallerPower(n uint64) (r uint64) {
 		return r
 	}
 }
+
+/*@
+pred Monotonic(ts []uint64) {
+	acc(ts) && forall i, j int :: { ts[i], ts[j] } 0 <= i && i < j && j < len(ts) ==> ts[i] < ts[j]
+}
+@*/
+
+// @ requires noPerm < p
+// @ requires acc(timestamps, p)
+// @ ensures  !res ==> acc(timestamps, p)
+// @ ensures   res ==> acc(Monotonic(timestamps), p) && unfolding acc(Monotonic(timestamps), p) in forall i int :: 0 <= i && i < len(timestamps) ==> start < timestamps[i]
+// @ decreases
+func CheckIncreasing(start uint64, timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
+	tmp := start
+	res = true
+	// @ invariant k == 0 ==> tmp == start
+	// @ invariant 0 <= k && k <= len(timestamps)
+	// @ invariant acc(timestamps, p)
+	// @ invariant res && 0 < k ==> start < timestamps[0]
+	// @ invariant res ==> forall i int :: { timestamps[i] } 0 <= i && i < k ==> timestamps[i] <= tmp
+	// @ invariant res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < k ==> timestamps[i] < timestamps[j]
+	// @ decreases len(timestamps) - k
+	for k := 0; k < len(timestamps); k++ {
+		if tmp >= timestamps[k] {
+			res = false
+		}
+		tmp = timestamps[k]
+	}
+
+	/*@
+	ghost if res {
+		fold acc(Monotonic(timestamps), p)
+	}
+	@*/
+
+	return res
+}

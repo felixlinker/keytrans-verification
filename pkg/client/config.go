@@ -1,9 +1,10 @@
 package client
 
+// @ import "github.com/felixlinker/keytrans-verification/pkg/utils"
+
 type DeploymentMode uint8
 
 const (
-	DeploymentModeReserved         DeploymentMode = 0
 	DeploymentContractMonitoring   DeploymentMode = 1
 	DeploymentThirdPartyManagement DeploymentMode = 2
 	DeploymentThirdPartyAuditing   DeploymentMode = 3
@@ -12,10 +13,10 @@ const (
 type Configuration struct {
 	Mode                       DeploymentMode
 	ReasonableMonitoringWindow uint64
+	SignaturePublicKey         []byte
+	VrfPublicKey               []byte
 	/*
 		Ciphersuite                uint16
-		SignaturePublicKey         []byte
-		VrfPublicKey               []byte
 		LeafPublickey              []byte //Only for Contact monitoring or ThirdParty
 		MaxAuditorLag              uint64 //Only for ThirdParty
 		AuditorStartPos            uint64 //Only for ThirdParty
@@ -28,4 +29,8 @@ type Configuration struct {
 	*/
 }
 
-//
+/*@
+pred (c *Configuration) Inv() {
+	acc(c) && 0 < c.ReasonableMonitoringWindow && acc(utils.BytesMem(c.SignaturePublicKey)) && acc(utils.BytesMem(c.VrfPublicKey))
+}
+@*/

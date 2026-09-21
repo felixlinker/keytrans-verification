@@ -1,0 +1,25 @@
+package binary
+
+type bigEndian struct {}
+
+var BigEndian bigEndian
+
+requires acc(buf)
+ensures  acc(r) && 32/8 <= len(r)
+func (b bigEndian) AppendUint32(buf []byte, x uint32) (r []byte)
+
+requires acc(buf)
+ensures  acc(r) && 64/8 <= len(r)
+func (b bigEndian) AppendUint64(buf []byte, x uint64) (r []byte)
+
+requires  noPerm < p
+preserves acc(buf, p)
+func (b bigEndian) Uint16(buf []byte, ghost p perm) (n uint16)
+
+requires  noPerm < p
+preserves acc(buf, p)
+func (b bigEndian) Uint32(buf []byte, ghost p perm) (n uint32)
+
+requires  noPerm < p
+preserves acc(buf, p)
+func (b bigEndian) Uint64(buf []byte, ghost p perm) (n uint64)

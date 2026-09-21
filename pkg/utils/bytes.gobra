@@ -2,7 +2,7 @@ package utils
 
 // wrapper predicate to "hide" the quantified permissions
 pred BytesMem(s []byte) {
-  acc(s)
+  acc(s) && s != nil
 }
 
 ghost

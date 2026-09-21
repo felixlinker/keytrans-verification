@@ -3,3 +3,4 @@ package fmt
 func Print(s string)
 func Println(s string)
 func Printf(format string, a ...interface{})
+func Sprintf(format string, a ...interface{}) string
