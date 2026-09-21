@@ -107,12 +107,18 @@ jobs:
       # A job that timed out or crashed uploads nothing, and its packages then
       # simply do not appear in the report -- which reads as a fast, healthy
       # run rather than a truncated one. Name the absentees instead.
+      #
+      # Search each artifact directory recursively rather than expecting
+      # stats/stats-<id>/stats.json: upload-artifact roots an artifact at the
+      # non-wildcard prefix of its path, so `out/iter1/*/stats.json` keeps the
+      # phase directory inside and the file lands at stats/stats-<id>/<phase>/.
       - name: Check which statistics arrived
         id: stats
         run: |
           missing=""
           for id in ${{ needs.plan.outputs.ids }}; do
-            [ -f "stats/stats-$id/stats.json" ] || missing="${missing:+$missing,}$id"
+            [ -n "$(find "stats/stats-$id" -name stats.json 2>/dev/null)" ] \
+              || missing="${missing:+$missing,}$id"
           done
           if [ -z "$(find stats -name stats.json 2>/dev/null)" ]; then
             echo "::notice::No statistics were produced; skipping the report."

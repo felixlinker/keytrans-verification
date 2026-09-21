@@ -542,14 +542,16 @@ def render_markdown(report, title, n_files, missing="", timings=None,
     def assemble(failed_limit, slowest_limit, pkg_limit):
         lines = [MD_MARKER, "", "# %s" % title, ""]
         if missing:
-            # Placed before everything else: a report missing a phase lists
-            # only the packages of the phases that ran, which otherwise looks
+            # Placed before everything else: a report that lost a job lists
+            # only the packages of the jobs that ran, which otherwise looks
             # like a fast, healthy verification.
+            names = [m.strip() for m in missing.replace(",", " ").split() if m.strip()]
             lines.append("> [!WARNING]")
-            lines.append("> Statistics for the **%s** phase are missing, so "
-                         "this report covers the remaining phase only. The "
-                         "packages verified by the missing phase are absent "
-                         "below, not fast." % missing)
+            lines.append("> No statistics from **%s**, so this report covers "
+                         "the remaining jobs only. The packages %s would have "
+                         "verified are absent below, not fast."
+                         % (", ".join(names),
+                            "it" if len(names) == 1 else "they"))
             lines.append("")
         lines.append("_%d stats.json file%s · %d package%s · %d members "
                      "· up to %d iteration%s per package%s_"
