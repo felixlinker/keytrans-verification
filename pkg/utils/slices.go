@@ -4,6 +4,7 @@ package utils
 // @ preserves acc(BytesMem(x), p)
 // @ ensures r != nil && acc(BytesMem(r))
 // @ ensures BytesEqual(x, r)
+// @ ensures GetBytesContent(r) == GetBytesContent(x)
 func Copy(x []byte /*@, ghost p perm @*/) (r []byte) {
 	if len(x) == 0 {
 		r = []byte{}
