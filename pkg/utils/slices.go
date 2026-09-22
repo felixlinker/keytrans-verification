@@ -21,14 +21,14 @@ func Copy(x []byte /*@, ghost p perm @*/) (r []byte) {
 // @ preserves acc(r_in, 1/2)
 // @ ensures acc(r_out)
 // @ ensures len(r_in) == len(r_out)
-// @ ensures forall i int :: 0 <= i && i < len(r_in) ==> r_in[i] - 1 == r_out[i]
+// @ ensures forall i int :: { &r_out[i] } 0 <= i && i < len(r_in) ==> r_in[i] - 1 == r_out[i]
 // @ decreases
 func Decrement(r_in []uint64) (r_out []uint64) {
 	r_out = make([]uint64, len(r_in))
 	// @ invariant acc(r_in, 1/2)
 	// @ invariant acc(r_out)
 	// @ invariant 0 <= i && i <= len(r_in) && i <= len(r_out)
-	// @ invariant forall j int :: 0 <= j && j < i ==> r_in[j] - 1 == r_out[j]
+	// @ invariant forall j int :: { &r_out[j] } 0 <= j && j < i ==> r_in[j] - 1 == r_out[j]
 	// @ decreases len(r_in) - i
 	for i := 0; i < len(r_in); i++ {
 		r_out[i] = r_in[i] - 1
@@ -39,14 +39,14 @@ func Decrement(r_in []uint64) (r_out []uint64) {
 // @ preserves acc(r_in, 1/2)
 // @ ensures acc(r_out)
 // @ ensures len(r_in) == len(r_out)
-// @ ensures forall i int :: 0 <= i && i < len(r_in) ==> r_in[i] + add == r_out[i]
+// @ ensures forall i int :: { &r_out[i] } 0 <= i && i < len(r_in) ==> r_in[i] + add == r_out[i]
 // @ decreases
 func Increment(r_in []uint64, add uint64) (r_out []uint64) {
 	r_out = make([]uint64, len(r_in))
 	// @ invariant acc(r_in, 1/2)
 	// @ invariant acc(r_out)
 	// @ invariant 0 <= i && i <= len(r_in) && i <= len(r_out)
-	// @ invariant forall j int :: 0 <= j && j < i ==> r_in[j] + add == r_out[j]
+	// @ invariant forall j int :: { &r_out[j] } 0 <= j && j < i ==> r_in[j] + add == r_out[j]
 	// @ decreases len(r_in) - i
 	for i := 0; i < len(r_in); i++ {
 		r_out[i] = r_in[i] + add
@@ -54,17 +54,18 @@ func Increment(r_in []uint64, add uint64) (r_out []uint64) {
 	return r_out
 }
 
-// @ preserves acc(r_in, 1/2)
-// @ ensures acc(r_out)
-// @ ensures len(r_in) == len(r_out)
-// @ ensures forall i int :: 0 <= i && i < len(r_in) ==> r_in[len(r_in)-1-i] == r_out[i]
+// @ requires  0 <= offset && offset < len(r_in)
+// @ preserves forall i int :: { &r_in[i] } offset <= i && i < len(r_in) ==> acc(&r_in[i], 1/2)
+// @ ensures   acc(r_out)
+// @ ensures   len(r_in) - offset == len(r_out)
+// @ ensures   forall i int :: { &r_out[i] } 0 <= i && i < len(r_out) ==> r_in[len(r_in)-1-i] == r_out[i]
 // @ decreases
-func Reverse(r_in []uint64) (r_out []uint64) {
-	r_out = make([]uint64, len(r_in))
-	// @ invariant acc(r_in, 1/2)
+func Reverse(r_in []uint64, offset int) (r_out []uint64) {
+	r_out = make([]uint64, len(r_in)-offset)
+	// @ invariant forall i int :: { &r_in[i] } offset <= i && i < len(r_in) ==> acc(&r_in[i], 1/4)
 	// @ invariant acc(r_out)
-	// @ invariant 0 <= i && i <= len(r_in) && i <= len(r_out)
-	// @ invariant forall j int :: 0 <= j && j < i ==> r_in[len(r_in)-1-j] == r_out[j]
+	// @ invariant 0 <= i && i + offset <= len(r_in) && i <= len(r_out)
+	// @ invariant forall j int :: { &r_out[j] } 0 <= j && j < i ==> r_in[len(r_in)-1-j] == r_out[j]
 	// @ decreases len(r_in) - i
 	for i := 0; i < len(r_out); i++ {
 		r_out[i] = r_in[len(r_in)-1-i]

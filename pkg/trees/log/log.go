@@ -27,6 +27,23 @@ pred (t *Tree) Inv() {
 	(t.right != nil ==> acc(t.right.Inv())) &&
 	(t.left == nil) == (t.right == nil)
 }
+
+// Note that `GetSize` below is the executable counterpart of `Size`; it also
+// accepts a nil receiver, for which it returns 0.
+ghost
+requires acc(t.Inv(), _)
+ensures  1 <= r
+decreases
+pure func (t *Tree) Size() (r uint64) {
+	return unfolding acc(t.Inv(), _) in t.size
+}
+
+ghost
+requires acc(t.Inv(), _)
+decreases
+pure func (t *Tree) Index() (r uint64) {
+	return unfolding acc(t.Inv(), _) in t.index
+}
 @*/
 
 // @ preserves acc(t.Inv())
@@ -39,7 +56,7 @@ func (t *Tree) cut() {
 
 // Remove all nodes from the tree that are not on the frontier, and memorize
 // the hash values of all balanced subtrees.
-// @ requires acc(t.Inv()) && unfolding acc(t.Inv()) in oldSize <= t.size
+// @ requires acc(t.Inv()) && oldSize <= t.Size()
 // @ ensures acc(t.Inv())
 func (t *Tree) Prune(oldSize uint64) {
 	var keep []uint64
@@ -62,10 +79,11 @@ func (t *Tree) prune(keeping []uint64) (r []uint64) {
 	// @ unfold acc(t.Inv())
 	if t.left == nil || t.right == nil {
 		i := 0
+		end := t.index + t.size
 		// @ fold acc(t.Inv())
 		// @ invariant 0 <= i && i <= len(keeping)
 		// @ invariant acc(keeping) && acc(t.Inv())
-		for ; i < len(keeping) && keeping[i] < /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size; i++ {
+		for ; i < len(keeping) && keeping[i] < end; i++ {
 		}
 		// Help gobra realize the relation between keeping and its subslice
 		// @ assert forall j int :: {&keeping[i:][j]} 0 <= j && j < len(keeping[i:]) ==> &keeping[i:][j] == &keeping[i+j]
@@ -96,7 +114,7 @@ func (t *Tree) prune(keeping []uint64) (r []uint64) {
 
 // @ requires 1 <= size
 // @ ensures t != nil && acc(t.Inv())
-// @ ensures unfolding acc(t.Inv()) in t.index == index && t.size == size
+// @ ensures t.Index() == index && t.Size() == size
 func Singleton(index uint64, size uint64) (t *Tree) {
 	tree /*@@@*/ := Tree{
 		index: index,
@@ -111,9 +129,8 @@ func Singleton(index uint64, size uint64) (t *Tree) {
 
 // @ preserves acc(t.Inv())
 // @ ensures copied != nil && acc(copied.Inv())
-// @ ensures old(unfolding acc(t.Inv()) in t.size) == (unfolding acc(t.Inv()) in t.size)
-// @ ensures old(unfolding acc(t.Inv()) in t.index) == (unfolding acc(t.Inv()) in t.index)
-// @ ensures unfolding acc(copied.Inv()) in unfolding acc(t.Inv()) in copied.index == t.index && copied.size == t.size
+// @ ensures old(t.Size()) == t.Size() && old(t.Index()) == t.Index()
+// @ ensures copied.Index() == t.Index() && copied.Size() == t.Size()
 func (t *Tree) copy() (copied *Tree) {
 	// @ unfold acc(t.Inv())
 	copied = Singleton(t.index, t.size)
@@ -156,6 +173,8 @@ func (t *Tree) fit(idx uint64) {
 	for /*@ unfolding acc(t.Inv()) in @*/ t.index+t.size <= idx {
 		// @ unfold acc(t.Inv())
 		lsp := utils.LargestSmallerPower(t.size)
+		// `copy` preserves index and size, so remembering them here avoids having
+		// to unfold the copy's invariant again below.
 		if lsp == t.size && (t.value != nil || (t.left != nil && t.right != nil)) {
 			// Tree is already fully balanced; move both children into left child if
 			// they exist.
@@ -165,8 +184,8 @@ func (t *Tree) fit(idx uint64) {
 			t.left = newLeft
 			// new right child contains one node; effectively, this tree now contains
 			// 2^n+1 nodes. We will grow the right child as necessary next.
-			t.right = Singleton( /*@ unfolding acc(newLeft.Inv()) in @*/ newLeft.index+newLeft.size, 1)
-			// @ assert unfolding acc(t.right.Inv()) in (t.left == nil) == (t.right == nil)
+			t.right = Singleton( /*@ unfolding newLeft.Inv() in @*/ newLeft.index+newLeft.size, 1)
+			// @ assert t.left != nil && t.right != nil
 		}
 
 		// Clear hash value; must be done in any case
@@ -182,7 +201,7 @@ func (t *Tree) fit(idx uint64) {
 		// Grow right subtree; left subtree will already be balanced or nil
 		if t.right != nil {
 			// set right to be full-balanced subtree
-			t.right.fit( /*@ unfolding acc(t.left.Inv()) in @*/ t.index + t.size - 1)
+			t.right.fit(t.index + t.size - 1)
 		}
 
 		// @ fold acc(t.Inv())
@@ -192,7 +211,7 @@ func (t *Tree) fit(idx uint64) {
 // TODO: Verification takes rather long. Optimize.
 // @ requires l != nil ==> acc(utils.BytesMem(l))
 // @ requires 0 <= idx
-// @ preserves acc(t.Inv()) && unfolding acc(t.Inv()) in 1 <= t.size
+// @ preserves acc(t.Inv())
 func (t *Tree) setLeaf(idx uint64, l []byte) {
 	t.fit(idx)
 	// @ unfold acc(t.Inv())
@@ -207,7 +226,7 @@ func (t *Tree) setLeaf(idx uint64, l []byte) {
 			// @ assert t.left == nil && t.right == nil
 			sizeLeft = utils.TrueLargestSmallerPower(t.size)
 			t.left = Singleton(t.index, sizeLeft)
-			t.right = Singleton( /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size, t.size-sizeLeft)
+			t.right = Singleton(t.index+sizeLeft, t.size-sizeLeft)
 		}
 
 		if idx < /*@ unfolding acc(t.left.Inv()) in @*/ t.left.index+t.left.size {
@@ -348,8 +367,7 @@ func (t *Tree) computeHash() (err error) {
 }
 
 // @ requires noPerm < p
-// TODO: Proving 1 <= size should not be necessary as it is provided by t.Inv() directly
-// @ preserves acc(t.Inv(), p) && unfolding acc(t.Inv(), p) in 1 <= t.size
+// @ preserves acc(t.Inv(), p)
 // @ ensures err == nil ==> acc(utils.BytesMem(commitment))
 func (t *Tree) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment []byte, err error) {
 	// @ unfold acc(t.Inv(), p)
@@ -377,8 +395,7 @@ func (t *Tree) GetLeafHash(index uint64 /*@, ghost p perm @*/) (commitment []byt
 
 // @ requires noPerm < p
 // @ preserves t != nil ==> acc(t.Inv(), p)
-// @ ensures 0 <= r
-// @ ensures (t != nil) == (1 <= r)
+// @ ensures r == (t == nil ? 0 : t.Size())
 func (t *Tree) GetSize( /*@ ghost p perm @*/ ) (r uint64) {
 	if t == nil {
 		r = 0

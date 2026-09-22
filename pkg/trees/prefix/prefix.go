@@ -384,23 +384,10 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 		// @ fold acc(t.Inv(), p)
 	} else {
 		// @ fold acc(t.Inv(), p)
-		input := make([]byte, 1+len(left)+len(right))
-		input[0] = 0x03
-		// @ unfold acc(utils.BytesMem(left))
-		// @ unfold acc(utils.BytesMem(right))
-		// @ invariant len(input) == 1+len(left)+len(right)
-		// @ invariant 0 <= i && i <= len(left)
-		// @ invariant acc(input) && acc(left, perm(1/2)) && acc(right, perm(1/2))
-		for i := 0; i < len(left); i++ {
-			input[1+i] = left[i]
-		}
-		// @ invariant len(input) == 1+len(left)+len(right)
-		// @ invariant 0 <= i && i <= len(right)
-		// @ invariant acc(input) && acc(left, perm(1/2)) && acc(right, perm(1/2))
-		for i := 0; i < len(right); i++ {
-			input[1+len(left)+i] = right[i]
-		}
-		// @ fold acc(utils.BytesMem(input))
+		// Spec: parent.value = Hash(0x03 || left.value || right.value)
+		prefixByte := []byte{0x03}
+		// @ fold utils.BytesMem(prefixByte)
+		input := utilsrel.Concat(prefixByte, utilsrel.Concat(left, right /*@, perm(1/2) @*/) /*@, perm(1/2) @*/)
 		r = crypto.Sum(input /*@, perm(1/2) @*/)
 		// @ incl = inclL ++ inclR
 		// @ notIncl = notInclL ++ notInclR
