@@ -92,15 +92,15 @@ pred (s *SearchResponse) Inv() {
 // @ requires acc(proofs.PrefixProofsInv(prfs)) && acc(proofs.BinaryLadderStepsInv(ladder))
 // @ preserves acc(utils.BytesMem(label), p)
 // @ preserves acc(st.Inv(), p)
-// @ ensures err == nil ==> 0 < len(pts) && prefix.PrefixesInv(pts)
-func (st *UserState) buildPrefixes(label []byte, version uint64, prfs []*proofs.PrefixProof, ladder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (pts []*prefix.Tree, err error) {
+// @ ensures err == nil ==> 0 < len(pts) && prefix.PrefixesInv(pts, cs)
+func (st *UserState) buildPrefixes(label []byte, version uint64, prfs []*proofs.PrefixProof, ladder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (pts []*prefix.Tree, err error /*@, ghost cs seq[prefix.TreeContent] @*/) {
 	// @ unfold acc(st.Inv(), p)
 	// @ unfold acc(st.Config.Inv(), p)
 	err = proofs.PullLeaves(prfs, ladder, st.Config.VrfPublicKey, label, version /*@, p/2 @*/)
 	// @ fold acc(st.Config.Inv(), p)
 	// @ fold acc(st.Inv(), p)
 	if err == nil {
-		pts, err = st.MkPrefixes(prfs /*@, p/2 @*/)
+		pts, err /*@, cs @*/ = st.MkPrefixes(prfs /*@, p/2 @*/)
 	}
 	return
 }
@@ -154,8 +154,9 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 	}
 
 	var pts []*prefix.Tree
+	// @ ghost var ptsContents seq[prefix.TreeContent]
 	if err == nil {
-		pts, err = st.buildPrefixes(label, *resp.Version, resp.Search.Prefix_proofs, resp.Binary_ladder /*@, perm(1/2) @*/)
+		pts, err /*@, ptsContents @*/ = st.buildPrefixes(label, *resp.Version, resp.Search.Prefix_proofs, resp.Binary_ladder /*@, perm(1/2) @*/)
 	}
 
 	// Phase 4: VerifyLatestKey
@@ -169,7 +170,7 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 		}
 		// @ fold acc(cv.Inv())
 		// @ ghost var p perm
-		_, err = VerifyLatestKey(&cv, lookups, pts /*@, perm(1/2) @*/)
+		_, err = VerifyLatestKey(&cv, lookups, pts /*@, perm(1/2), ptsContents @*/)
 		// @ unfold acc(cv.Inv())
 	}
 
@@ -188,7 +189,7 @@ type MonitoringMapEntry struct {
 // @ requires  noPerm < p
 // @ preserves acc(cv.Inv(), p)
 // @ preserves acc(lookups.Inv(), p)
-// @ preserves acc(prefix.PrefixesInv(prefixTrees), p)
+// @ preserves acc(prefix.PrefixesInv(prefixTrees, cs), p)
 // @ requires  0 < len(prefixTrees) // && len(prefixTrees) <= math.MaxUint64
 // hyper-postcondition:
 // // @ ensures   err == nil &&
@@ -197,13 +198,19 @@ type MonitoringMapEntry struct {
 // // @		unfolding acc(resp.Inv(), p) in low(*resp.Version)
 // // @ decreases
 // returns an error if verification fails and a non-nil map entry if an entry needs to be monitored
-func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefixTrees []*prefix.Tree /*@, ghost p perm @*/) (entry *MonitoringMapEntry, err error) {
+func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefixTrees []*prefix.Tree /*@, ghost p perm, ghost cs seq[prefix.TreeContent] @*/) (entry *MonitoringMapEntry, err error) {
 	// we use `err` to skip loop iterations instead of
 	// returning early, which is not yet supported by Gobra's hypermode.
 
+	// The only fact about cs that is hidden behind the predicate is its length;
+	// pull it out once, and from then on cs[i] -- and hence the root hash
+	// prefix.RootHashOf(cs[i]) -- is readable anywhere below without unfolding.
+	// @ assert unfolding acc(prefix.PrefixesInv(prefixTrees, cs), p) in len(cs) == len(prefixTrees)
+
 	var commitment []byte
 	// @ invariant acc(cv.Inv(), p) && acc(lookups.Inv(), p)
-	// @ invariant acc(prefix.PrefixesInv(prefixTrees), p)
+	// @ invariant acc(prefix.PrefixesInv(prefixTrees, cs), p)
+	// @ invariant len(cs) == len(prefixTrees)
 	// @ invariant 0 <= idx && idx <= len(prefixTrees)
 	// hyper-invariants:
 	// // @ invariant low(len(prefixTrees)) ==> low(idx)
@@ -214,14 +221,22 @@ func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefix
 	// // @ decreases len(prefixTrees) - idx
 	for idx := 0; idx < len(prefixTrees) && err == nil; idx++ {
 		// TODO: Check monitoring
-		// @ unfold acc(prefix.PrefixesInv(prefixTrees), p)
-		commitment, err = lookups.CheckPrefixTree(prefixTrees[idx] /*@, p @*/)
+		// The root hash of tree idx is readable here with no unfolding at all:
+		// @ ghost rootHash := prefix.RootHashOf(cs[idx])
+		// @ unfold acc(prefix.PrefixesInv(prefixTrees, cs), p)
+		// The projection is faithful: cs[idx] really is the content of the tree.
+		// @ assert cs[idx] == prefixTrees[idx].Content()
+		// @ assert rootHash == prefix.RootHashOf(prefixTrees[idx].Content())
+		// Only half of the permission is handed to the callee so that the
+		// remaining half keeps prefixTrees[idx].Content() framed across the
+		// call; otherwise the fold below could not re-establish cs[idx].
+		commitment, err = lookups.CheckPrefixTree(prefixTrees[idx] /*@, p/2 @*/)
 		if commitment != nil && err != nil {
 			if !crypto.VerifyCommitmentValue(commitment, cv /*@, p @*/) {
 				err = errors.New("commitments did not match")
 			}
 		}
-		// @ fold acc(prefix.PrefixesInv(prefixTrees), p)
+		// @ fold acc(prefix.PrefixesInv(prefixTrees, cs), p)
 	}
 
 	if commitment == nil {

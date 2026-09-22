@@ -121,22 +121,23 @@ func (st *UserState) UpdateView(newSize uint64, timestamps []uint64, prf *proofs
 
 // NOTE: Below function was an attempt to encapsulate some of the challenges I
 // encountered verifying MkPrefixes.
-// @ requires prefix.PrefixesInv(ts)
+// @ requires prefix.PrefixesInv(ts, cs)
 // @ requires t.Inv()
-// @ requires unfolding prefix.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
-// @ ensures prefix.PrefixesInv(r) && len(r) == len(ts)+1
-func auxAppend(ts []*prefix.Tree, t *prefix.Tree) (r []*prefix.Tree) {
-	// @ unfold prefix.PrefixesInv(ts)
+// @ requires c == t.Content()
+// @ requires unfolding prefix.PrefixesInv(ts, cs) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
+// @ ensures prefix.PrefixesInv(r, cs ++ seq[prefix.TreeContent]{c}) && len(r) == len(ts)+1
+func auxAppend(ts []*prefix.Tree, t *prefix.Tree /*@, ghost cs seq[prefix.TreeContent], ghost c prefix.TreeContent @*/) (r []*prefix.Tree) {
+	// @ unfold prefix.PrefixesInv(ts, cs)
 	r = append( /*@ perm(1/2), @*/ ts, t)
-	// @ fold prefix.PrefixesInv(r)
+	// @ fold prefix.PrefixesInv(r, cs ++ seq[prefix.TreeContent]{c})
 	return
 }
 
 // @ requires noPerm < p
 // @ preserves acc(st.Inv(), p)
 // @ requires acc(proofs.PrefixProofsInv(prfs), p)
-// @ ensures err == nil ==> 0 < len(ts) && prefix.PrefixesInv(ts)
-func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/) (ts []*prefix.Tree, err error) {
+// @ ensures err == nil ==> 0 < len(ts) && prefix.PrefixesInv(ts, cs)
+func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/) (ts []*prefix.Tree, err error /*@, ghost cs seq[prefix.TreeContent] @*/) {
 	// @ unfold acc(st.Inv(), p)
 	size := st.Tree.GetSize( /*@ p @*/ )
 	if size <= 0 {
@@ -163,7 +164,8 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 			err = errors.New("too few or too many prefix proofs")
 		} else {
 			ts = make([]*prefix.Tree, 0, len(prfs))
-			// @ fold prefix.PrefixesInv(ts)
+			// @ cs = seq[prefix.TreeContent]{}
+			// @ fold prefix.PrefixesInv(ts, cs)
 			// @ unfold acc(proofs.PrefixProofsInv(prfs), p)
 
 			// @ invariant 0 <= i && i <= len(prfs)
@@ -172,7 +174,7 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 			// @ invariant len(frontier) == st.NumTimestamps()
 			// @ invariant st.HasTree()
 			// @ invariant forall j int :: {prfs[j]} i <= j && j < len(prfs) ==> acc(prfs[j].Inv(), p)
-			// @ invariant prefix.PrefixesInv(ts)
+			// @ invariant prefix.PrefixesInv(ts, cs)
 			// @ invariant 0 < i && err == nil ==> 0 < len(ts)
 			for i := 0; i < len(prfs) && err == nil; i++ {
 				// @ unfold acc(st.Inv(), p)
@@ -197,8 +199,10 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 					} else {
 						// TODO: I cannot assert below because whenever I add new lines after
 						// the (now) assume, the assert fails.
-						// @ assume unfolding prefix.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
-						ts = auxAppend(ts, t)
+						// @ assume unfolding prefix.PrefixesInv(ts, cs) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
+						// @ ghost tc := t.Content()
+						ts = auxAppend(ts, t /*@, cs, tc @*/)
+						// @ cs = cs ++ seq[prefix.TreeContent]{tc}
 					}
 					// @ fold utils.BytesMem(v)
 					// @ fold utils.BytesMem(h)

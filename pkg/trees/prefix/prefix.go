@@ -125,8 +125,16 @@ pred (t *Tree) Inv() {
 @*/
 
 /*@
-pred PrefixesInv(ts []*Tree) {
-	forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> acc(&ts[i]) && acc(ts[i].Inv())
+// PrefixesInv carries both the permissions for a slice of prefix trees and,
+// via the ghost parameter cs, their pure content. Because cs is a *parameter*
+// rather than part of the (hidden) body, a holder of acc(PrefixesInv(ts, cs), p)
+// can talk about cs[i] -- and hence about RootHashOf(cs[i]) -- without ever
+// unfolding the predicate. Folding the predicate therefore no longer discards
+// what was learned about the trees' content while they were being built.
+pred PrefixesInv(ts []*Tree, cs seq[TreeContent]) {
+	len(cs) == len(ts) &&
+	(forall i int :: {ts[i]} 0 <= i && i < len(ts) ==>
+		acc(&ts[i]) && acc(ts[i].Inv()) && cs[i] == ts[i].Content())
 }
 @*/
 
