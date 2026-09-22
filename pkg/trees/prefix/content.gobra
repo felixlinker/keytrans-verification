@@ -102,3 +102,21 @@ pure func (t *Tree) Content() (r TreeContent) {
 					t.left == nil ? emptyTree{} : t.left.Content(),
 					t.right == nil ? emptyTree{} : t.right.Content() }
 }
+
+// A key leaf's hash determines its search key and commitment, provided the two
+// hash inputs do not collide. The search keys must have equal length: without a
+// known split point the concatenation cannot be taken apart.
+ghost
+requires len(sk1) == len(sk2)
+requires !crypto.IsCollision(leafTag() ++ sk1 ++ cm1, leafTag() ++ sk2 ++ cm2)
+requires RootHashOf(keyLeaf{sk1, cm1}) == RootHashOf(keyLeaf{sk2, cm2})
+ensures  sk1 == sk2 && cm1 == cm2
+decreases
+func KeyLeafInjective(sk1 seq[byte], cm1 seq[byte], sk2 seq[byte], cm2 seq[byte]) {
+	ghost a := leafTag() ++ sk1 ++ cm1
+	ghost b := leafTag() ++ sk2 ++ cm2
+	crypto.NoCollisionMeansEqual(a, b)
+	assert a == b
+	assert sk1 == a[len(leafTag()) : len(leafTag())+len(sk1)]
+	assert cm1 == a[len(leafTag())+len(sk1) :]
+}

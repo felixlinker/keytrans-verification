@@ -53,11 +53,6 @@ func (l *prefixLeaf) copy( /*@ ghost p perm @*/ ) (r *prefixLeaf) {
 // @ preserves acc(l.Inv(), p)
 // @ ensures   v != nil && acc(utils.BytesMem(v))
 // @ ensures   utils.GetBytesContent(v) == RootHashOf(l.Content())
-// NOTE: ensures below is only to convince Gobra that permissions for final
-// ensures suffice
-// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> low(l.searchKey != nil) && low(l.commitment != nil))
-// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil && low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment))))
-// @ trusted
 func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
 		// @ unfold acc(l.Inv(), p)
@@ -74,13 +69,8 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// @ unfold acc(l.Inv(), p)
 		input1 := []byte{0x02}
 		// @ fold utils.BytesMem(input1)
-		// @ assert low(utils.GetBytesContent(input1))
-		// TODO:
-		// @ assume len(l.searchKey) == 32
 		input2 := utils.Concat(l.searchKey, l.commitment /*@, p @*/)
-		// @ assert low(utils.GetBytesContent(input2)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 		input := utils.Concat(input1, input2 /*@, perm(1/2) @*/)
-		// @ assert low(utils.GetBytesContent(input)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 
 		// @ ghost searchKeySeq := utils.GetBytesContent(l.searchKey)
 		// @ incl = Incl{ utils.BitsSeq(searchKeySeq) }
@@ -88,8 +78,14 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// // @ fold InclChar(incl, notIncl)
 
 		v = crypto.Sum(input /*@, perm(1/2) @*/)
-		// @ assert (low(utils.GetBytesContent(l.searchKey)) && low(depth)) == (low(incl) && low(notIncl))
-		// @ assert low(utils.GetBytesContent(v)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
+		/*@
+		assert v != nil by contra {
+			unfold utils.BytesMem(v)
+		}
+		@*/
+		// @ assert reveal utils.GetBytesContent(input1) == leafTag()
+		// Concat nests to the right, RootHashOf concatenates left-associatively.
+		// @ assert leafTag() ++ utils.GetBytesContent(l.searchKey) ++ utils.GetBytesContent(l.commitment) == leafTag() ++ (utils.GetBytesContent(l.searchKey) ++ utils.GetBytesContent(l.commitment))
 		// @ fold acc(l.Inv(), p)
 	}
 	return
