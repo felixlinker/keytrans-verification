@@ -52,6 +52,7 @@ func (l *prefixLeaf) copy( /*@ ghost p perm @*/ ) (r *prefixLeaf) {
 // @ requires  0 <= depth
 // @ preserves acc(l.Inv(), p)
 // @ ensures   v != nil && acc(utils.BytesMem(v))
+// @ ensures   utils.GetBytesContent(v) == RootHashOf(l.Content())
 // NOTE: ensures below is only to convince Gobra that permissions for final
 // ensures suffice
 // @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> low(l.searchKey != nil) && low(l.commitment != nil))
@@ -366,10 +367,12 @@ pred InclChar(incl seq[seq[bool]], idx seq[int]) {
 }
 @*/
 
-// @ requires noPerm < p
-// @ requires 0 <= depth
+// @ requires  noPerm < p
+// @ requires  0 <= depth
 // @ preserves acc(t.Inv(), p)
-// @ ensures err == nil ==> utils.BytesMem(r)
+// @ requires  unfolding acc(t.Inv(), p) in t.leaf == nil
+// @ ensures   err == nil ==> utils.BytesMem(r)
+// @ ensures   err == nil ==> utils.GetBytesContent(r) == RootHashOf(t.Content())
 func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs.NodeValue, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	// @ unfold acc(t.Inv(), p)
 	if t.left == nil && t.right == nil {
@@ -388,6 +391,9 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 		// @ fold utils.BytesMem(prefixByte)
 		input := utils.Concat(prefixByte, utils.Concat(left, right /*@, perm(1/2) @*/) /*@, perm(1/2) @*/)
 		r = crypto.Sum(input /*@, perm(1/2) @*/)
+		// @ assert reveal utils.GetBytesContent(prefixByte) == innerTag()
+		// Concat nests to the right, RootHashOf concatenates left-associatively.
+		// @ assert innerTag() ++ utils.GetBytesContent(left) ++ utils.GetBytesContent(right) == innerTag() ++ (utils.GetBytesContent(left) ++ utils.GetBytesContent(right))
 		// @ incl = inclL ++ inclR
 		// @ notIncl = notInclL ++ notInclR
 	}
@@ -400,6 +406,7 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
 // @ ensures  err == nil ==> utils.BytesMem(r)
+// @ ensures  err == nil ==> utils.GetBytesContent(r) == RootHashOf(t.Content())
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
@@ -415,6 +422,7 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 	} else { // t == nil
 		r = make(proofs.NodeValue, sha256.Size)
 		// @ fold acc(utils.BytesMem(r))
+		// @ assert reveal utils.GetBytesContent(r) == ZeroHash()
 	}
 	return
 }
@@ -424,6 +432,7 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
 // @ ensures  err == nil ==> utils.BytesMem(r)
+// @ ensures  err == nil ==> utils.GetBytesContent(r) == RootHashOf(t.Content())
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
