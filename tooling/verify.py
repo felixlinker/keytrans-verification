@@ -7,8 +7,8 @@ below are exactly the flags that run in CI. Never duplicate them elsewhere.
 
 Verification happens in two phases, as in CI:
 
-    unary   --hyperMode off       over proofs and utils
-    hyper   --hyperMode extended  over everything except main, proofs, utils
+    unary   --hyperMode off       over the packages listed in UNARY_PACKAGES
+    hyper   --hyperMode extended  over everything else
 
 Usage:
     tooling/verify.py                         # both phases, once
@@ -70,10 +70,16 @@ MODULE = "github.com/felixlinker/keytrans-verification"
 JVM_ARGS = ["-Xss128m"]
 COMMON = ["--recursive", "--include", ".", ".verification",
           "--checkConsistency", "--parallelizeBranches"]
+# Packages whose specifications are free of relational constructs, and which
+# are therefore verified without the product construction.
+UNARY_PACKAGES = ["crypto", "proofs", "utils"]
+# Packages that are not verified at all.
+SKIPPED_PACKAGES = ["main"]
+
 # phase -> (--hyperMode value, package selector flag, packages)
 PHASES = {
-    "unary": ("off", "--includePackages", ["proofs", "utils"]),
-    "hyper": ("extended", "--excludePackages", ["main", "proofs", "utils"]),
+    "unary": ("off", "--includePackages", UNARY_PACKAGES),
+    "hyper": ("extended", "--excludePackages", SKIPPED_PACKAGES + UNARY_PACKAGES),
 }
 # ---------------------------------------------------------------------------
 
@@ -331,8 +337,8 @@ def main(argv=None):
     # reconcile that with --hyperMode off, aborting the whole run with
     #   "Unable to merge differing hyper modes from in-file configuration
     #    options, got Disabled and EnabledExtended"
-    # So pick one phase: hyper, the mode CI uses for every package except
-    # proofs and utils. Pass --phase explicitly to override.
+    # So pick one phase: hyper, which covers everything outside
+    # UNARY_PACKAGES. Pass --phase explicitly to override.
     if args.packages and args.phase == "both":
         phases = ["hyper"]
         print("note: --packages given without --phase; verifying in the hyper "
