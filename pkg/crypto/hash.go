@@ -7,7 +7,7 @@ import (
 
 // @ requires  noPerm < p
 // @ preserves acc(utils.BytesMem(input), p)
-// @ ensures   output != nil && utils.BytesMem(output)
+// @ ensures   utils.BytesMem(output)
 func sum(input []byte /*@, ghost p perm @*/) (output []byte) {
 	// @ unfold acc(utils.BytesMem(input), p)
 	digest /*@@@*/ := sha256.Sum256(input /*@, p @*/)
@@ -43,7 +43,7 @@ func NoCollisionMeansEqual(a seq[byte], b seq[byte]) {
 
 // @ requires  noPerm < p
 // @ preserves acc(utils.BytesMem(input), p)
-// @ ensures   output != nil && utils.BytesMem(output)
+// @ ensures   utils.BytesMem(output)
 // @ ensures   utils.GetBytesContent(output) == HashOf(utils.GetBytesContent(input))
 func Sum(input []byte /*@, ghost p perm @*/) (output []byte) {
 	output = sum(input /*@, p @*/)

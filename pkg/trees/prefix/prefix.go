@@ -24,9 +24,9 @@ pred (l *prefixLeaf) Inv() {
 	acc(l) &&
 	// Either value is not nil, or search key AND commitment are not nil
 	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
-	(l.value != nil ==> acc(utils.BytesMem(l.value))) &&
-	(l.searchKey != nil ==> acc(utils.BytesMem(l.searchKey))) &&
-	(l.commitment != nil ==> acc(utils.BytesMem(l.commitment)))
+	(l.value != nil ==> utils.BytesMem(l.value)) &&
+	(l.searchKey != nil ==> utils.BytesMem(l.searchKey)) &&
+	(l.commitment != nil ==> utils.BytesMem(l.commitment))
 }
 @*/
 
@@ -369,7 +369,7 @@ pred InclChar(incl seq[seq[bool]], idx seq[int]) {
 // @ requires noPerm < p
 // @ requires 0 <= depth
 // @ preserves acc(t.Inv(), p)
-// @ ensures err == nil ==> r != nil && acc(utils.BytesMem(r))
+// @ ensures err == nil ==> utils.BytesMem(r)
 func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs.NodeValue, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	// @ unfold acc(t.Inv(), p)
 	if t.left == nil && t.right == nil {
@@ -399,7 +399,7 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 // @ requires 0 <= depth
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
-// @ ensures  err == nil ==> r != nil && acc(utils.BytesMem(r))
+// @ ensures  err == nil ==> utils.BytesMem(r)
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
@@ -423,7 +423,7 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 // @ requires t != nil ==> acc(t.Inv(), p)
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
-// @ ensures  err == nil ==> r != nil && acc(utils.BytesMem(r))
+// @ ensures  err == nil ==> utils.BytesMem(r)
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
