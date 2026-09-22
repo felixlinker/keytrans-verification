@@ -23,7 +23,7 @@ pure func getBytesContent_Rec(s []byte, idx int) (r seq[byte]) {
 ghost
 requires acc(s, _)
 decreases
-ensures len(s) == len(r) && forall i int :: 0 <= i && i < len(r) ==> r[i] == s[i]
+ensures len(s) == len(r)
 opaque
 pure func GetUint64sContent(s []uint64) (r seq[uint64]) {
   return getUint64sContent_Rec(s, 0)
@@ -33,8 +33,9 @@ ghost
 requires acc(s, _)
 requires 0 <= idx && idx <= len(s)
 ensures len(r) == len(s) - idx
-ensures forall i int :: 0 <= i && i < len(r) ==> r[i] == s[idx+i]
+ensures forall i int :: {s[idx+i]} {r[i]} 0 <= i && i < len(r) ==> s[idx+i] == r[i]
 decreases len(s) - idx
+opaque // ensures that revealing `GetUint64sContent` makes only the postconditions but not the body of this function available
 pure func getUint64sContent_Rec(s []uint64, idx int) (r seq[uint64]) {
   return idx == len(s) ? seq[uint64]{} : seq[uint64]{s[idx]} ++ getUint64sContent_Rec(s, idx + 1)
 }

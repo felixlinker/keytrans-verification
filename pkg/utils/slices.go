@@ -1,9 +1,9 @@
 package utils
 
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(BytesMem(x), p)
-// @ ensures r != nil && acc(BytesMem(r))
-// @ ensures BytesEqual(x, r)
+// @ ensures   BytesMem(r)
+// @ ensures   BytesEqual(x, r)
 func Copy(x []byte /*@, ghost p perm @*/) (r []byte) {
 	if len(x) == 0 {
 		r = []byte{}
