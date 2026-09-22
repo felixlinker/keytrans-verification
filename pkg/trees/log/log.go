@@ -22,9 +22,9 @@ type Tree struct {
 /*@
 pred (t *Tree) Inv() {
 	acc(t) && 1 <= t.size &&
-	(t.value != nil ==> acc(utils.BytesMem(t.value))) &&
-	(t.left != nil ==> acc(t.left.Inv())) &&
-	(t.right != nil ==> acc(t.right.Inv())) &&
+	(t.value != nil ==> utils.BytesMem(t.value)) &&
+	(t.left != nil ==> t.left.Inv()) &&
+	(t.right != nil ==> t.right.Inv()) &&
 	(t.left == nil) == (t.right == nil)
 }
 
@@ -338,14 +338,18 @@ func (t *Tree) hashContent() (content []byte, err error) {
 	return
 }
 
-// @ preserves acc(t.Inv())
-// @ ensures err == nil ==> unfolding acc(t.Inv()) in t.value != nil
+// @ preserves t.Inv()
+// @ ensures   err == nil ==> unfolding t.Inv() in t.value != nil
 func (t *Tree) computeHash() (err error) {
-	// @ unfold acc(t.Inv())
+	// @ unfold t.Inv()
 	if t.left == nil || t.right == nil {
 		if t.value == nil {
 			err = errors.New("missing value for incomplete subtree or leaf")
-		} // else all good
+		} /*@ else {
+			assert t.value != nil by contra {
+				unfold utils.BytesMem(t.value)
+			}
+		} @*/
 	} else {
 		// @ assert t.left != nil && t.right != nil // test invariant
 		if t.value == nil {
@@ -354,15 +358,20 @@ func (t *Tree) computeHash() (err error) {
 			} else if rightContent, e := t.right.hashContent(); e != nil {
 				err = e
 			} else {
-				// @ unfold acc(utils.BytesMem(leftContent))
-				// @ unfold acc(utils.BytesMem(rightContent))
+				// @ unfold utils.BytesMem(leftContent)
+				// @ unfold utils.BytesMem(rightContent)
 				input := append( /*@ perm(1/2), @*/ leftContent, rightContent...)
-				// @ fold acc(utils.BytesMem(input))
+				// @ fold utils.BytesMem(input)
 				t.value = crypto.Sum(input /*@, perm(1/2) @*/)
+				/*@
+				assert t.value != nil by contra {
+					unfold utils.BytesMem(t.value)
+				}
+				@*/
 			}
 		} // else all good
 	}
-	// @ fold acc(t.Inv())
+	// @ fold t.Inv()
 	return
 }
 

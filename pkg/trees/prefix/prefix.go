@@ -9,7 +9,6 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/trees/misc"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
-	utilsrel "github.com/felixlinker/keytrans-verification/pkg/utils-rel"
 )
 
 // ##(--hyperMode extended --enableExperimentalHyperFeatures)
@@ -25,9 +24,9 @@ pred (l *prefixLeaf) Inv() {
 	acc(l) &&
 	// Either value is not nil, or search key AND commitment are not nil
 	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
-	(l.value != nil ==> acc(utils.BytesMem(l.value))) &&
-	(l.searchKey != nil ==> acc(utils.BytesMem(l.searchKey))) &&
-	(l.commitment != nil ==> acc(utils.BytesMem(l.commitment)))
+	(l.value != nil ==> utils.BytesMem(l.value)) &&
+	(l.searchKey != nil ==> utils.BytesMem(l.searchKey)) &&
+	(l.commitment != nil ==> utils.BytesMem(l.commitment))
 }
 @*/
 
@@ -77,9 +76,9 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// @ assert low(utils.GetBytesContent(input1))
 		// TODO:
 		// @ assume len(l.searchKey) == 32
-		input2 := utilsrel.Concat(l.searchKey, l.commitment /*@, p @*/)
+		input2 := utils.Concat(l.searchKey, l.commitment /*@, p @*/)
 		// @ assert low(utils.GetBytesContent(input2)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
-		input := utilsrel.Concat(input1, input2 /*@, perm(1/2) @*/)
+		input := utils.Concat(input1, input2 /*@, perm(1/2) @*/)
 		// @ assert low(utils.GetBytesContent(input)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
 
 		// @ ghost searchKeySeq := utils.GetBytesContent(l.searchKey)
@@ -370,7 +369,7 @@ pred InclChar(incl seq[seq[bool]], idx seq[int]) {
 // @ requires noPerm < p
 // @ requires 0 <= depth
 // @ preserves acc(t.Inv(), p)
-// @ ensures err == nil ==> r != nil && acc(utils.BytesMem(r))
+// @ ensures err == nil ==> utils.BytesMem(r)
 func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs.NodeValue, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	// @ unfold acc(t.Inv(), p)
 	if t.left == nil && t.right == nil {
@@ -387,7 +386,7 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 		// Spec: parent.value = Hash(0x03 || left.value || right.value)
 		prefixByte := []byte{0x03}
 		// @ fold utils.BytesMem(prefixByte)
-		input := utilsrel.Concat(prefixByte, utilsrel.Concat(left, right /*@, perm(1/2) @*/) /*@, perm(1/2) @*/)
+		input := utils.Concat(prefixByte, utils.Concat(left, right /*@, perm(1/2) @*/) /*@, perm(1/2) @*/)
 		r = crypto.Sum(input /*@, perm(1/2) @*/)
 		// @ incl = inclL ++ inclR
 		// @ notIncl = notInclL ++ notInclR
@@ -400,7 +399,7 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 // @ requires 0 <= depth
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
-// @ ensures  err == nil ==> r != nil && acc(utils.BytesMem(r))
+// @ ensures  err == nil ==> utils.BytesMem(r)
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
@@ -424,7 +423,7 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 // @ requires t != nil ==> acc(t.Inv(), p)
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
-// @ ensures  err == nil ==> r != nil && acc(utils.BytesMem(r))
+// @ ensures  err == nil ==> utils.BytesMem(r)
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())

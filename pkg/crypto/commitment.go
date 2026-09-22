@@ -8,8 +8,6 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
-// ##(--hyperMode extended --enableExperimentalHyperFeatures)
-
 type UpdateValue struct {
 	Value []byte
 }
@@ -20,7 +18,7 @@ pred (u *UpdateValue) Inv() {
 }
 @*/
 
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(v.Inv(), p)
 func (v *UpdateValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 	// @ unfold acc(v.Inv(), p)
@@ -32,13 +30,13 @@ func (v *UpdateValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 }
 
 // @ requires acc(v)
-// @ ensures err == nil ==> acc(v.Inv())
+// @ ensures  err == nil ==> v.Inv()
 func (v *UpdateValue) Unmarshal(buf *bytes.Buffer) (err error) {
 	if p, e := utils.ReadBytes(buf, 32/8); e != nil {
 		err = e
 	} else {
 		v.Value = p
-		// @ fold acc(v.Inv())
+		// @ fold v.Inv()
 	}
 	return
 }
@@ -52,12 +50,15 @@ type CommitmentValue struct {
 
 /*@
 pred (cv *CommitmentValue) Inv() {
-	acc(cv) && acc(utils.BytesMem(cv.Opening)) && acc(utils.BytesMem(cv.Label)) && acc(cv.Update.Inv())
+	acc(cv) &&
+	utils.BytesMem(cv.Opening) &&
+	utils.BytesMem(cv.Label) &&
+	cv.Update.Inv()
 }
 @*/
 
 // @ preserves noPerm < p && acc(cv.Inv(), p)
-// @ ensures acc(r)
+// @ ensures   acc(r)
 func (cv *CommitmentValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 	buf := bytes.NewBuffer(nil)
 	// @ unfold acc(cv.Inv(), p)
@@ -85,13 +86,13 @@ func VerifyCommitmentValue(commitment []byte, cv *CommitmentValue /*@, ghost p p
 	return r
 }
 
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(utils.BytesMem(prefix_tree), p)
-// @ ensures acc(utils.BytesMem(r))
+// @ ensures   utils.BytesMem(r)
 func LogEntryHash(timestamp uint64, prefix_tree []byte /*@, ghost p perm @*/) (r []byte) {
 	// @ unfold acc(utils.BytesMem(prefix_tree), p)
 	input := append( /*@ p, @*/ utils.Uint64(timestamp), prefix_tree...)
 	// @ fold acc(utils.BytesMem(prefix_tree), p)
-	// @ fold acc(utils.BytesMem(input))
+	// @ fold utils.BytesMem(input)
 	return Sum(input /*@, p @*/)
 }

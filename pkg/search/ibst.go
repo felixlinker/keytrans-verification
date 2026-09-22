@@ -144,24 +144,24 @@ func YoungerToMostRecent(n uint64, size uint64) (r []uint64) {
 func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @*/) (i int) {
 	var t uint64 = 0 // left timestamp in recursive algorithm from spec
 	// @ unfold acc(utils.Monotonic(timestamps), p)
-	// @ pureTimestamps := utils.GetUint64sContent(timestamps)
+	// @ pureTimestamps := reveal utils.GetUint64sContent(timestamps)
 	rightMost := timestamps[len(timestamps)-1] // right timestamp in recursive algorithm from spec
 	// @ assume 0 <= rightMost
 	// @ fold acc(utils.Monotonic(timestamps), p)
 	done := false
 	// @ invariant t <= rightMost
 	// @ invariant 0 <= i && i <= len(timestamps)
-	// @ invariant acc(utils.Monotonic(timestamps), p)
-	// @ invariant unfolding acc(utils.Monotonic(timestamps), p) in forall j int :: 0 <= j && j < len(timestamps) ==> timestamps[j] <= rightMost && timestamps[j] == pureTimestamps[j]
+	// @ invariant acc(utils.Monotonic(timestamps), p/2)
+	// @ invariant unfolding acc(utils.Monotonic(timestamps), p/2) in forall j int :: {timestamps[j]} 0 <= j && j < len(timestamps) ==> timestamps[j] <= rightMost && timestamps[j] == pureTimestamps[j]
 	// @ invariant done ==> 0 < i
 	// @ invariant low(pureTimestamps) && low(rmw) ==> low(rightMost) && low(done) && low(t) && low(i)
 	for ; !done && i < len(timestamps); i++ {
 		if rightMost-t < rmw {
 			done = true
 		} else {
-			// @ unfold acc(utils.Monotonic(timestamps), p)
+			// @ unfold acc(utils.Monotonic(timestamps), p/2)
 			t = timestamps[i]
-			// @ fold acc(utils.Monotonic(timestamps), p)
+			// @ fold acc(utils.Monotonic(timestamps), p/2)
 			// @ assert t == pureTimestamps[i]
 		}
 	}
