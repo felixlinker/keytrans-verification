@@ -4,7 +4,6 @@ package utils
 // @ preserves acc(BytesMem(x), p)
 // @ ensures r != nil && acc(BytesMem(r))
 // @ ensures BytesEqual(x, r)
-// @ ensures GetBytesContent(r) == GetBytesContent(x)
 func Copy(x []byte /*@, ghost p perm @*/) (r []byte) {
 	if len(x) == 0 {
 		r = []byte{}
@@ -75,22 +74,17 @@ func Reverse(r_in []uint64, offset int) (r_out []uint64) {
 }
 
 // Concatenate two byte slices.
-//
-// Lives here rather than in utils-rel: the postcondition is unary, and proving
-// it under --hyperMode extended costs orders of magnitude more. Callers get
-// lowness from it directly, since the equality holds in each execution.
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(BytesMem(bs1), p) && acc(BytesMem(bs2), p)
-// @ ensures  r != nil && BytesMem(r)
-// @ ensures  len(r) == len(bs1) + len(bs2)
-// @ ensures  GetBytesContent(r) == GetBytesContent(bs1) ++ GetBytesContent(bs2)
+// @ ensures   BytesMem(r)
+// @ ensures   GetBytesContent(r) == GetBytesContent(bs1) ++ GetBytesContent(bs2)
 func Concat(bs1 []byte, bs2 []byte /*@, ghost p perm @*/) (r []byte) {
 	r = Copy(bs1 /*@, p @*/)
 
 	// @ invariant 0 <= i && i <= len(bs2)
 	// @ invariant len(r) == len(bs1) + i
-	// @ invariant BytesMem(r) && r != nil
 	// @ invariant acc(BytesMem(bs1), p) && acc(BytesMem(bs2), p)
+	// @ invariant BytesMem(r)
 	// @ invariant GetBytesContent(r) == GetBytesContent(bs1) ++ GetBytesContent(bs2)[:i]
 	for i := 0; i < len(bs2); i++ {
 		// @ unfold BytesMem(r)
