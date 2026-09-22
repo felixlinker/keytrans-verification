@@ -1,5 +1,8 @@
 package utils
 
+// The content helpers below trigger on the result sequence only; adding a
+// trigger on the slice as well forms a matching loop.
+
 ghost
 requires acc(BytesMem(s), _)
 ensures len(s) == len(r)
@@ -13,9 +16,9 @@ ghost
 requires acc(s)
 requires 0 <= idx && idx <= len(s)
 ensures len(r) == len(s) - idx
-ensures forall i int :: {s[idx+i]} {r[i]} 0 <= i && i < len(r) ==> s[idx+i] == r[i]
+ensures forall i int :: {r[i]} 0 <= i && i < len(r) ==> s[idx+i] == r[i]
 decreases len(s) - idx
-opaque // ensures that revealing `GetBytesContent` makes only the postconditions but not the body of this function available
+opaque // revealing the public wrapper exposes only this function's postconditions, not its body
 pure func getBytesContent_Rec(s []byte, idx int) (r seq[byte]) {
   return idx == len(s) ? seq[byte]{} : seq[byte]{s[idx]} ++ getBytesContent_Rec(s, idx + 1)
 }
@@ -33,30 +36,31 @@ ghost
 requires acc(s, _)
 requires 0 <= idx && idx <= len(s)
 ensures len(r) == len(s) - idx
-ensures forall i int :: {s[idx+i]} {r[i]} 0 <= i && i < len(r) ==> s[idx+i] == r[i]
+ensures forall i int :: {r[i]} 0 <= i && i < len(r) ==> s[idx+i] == r[i]
 decreases len(s) - idx
-opaque // ensures that revealing `GetUint64sContent` makes only the postconditions but not the body of this function available
+opaque // revealing the public wrapper exposes only this function's postconditions, not its body
 pure func getUint64sContent_Rec(s []uint64, idx int) (r seq[uint64]) {
   return idx == len(s) ? seq[uint64]{} : seq[uint64]{s[idx]} ++ getUint64sContent_Rec(s, idx + 1)
 }
 
 ghost
 requires acc(BitsMem(bs), _)
-requires 0 <= i && i <= len(bs)
-ensures len(r) == len(bs)-i
-ensures unfolding acc(BitsMem(bs), _) in forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[i+j]
-decreases len(bs)-i
-pure func getBitsContent_Rec(bs []bool, i int) (r seq[bool]) {
-	return unfolding acc(BitsMem(bs), _) in len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ getBitsContent_Rec(bs, i+1))
+ensures len(bs) == len(r)
+decreases
+opaque
+pure func GetBitsContent(bs []bool) (r seq[bool]) {
+	return getBitsContent_Rec(bs, 0)
 }
 
 ghost
 requires acc(BitsMem(bs), _)
-ensures len(bs) == len(r)
-ensures unfolding acc(BitsMem(bs), _) in forall j int :: 0 <= j && j < len(r) ==> r[j] == bs[j]
-decreases
-pure func GetBitsContent(bs []bool) (r seq[bool]) {
-	return getBitsContent_Rec(bs, 0)
+requires 0 <= i && i <= len(bs)
+ensures len(r) == len(bs)-i
+ensures unfolding acc(BitsMem(bs), _) in forall j int :: {r[j]} 0 <= j && j < len(r) ==> bs[i+j] == r[j]
+decreases len(bs)-i
+opaque // revealing the public wrapper exposes only this function's postconditions, not its body
+pure func getBitsContent_Rec(bs []bool, i int) (r seq[bool]) {
+	return unfolding acc(BitsMem(bs), _) in len(bs) == i ? seq[bool]{} : (seq[bool]{bs[i]} ++ getBitsContent_Rec(bs, i+1))
 }
 
 ghost

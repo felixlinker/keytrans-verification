@@ -92,11 +92,14 @@ func Concat(bs1 []byte, bs2 []byte /*@, ghost p perm @*/) (r []byte) {
 	// @ invariant BytesMem(r)
 	// @ invariant reveal GetBytesContent(r) == reveal GetBytesContent(bs1) ++ reveal GetBytesContent(bs2)[:i]
 	for i := 0; i < len(bs2); i++ {
+		// @ ghost prev := reveal GetBytesContent(r)
 		// @ unfold BytesMem(r)
 		// @ unfold acc(BytesMem(bs2), p/2)
+		// @ ghost b := bs2[i]
 		r = append( /*@ perm(1/2), @*/ r, bs2[i])
 		// @ fold acc(BytesMem(bs2), p/2)
 		// @ fold BytesMem(r)
+		// @ assert reveal GetBytesContent(r) == prev ++ seq[byte]{b}
 	}
 	return
 }

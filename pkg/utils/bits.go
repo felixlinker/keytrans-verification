@@ -42,6 +42,7 @@ func ByteBits(b byte) (r []bool) {
 	}
 	// @ assert rseq == ByteBits_Pure(b)
 	// @ fold BitsMem(r)
+	// @ assert rseq == reveal GetBitsContent(r)
 	return r
 }
 
@@ -69,24 +70,25 @@ func Bits(bytes []byte /*@, ghost p perm @*/) (r []bool) {
 	r = []bool{}
 	// @ rseq := seq[bool]{}
 	// @ pureBs := GetBytesContent(bytes)
-	// @ fold BitsMem(r)
 
 	// @ invariant 0 <= i && i <= len(bytes)
-	// @ invariant len(r) == (len(bytes)-i)*8
-	// @ invariant acc(BytesMem(bytes), p/2) && BitsMem(r)
+	// @ invariant len(r) == (len(bytes)-i)*8 && len(rseq) == len(r)
+	// @ invariant acc(BytesMem(bytes), p/2) && acc(r) && r != nil
 	// @ invariant pureBs == reveal GetBytesContent(bytes)
 	// @ invariant rseq == bitsPure_Rec(pureBs, i)
-	// @ invariant rseq == getBitsContent_Rec(r, 0)
+	// @ invariant forall j int :: 0 <= j && j < len(r) ==> r[j] == rseq[j]
 	for i := len(bytes); 0 < i; i-- {
 		// @ unfold acc(BytesMem(bytes), p/2)
 		tmp := ByteBits(bytes[i-1])
+		// @ ghost tmpSeq := reveal GetBitsContent(tmp)
 		// @ unfold BitsMem(tmp)
-		// @ unfold BitsMem(r)
+		// @ assert forall j int :: {tmp[j]} 0 <= j && j < len(tmp) ==> tmp[j] == tmpSeq[j]
 		r = append( /*@ perm(1/2), @*/ tmp, r...)
-		// @ fold BitsMem(r)
 		// @ fold acc(BytesMem(bytes), p/2)
 		// @ rseq = ByteBits_Pure(pureBs[i-1]) ++ rseq
 	}
+	// @ fold BitsMem(r)
+	// @ assert rseq == reveal GetBitsContent(r)
 	return r
 }
 
