@@ -9,6 +9,7 @@
 package prefix
 
 import (
+	"crypto/sha256"
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 )
@@ -34,7 +35,7 @@ ghost type TreeContent adt {
 
 // The value of an absent subtree: sha256.Size zero bytes.
 ghost
-ensures len(r) == 32
+ensures len(r) == sha256.Size
 decreases
 pure func ZeroHash() (r seq[byte])
 
@@ -75,17 +76,18 @@ pure func (l *prefixLeaf) Content() (r TreeContent) {
 				keyLeaf{ utils.GetBytesContent(l.searchKey),
 					utils.GetBytesContent(l.commitment) }
 }
+
 ghost
-requires t != nil ==> acc(t.Inv(), _)
+requires  t != nil ==> acc(t.Inv(), _)
 decreases acc(t.Inv(), _)
 pure func (t *Tree) Content() (r TreeContent) {
-	// Nil children are guarded here because the termination measure
-	// acc(t.Inv(), _) cannot be evaluated for a nil receiver.
 	return t == nil ? emptyTree{} :
 		unfolding acc(t.Inv(), _) in
 			t.leaf != nil ?
 				t.leaf.Content() :
 				innerNode{
+					// Nil children are guarded because the termination measure
+					// acc(t.Inv(), _) cannot be evaluated for a nil receiver.
 					t.left == nil ? emptyTree{} : t.left.Content(),
 					t.right == nil ? emptyTree{} : t.right.Content() }
 }
