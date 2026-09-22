@@ -15,6 +15,7 @@ func Copy(x []byte /*@, ghost p perm @*/) (r []byte) {
 		// @ fold acc(BytesMem(r))
 		// @ fold acc(BytesMem(x), p)
 	}
+	// @ assert reveal GetBytesContent(x) == reveal GetBytesContent(r)
 	return
 }
 
@@ -82,15 +83,14 @@ func Concat(bs1 []byte, bs2 []byte /*@, ghost p perm @*/) (r []byte) {
 	r = Copy(bs1 /*@, p @*/)
 
 	// @ invariant 0 <= i && i <= len(bs2)
-	// @ invariant len(r) == len(bs1) + i
-	// @ invariant acc(BytesMem(bs1), p) && acc(BytesMem(bs2), p)
+	// @ invariant acc(BytesMem(bs1), p/2) && acc(BytesMem(bs2), p/2)
 	// @ invariant BytesMem(r)
-	// @ invariant GetBytesContent(r) == GetBytesContent(bs1) ++ GetBytesContent(bs2)[:i]
+	// @ invariant reveal GetBytesContent(r) == reveal GetBytesContent(bs1) ++ reveal GetBytesContent(bs2)[:i]
 	for i := 0; i < len(bs2); i++ {
 		// @ unfold BytesMem(r)
-		// @ unfold acc(BytesMem(bs2), p)
+		// @ unfold acc(BytesMem(bs2), p/2)
 		r = append( /*@ perm(1/2), @*/ r, bs2[i])
-		// @ fold acc(BytesMem(bs2), p)
+		// @ fold acc(BytesMem(bs2), p/2)
 		// @ fold BytesMem(r)
 	}
 	return
