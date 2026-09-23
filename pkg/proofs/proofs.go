@@ -61,10 +61,10 @@ type PrefixLeaf struct {
 
 /*@
 pred (l *PrefixLeaf) Inv() {
-	acc(l) && acc(utils.BytesMem(l.Vrf_output)) && acc(utils.BytesMem(l.Commitment)) &&
-	// VRF outputs are truncated to the cipher suite's hash length, so every
-	// leaf carries a fixed-length search key.
-	len(l.Vrf_output) == sha256.Size
+	acc(l) &&
+	// VRF outputs are truncated to the cipher suite's hash length:
+	utils.BytesMem(l.Vrf_output) && len(l.Vrf_output) == sha256.Size &&
+	utils.BytesMem(l.Commitment)
 }
 @*/
 
