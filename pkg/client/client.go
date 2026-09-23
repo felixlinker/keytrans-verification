@@ -216,7 +216,7 @@ func VerifyLatestKey(cv *crypto.CommitmentValue, lookups *search.Lookups, prefix
 		// TODO: Check monitoring
 		// @ unfold acc(prefix.PrefixesInv(prefixTrees), p)
 		commitment, err = lookups.CheckPrefixTree(prefixTrees[idx] /*@, p/2 @*/)
-		if commitment != nil && err != nil {
+		if commitment != nil && err == nil {
 			if !crypto.VerifyCommitmentValue(commitment, cv /*@, p @*/) {
 				err = errors.New("commitments did not match")
 			}
