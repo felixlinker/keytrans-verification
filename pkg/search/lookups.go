@@ -88,10 +88,10 @@ func MkLookups(label []byte, version uint64, pk []byte, fullLadder []*proofs.Bin
 // that is consistent with the claimed greatest version. This is the case
 // whenever err == nil. Furthermore, if r != nil, the greatest version of the
 // key is committed to by the respectively returned value.
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(ls.Inv(), p)
 // @ preserves acc(t.Inv(), p)
-// @ ensures r != nil && err != nil ==> utils.BytesMem(r)
+// @ ensures   err == nil && r != nil ==> utils.BytesMem(r)
 func (ls *Lookups) CheckPrefixTree(t *prefix.Tree /*@, ghost p perm @*/) (r []byte, err error) {
 	// @ unfold acc(ls.Inv(), p)
 	// @ assume 0 <= ls.version
