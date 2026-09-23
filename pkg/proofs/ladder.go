@@ -100,10 +100,10 @@ pred BinaryLadderInv(r []uint64) {
 
 ghost
 requires acc(BinaryLadderInv(r), _)
-requires 0 <= t1 && 0 <= t2
 decreases
 pure func IstStar(r []uint64, t1, t2 uint64, idx int) bool {
 	return unfolding acc(BinaryLadderInv(r), _) in
+		0 <= t1 && 0 <= t2 && // since Gobra does yet handle the ranges of `uint64`
 		0 <= idx && idx < len(r) &&
 		r[idx] == TStar_pure(t1, t2)
 }
@@ -203,11 +203,12 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // FullBinaryLadderSteps is the public entry point for computing the full
 // binary ladder. This is the key interface used by CheckGreatest to obtain the
 // ladder steps.
-// @ requires 0 <= target && 0 <= t2
 // @ ensures BinaryLadderInv(r)
 // @ ensures IstStar(r, target, t2, idx)
 // @ decreases
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
+	// addresses an incompleteness of Gobra:
+	//@ assume 0 <= target && 0 <= t2
 	steps /*@, idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
 	r = utils.Decrement(steps)
 	//@ fold BinaryLadderInv(r)

@@ -189,8 +189,11 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 				} else if c == nil {
 					err = errors.New("no commitment for frontier node")
 				} else {
-					// A log entry commits to the prefix tree's root hash under the
-					// entry's timestamp, so recompute it from the root and compare
+					// The log tree stores hashes in its leaves, which correspond
+					// to the hash of a log entry. A log entry consists of a timestamp
+					// `timestamp` and a prefix tree root hash `v`. Thus, a log entry
+					// commits to the prefix tree's root hash under the entry's timestamp.
+					// Hence, we recompute the log entry's hash and compare it
 					// against what the log stores.
 					h := crypto.LogEntryHash(timestamp, v /*@, perm(1/2) @*/)
 					// @ unfold utils.BytesMem(c)

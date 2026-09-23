@@ -89,7 +89,6 @@ pred (s *SearchResponse) Inv() {
 @*/
 
 // @ requires noPerm < p
-// @ requires 0 <= version
 // @ requires acc(proofs.PrefixProofsInv(prfs)) && acc(proofs.BinaryLadderStepsInv(ladder))
 // @ preserves acc(utils.BytesMem(label), p)
 // @ preserves acc(st.Inv(), p)
