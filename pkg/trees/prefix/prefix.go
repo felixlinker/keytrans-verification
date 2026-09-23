@@ -425,6 +425,7 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 		/* @
 		assert utils.GetBytesContent(r) == ZeroHash() by contra {
 			reveal utils.GetBytesContent(r)
+			reveal ZeroHash()
 		}
 		@ */
 	}

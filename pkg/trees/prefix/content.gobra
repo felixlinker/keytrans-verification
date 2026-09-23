@@ -44,6 +44,7 @@ pure func zeroBytes(n int) (r seq[byte]) {
 
 ghost
 decreases
+opaque
 // The value of an absent subtree: sha256.Size zero bytes.
 pure func ZeroHash() (r seq[byte]) {
 	return zeroBytes(sha256.Size)
