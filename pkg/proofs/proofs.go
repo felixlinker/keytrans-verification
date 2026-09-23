@@ -100,24 +100,36 @@ pred PrefixProofsInv(ps []*PrefixProof) {
 @*/
 
 // @ requires noPerm < p
+// @ requires 0 <= version
 // @ preserves acc(PrefixProofsInv(prfs))
 // @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
 func PullLeaves(prfs []*PrefixProof, ladder []*BinaryLadderStep, pk []byte, label []byte, version uint64 /*@, ghost p perm @*/) (err error) {
-	// @ invariant acc(PrefixProofsInv(prfs))
-	// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
-	// @ invariant 0 <= i && i <= len(prfs)
-	for i := 0; i < len(prfs) && err == nil; i++ {
-		// @ unfold acc(PrefixProofsInv(prfs))
-		err = pullLeaves(prfs[i], ladder, pk, label, version /*@, p @*/)
-		// @ fold acc(PrefixProofsInv(prfs))
+	// The ladder is positional: entry i proves the version at ladder index i,
+	// so each step's search key is the VRF of its own version.
+	steps /*@, tmp @*/ := FullBinaryLadderSteps(version /*@, 0 @*/)
+	// @ unfold BinaryLadderInv(steps)
+	if len(steps) != len(ladder) {
+		err = errors.New("wrong number of binary ladder steps")
+	} else {
+		// @ invariant acc(PrefixProofsInv(prfs))
+		// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
+		// @ invariant acc(steps) && len(steps) == len(ladder)
+		// @ invariant 0 <= i && i <= len(prfs)
+		for i := 0; i < len(prfs) && err == nil; i++ {
+			// @ unfold acc(PrefixProofsInv(prfs))
+			err = pullLeaves(prfs[i], ladder, pk, label, steps /*@, p @*/)
+			// @ fold acc(PrefixProofsInv(prfs))
+		}
 	}
 	return
 }
 
 // @ requires noPerm < p
+// @ requires len(steps) == len(ladder)
 // @ preserves acc(prf.Inv())
 // @ preserves acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
-func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label []byte, version uint64 /*@, ghost p perm @*/) (err error) {
+// @ preserves acc(steps, perm(1/2))
+func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label []byte, steps []uint64 /*@, ghost p perm @*/) (err error) {
 	// @ unfold acc(prf.Inv())
 	if len(ladder) < len(prf.Results) {
 		err = errors.New("too few binary ladder steps")
@@ -125,13 +137,14 @@ func pullLeaves(prf *PrefixProof, ladder []*BinaryLadderStep, pk []byte, label [
 		// @ invariant acc(prf) && PrefixSearchResultsInv(prf.Results) && NodeValuesInv(prf.Elements)
 		// @ invariant 0 <= i && i <= len(prf.Results) && i <= len(ladder)
 		// @ invariant acc(BinaryLadderStepsInv(ladder), p) && acc(utils.BytesMem(pk), p) && acc(utils.BytesMem(label), p)
+		// @ invariant acc(steps, perm(1/2)) && len(steps) == len(ladder)
 		for i := 0; i < len(prf.Results) && i < len(ladder) && err == nil; i++ {
 			// @ unfold PrefixSearchResultsInv(prf.Results)
 			// @ unfold acc(prf.Results[i].Inv())
 			if prf.Results[i].ResultType == Inclusion {
 				// @ unfold acc(BinaryLadderStepsInv(ladder), p)
 				// @ unfold acc(ladder[i].Inv(), p)
-				if vrfOutput, ok := crypto.VRF_verify(pk, label, version, ladder[i].Proof /*@, p @*/); !ok {
+				if vrfOutput, ok := crypto.VRF_verify(pk, label, steps[i], ladder[i].Proof /*@, p @*/); !ok {
 					err = errors.New("VRF did not verify")
 				} else if ladder[i].Commitment == nil {
 					err = errors.New("binary ladder misses commitment")
