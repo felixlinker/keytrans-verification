@@ -33,24 +33,35 @@ ghost type TreeContent adt {
 	}
 }
 
-// The value of an absent subtree: sha256.Size zero bytes.
 ghost
-ensures len(r) == sha256.Size
-decreases
-pure func ZeroHash() (r seq[byte])
+requires 0 <= n
+ensures  len(r) == n
+ensures  forall i int :: {r[i]} 0 <= i && i < n ==> r[i] == byte(0)
+decreases n
+pure func zeroBytes(n int) (r seq[byte]) {
+	return n == 0 ? seq[byte]{} : zeroBytes(n-1) ++ seq[byte]{ byte(0) }
+}
 
-// Domain separation tags, matching the byte literals in Tree.value().
 ghost
 decreases
+opaque
+// The value of an absent subtree: sha256.Size zero bytes.
+pure func ZeroHash() (r seq[byte]) {
+	return zeroBytes(sha256.Size)
+}
+
+ghost
+decreases
+// Domain separation tags, matching the byte literals in Tree.value().
 pure func leafTag() seq[byte] { return seq[byte]{ byte(0x02) } }
 
 ghost
 decreases
 pure func innerTag() seq[byte] { return seq[byte]{ byte(0x03) } }
 
-// Mirrors Tree.value().
 ghost
 decreases len(c)
+// Mirrors Tree.value().
 pure func RootHashOf(c TreeContent) seq[byte] {
 	return match c {
 		case emptyTree{}:
@@ -64,13 +75,14 @@ pure func RootHashOf(c TreeContent) seq[byte] {
 	}
 }
 
-// Inv() guarantees exactly one of value / (searchKey, commitment) is set.
 ghost
 requires l != nil ==> acc(l.Inv(), _)
+ensures  r.iskeyLeaf ==> len(r.searchKey) == sha256.Size
 decreases
 pure func (l *prefixLeaf) Content() (r TreeContent) {
 	return l == nil ? emptyTree{} :
 		unfolding acc(l.Inv(), _) in
+			// l.Inv() guarantees exactly one of value / (searchKey, commitment) is set:
 			l.value != nil ?
 				opaqueLeaf{ utils.GetBytesContent(l.value) } :
 				keyLeaf{ utils.GetBytesContent(l.searchKey),
@@ -90,4 +102,41 @@ pure func (t *Tree) Content() (r TreeContent) {
 					// acc(t.Inv(), _) cannot be evaluated for a nil receiver.
 					t.left == nil ? emptyTree{} : t.left.Content(),
 					t.right == nil ? emptyTree{} : t.right.Content() }
+}
+
+ghost
+requires len(sk1) == len(sk2)
+requires !crypto.IsCollision(leafTag() ++ sk1 ++ cm1, leafTag() ++ sk2 ++ cm2)
+requires RootHashOf(keyLeaf{sk1, cm1}) == RootHashOf(keyLeaf{sk2, cm2})
+ensures  sk1 == sk2 && cm1 == cm2
+decreases
+// A key leaf's hash determines its search key and commitment, provided the two
+// hash inputs do not collide. The search keys must have equal length as otherwise
+// the concatenation's split point is ambiguous.
+func KeyLeafInjective(sk1 seq[byte], cm1 seq[byte], sk2 seq[byte], cm2 seq[byte]) {
+	a := leafTag() ++ sk1 ++ cm1
+	b := leafTag() ++ sk2 ++ cm2
+	assert a == b by contra {
+		crypto.NoCollisionMeansEqual(a, b)
+	}
+	assert sk1 == a[len(leafTag()) : len(leafTag())+len(sk1)]
+	assert cm1 == a[len(leafTag())+len(sk1) :]
+}
+
+ghost
+requires noPerm < p
+requires l1 != nil && l2 != nil
+preserves acc(l1.Inv(), p) && acc(l2.Inv(), p)
+requires l1.Content().iskeyLeaf && l2.Content().iskeyLeaf
+requires !crypto.IsCollision(leafTag() ++ l1.Content().searchKey ++ l1.Content().commitment,
+	leafTag() ++ l2.Content().searchKey ++ l2.Content().commitment)
+requires RootHashOf(l1.Content()) == RootHashOf(l2.Content())
+ensures  l1.Content() == l2.Content()
+decreases
+// Two key leaves hashing to the same root hash agree, unless their hash inputs
+// collide.
+func KeyLeavesAgree(l1 *prefixLeaf, l2 *prefixLeaf, p perm) {
+	c1 := l1.Content()
+	c2 := l2.Content()
+	KeyLeafInjective(c1.searchKey, c1.commitment, c2.searchKey, c2.commitment)
 }

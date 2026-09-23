@@ -25,26 +25,26 @@ pred (l *prefixLeaf) Inv() {
 	// Either value is not nil, or search key AND commitment are not nil
 	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
 	(l.value != nil ==> utils.BytesMem(l.value)) &&
-	(l.searchKey != nil ==> utils.BytesMem(l.searchKey)) &&
+	(l.searchKey != nil ==> utils.BytesMem(l.searchKey) && len(l.searchKey) == sha256.Size) &&
 	(l.commitment != nil ==> utils.BytesMem(l.commitment))
 }
 @*/
 
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(l.Inv(), p)
-// @ ensures r.Inv()
+// @ ensures   r.Inv()
 func (l *prefixLeaf) copy( /*@ ghost p perm @*/ ) (r *prefixLeaf) {
 	r = &prefixLeaf{}
-	// @ unfold acc(l.Inv(), p)
+	// @ unfold acc(l.Inv(), p/2)
 	if l.value != nil {
-		r.value = utils.Copy(l.value /*@, p @*/)
+		r.value = utils.Copy(l.value /*@, p/4 @*/)
 		// @ fold r.Inv()
 	} else {
-		r.searchKey = utils.Copy(l.searchKey /*@, p @*/)
-		r.commitment = utils.Copy(l.commitment /*@, p @*/)
+		r.searchKey = utils.Copy(l.searchKey /*@, p/4 @*/)
+		r.commitment = utils.Copy(l.commitment /*@, p/4 @*/)
 		// @ fold r.Inv()
 	}
-	// @ fold acc(l.Inv(), p)
+	// @ fold acc(l.Inv(), p/2)
 	return
 }
 
@@ -52,11 +52,7 @@ func (l *prefixLeaf) copy( /*@ ghost p perm @*/ ) (r *prefixLeaf) {
 // @ requires  0 <= depth
 // @ preserves acc(l.Inv(), p)
 // @ ensures   v != nil && acc(utils.BytesMem(v))
-// NOTE: ensures below is only to convince Gobra that permissions for final
-// ensures suffice
-// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil ==> low(l.searchKey != nil) && low(l.commitment != nil))
-// @ ensures   unfolding acc(l.Inv(), p) in (l.value == nil && low(utils.GetBytesContent(v)) ==> (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment))))
-// @ trusted
+// @ ensures   utils.GetBytesContent(v) == RootHashOf(l.Content())
 func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.NodeValue /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
 	if /*@ unfolding acc(l.Inv(), p) in @*/ l.value != nil {
 		// @ unfold acc(l.Inv(), p)
@@ -70,16 +66,16 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// // @ fold InclChar(incl, notIncl)
 	} else {
 		// Spec: leaf.value = Hash(0x02 || vrf_output || commitment)
-		// @ unfold acc(l.Inv(), p)
-		input1 := []byte{0x02}
-		// @ fold utils.BytesMem(input1)
-		// @ assert low(utils.GetBytesContent(input1))
-		// TODO:
-		// @ assume len(l.searchKey) == 32
-		input2 := utils.Concat(l.searchKey, l.commitment /*@, p @*/)
-		// @ assert low(utils.GetBytesContent(input2)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
-		input := utils.Concat(input1, input2 /*@, perm(1/2) @*/)
-		// @ assert low(utils.GetBytesContent(input)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
+		// @ unfold acc(l.Inv(), p/2)
+		tag := []byte{0x02}
+		// @ fold utils.BytesMem(tag)
+		/* @
+		assert utils.GetBytesContent(tag) == leafTag() by contra {
+			reveal utils.GetBytesContent(tag)
+		}
+		@ */
+		input1 := utils.Concat(tag, l.searchKey /*@, p/4 @*/)
+		input := utils.Concat(input1, l.commitment /*@, p/4 @*/)
 
 		// @ ghost searchKeySeq := utils.GetBytesContent(l.searchKey)
 		// @ incl = Incl{ utils.BitsSeq(searchKeySeq) }
@@ -87,9 +83,12 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 		// // @ fold InclChar(incl, notIncl)
 
 		v = crypto.Sum(input /*@, perm(1/2) @*/)
-		// @ assert (low(utils.GetBytesContent(l.searchKey)) && low(depth)) == (low(incl) && low(notIncl))
-		// @ assert low(utils.GetBytesContent(v)) == (low(utils.GetBytesContent(l.searchKey)) && low(utils.GetBytesContent(l.commitment)))
-		// @ fold acc(l.Inv(), p)
+		/* @
+		assert v != nil by contra {
+			unfold utils.BytesMem(v)
+		}
+		@ */
+		// @ fold acc(l.Inv(), p/2)
 	}
 	return
 }
@@ -100,11 +99,10 @@ func (l *prefixLeaf) Value( /*@ ghost depth int, ghost p perm @*/ ) (v proofs.No
 func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf) {
 	if pl != nil {
 		// @ unfold acc(pl.Inv(), p)
-		c /*@@@*/ := utils.Copy(pl.Commitment /*@, p/2 @*/)
 		l = &prefixLeaf{
 			value:      nil,
 			searchKey:  utils.Copy(pl.Vrf_output /*@, p/2 @*/),
-			commitment: c,
+			commitment: utils.Copy(pl.Commitment /*@, p/2 @*/),
 		}
 		// @ fold l.Inv()
 		// @ fold acc(pl.Inv(), p)
@@ -366,27 +364,35 @@ pred InclChar(incl seq[seq[bool]], idx seq[int]) {
 }
 @*/
 
-// @ requires noPerm < p
-// @ requires 0 <= depth
+// @ requires  noPerm < p
+// @ requires  0 <= depth
 // @ preserves acc(t.Inv(), p)
-// @ ensures err == nil ==> utils.BytesMem(r)
+// @ requires  unfolding acc(t.Inv(), p) in t.leaf == nil
+// @ ensures   err == nil ==> utils.BytesMem(r)
+// @ ensures   err == nil ==> utils.GetBytesContent(r) == RootHashOf(t.Content())
 func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs.NodeValue, err error /*@, ghost incl Incl, ghost notIncl NotIncl @*/) {
-	// @ unfold acc(t.Inv(), p)
+	// @ unfold acc(t.Inv(), p/2)
 	if t.left == nil && t.right == nil {
 		err = errors.New("tree is not inner node")
-		// @ fold acc(t.Inv(), p)
-	} else if left, errL /*@, inclL, notInclL @*/ := t.left.value( /*@ depth+1, p @*/ ); errL != nil {
+		// @ fold acc(t.Inv(), p/2)
+	} else if left, errL /*@, inclL, notInclL @*/ := t.left.value( /*@ depth+1, p/4 @*/ ); errL != nil {
 		err = errL
-		// @ fold acc(t.Inv(), p)
-	} else if right, errR /*@, inclR, notInclR @*/ := t.right.value( /*@ depth+1, p @*/ ); errR != nil {
+		// @ fold acc(t.Inv(), p/2)
+	} else if right, errR /*@, inclR, notInclR @*/ := t.right.value( /*@ depth+1, p/4 @*/ ); errR != nil {
 		err = errR
-		// @ fold acc(t.Inv(), p)
+		// @ fold acc(t.Inv(), p/2)
 	} else {
-		// @ fold acc(t.Inv(), p)
+		// @ fold acc(t.Inv(), p/2)
 		// Spec: parent.value = Hash(0x03 || left.value || right.value)
 		prefixByte := []byte{0x03}
 		// @ fold utils.BytesMem(prefixByte)
-		input := utils.Concat(prefixByte, utils.Concat(left, right /*@, perm(1/2) @*/) /*@, perm(1/2) @*/)
+		/* @
+		assert utils.GetBytesContent(prefixByte) == innerTag() by contra {
+			reveal utils.GetBytesContent(prefixByte)
+		}
+		@ */
+		input1 := utils.Concat(prefixByte, left /*@, perm(1/2) @*/)
+		input := utils.Concat(input1, right /*@, perm(1/2) @*/)
 		r = crypto.Sum(input /*@, perm(1/2) @*/)
 		// @ incl = inclL ++ inclR
 		// @ notIncl = notInclL ++ notInclR
@@ -400,6 +406,7 @@ func (t *Tree) innerNodeValue( /*@ ghost depth int, ghost p perm @*/ ) (r proofs
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
 // @ ensures  err == nil ==> utils.BytesMem(r)
+// @ ensures  err == nil ==> utils.GetBytesContent(r) == RootHashOf(t.Content())
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
@@ -414,7 +421,13 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 		}
 	} else { // t == nil
 		r = make(proofs.NodeValue, sha256.Size)
-		// @ fold acc(utils.BytesMem(r))
+		// @ fold utils.BytesMem(r)
+		/* @
+		assert utils.GetBytesContent(r) == ZeroHash() by contra {
+			reveal utils.GetBytesContent(r)
+			reveal ZeroHash()
+		}
+		@ */
 	}
 	return
 }
@@ -424,6 +437,7 @@ func (t *Tree) value( /*@ ghost depth int, ghost p perm @*/ ) (r []byte, err err
 // // @ requires low(t.Included())
 // @ ensures  t != nil ==> acc(t.Inv(), p)
 // @ ensures  err == nil ==> utils.BytesMem(r)
+// @ ensures  err == nil ==> utils.GetBytesContent(r) == RootHashOf(t.Content())
 // // @ ensures low(r) && err == nil ==>
 // // @	NoPrefixMatches(rel(t, 0).NotIncludedPrefixes(0), rel(t, 1).Included()) &&
 // // @	NoPrefixMatches(rel(t, 1).NotIncludedPrefixes(0), rel(t, 0).Included())
@@ -648,31 +662,31 @@ func leafTreeProof(leaf *prefixLeaf, depth uint8 /*@, ghost p perm @*/) (prf *pr
 		Results:  []*proofs.PrefixSearchResult{},
 		Elements: []proofs.NodeValue{},
 	}
-	// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results))
-	// @ fold acc(proofs.NodeValuesInv(prf.Elements))
+	// @ fold proofs.PrefixSearchResultsInv(prf.Results)
+	// @ fold proofs.NodeValuesInv(prf.Elements)
 
-	// @ unfold acc(leaf.Inv(), p)
+	// @ unfold acc(leaf.Inv(), p/2)
 	if leaf.searchKey != nil && leaf.commitment != nil {
 		searchResult /*@@@*/ := proofs.PrefixSearchResult{
 			Leaf: &proofs.PrefixLeaf{
-				Vrf_output: utils.Copy(leaf.searchKey /*@, p @*/),
-				Commitment: utils.Copy(leaf.commitment /*@, p @*/),
+				Vrf_output: utils.Copy(leaf.searchKey /*@, p/4 @*/),
+				Commitment: utils.Copy(leaf.commitment /*@, p/4 @*/),
 			},
 			Depth: depth,
 		}
-		// @ fold acc(searchResult.Leaf.Inv())
-		// @ fold acc((&searchResult).Inv())
+		// @ fold searchResult.Leaf.Inv()
+		// @ fold searchResult.Inv()
 		prf.Results = []*proofs.PrefixSearchResult{&searchResult}
-		// @ fold acc(proofs.PrefixSearchResultsInv(prf.Results))
+		// @ fold proofs.PrefixSearchResultsInv(prf.Results)
 	} else {
-		prf.Elements = []proofs.NodeValue{utils.Copy(leaf.value /*@, p @*/)}
+		prf.Elements = []proofs.NodeValue{utils.Copy(leaf.value /*@, p/4 @*/)}
 		// @ assert forall i, j int :: {prf.Elements[i], prf.Elements[j]} 0 <= i && i < j && j < len(prf.Elements) ==> &prf.Elements[i][0] != &prf.Elements[j][0]
 		// TODO: folding below predicate currently fails. No idea why, above
 		// assertion should be enough
 		// @ inhale proofs.NodeValuesInv(prf.Elements)
 	}
-	// @ fold acc(leaf.Inv(), p)
-	// @ fold acc(prf.Inv())
+	// @ fold acc(leaf.Inv(), p/2)
+	// @ fold prf.Inv()
 	return
 }
 
