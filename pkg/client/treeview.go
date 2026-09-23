@@ -189,10 +189,13 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 				} else if c == nil {
 					err = errors.New("no commitment for frontier node")
 				} else {
-					h := crypto.LogEntryHash(timestamp, c /*@, perm(1/2) @*/)
-					// @ unfold utils.BytesMem(v)
+					// A log entry commits to the prefix tree's root hash under the
+					// entry's timestamp, so recompute it from the root and compare
+					// against what the log stores.
+					h := crypto.LogEntryHash(timestamp, v /*@, perm(1/2) @*/)
+					// @ unfold utils.BytesMem(c)
 					// @ unfold utils.BytesMem(h)
-					if !bytes.Equal(v, h /*@, perm(1/2), perm(1/2) @*/) {
+					if !bytes.Equal(c, h /*@, perm(1/2), perm(1/2) @*/) {
 						err = errors.New("log tree commitment does not match prefix tree root hash")
 					} else {
 						// TODO: I cannot assert below because whenever I add new lines after
@@ -200,7 +203,7 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 						// @ assume unfolding prefix.PrefixesInv(ts) in forall i int :: {ts[i]} 0 <= i && i < len(ts) ==> ts[i] != t
 						ts = auxAppend(ts, t)
 					}
-					// @ fold utils.BytesMem(v)
+					// @ fold utils.BytesMem(c)
 					// @ fold utils.BytesMem(h)
 				}
 				// @ fold acc(st.Inv(), p)
