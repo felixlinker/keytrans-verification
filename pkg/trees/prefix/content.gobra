@@ -78,6 +78,7 @@ pure func RootHashOf(c TreeContent) seq[byte] {
 // Inv() guarantees exactly one of value / (searchKey, commitment) is set.
 ghost
 requires l != nil ==> acc(l.Inv(), _)
+ensures  r.iskeyLeaf ==> len(r.searchKey) == sha256.Size
 decreases
 pure func (l *prefixLeaf) Content() (r TreeContent) {
 	return l == nil ? emptyTree{} :
@@ -119,4 +120,25 @@ func KeyLeafInjective(sk1 seq[byte], cm1 seq[byte], sk2 seq[byte], cm2 seq[byte]
 	assert a == b
 	assert sk1 == a[len(leafTag()) : len(leafTag())+len(sk1)]
 	assert cm1 == a[len(leafTag())+len(sk1) :]
+}
+
+// Two key leaves hashing to the same root hash agree, unless their hash inputs
+// collide. KeyLeafInjective's length hypothesis is discharged by Content(),
+// which inherits the fixed search key length from prefixLeaf.Inv().
+ghost
+requires noPerm < p
+requires l1 != nil && l2 != nil
+preserves acc(l1.Inv(), p) && acc(l2.Inv(), p)
+requires l1.Content().iskeyLeaf && l2.Content().iskeyLeaf
+requires !crypto.IsCollision(leafTag() ++ l1.Content().searchKey ++ l1.Content().commitment,
+	leafTag() ++ l2.Content().searchKey ++ l2.Content().commitment)
+requires RootHashOf(l1.Content()) == RootHashOf(l2.Content())
+ensures  l1.Content() == l2.Content()
+decreases
+func KeyLeavesAgree(l1 *prefixLeaf, l2 *prefixLeaf, p perm) {
+	c1 := l1.Content()
+	c2 := l2.Content()
+	assert c1 == keyLeaf{ c1.searchKey, c1.commitment }
+	assert c2 == keyLeaf{ c2.searchKey, c2.commitment }
+	KeyLeafInjective(c1.searchKey, c1.commitment, c2.searchKey, c2.commitment)
 }

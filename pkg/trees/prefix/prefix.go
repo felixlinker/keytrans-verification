@@ -26,7 +26,10 @@ pred (l *prefixLeaf) Inv() {
 	(l.value != nil) != (l.searchKey != nil && l.commitment != nil) &&
 	(l.value != nil ==> utils.BytesMem(l.value)) &&
 	(l.searchKey != nil ==> utils.BytesMem(l.searchKey)) &&
-	(l.commitment != nil ==> utils.BytesMem(l.commitment))
+	(l.commitment != nil ==> utils.BytesMem(l.commitment)) &&
+	// Search keys are truncated VRF outputs, hence of fixed length. Splitting a
+	// leaf's hashed concatenation back into its parts needs this split point.
+	(l.searchKey != nil ==> len(l.searchKey) == sha256.Size)
 }
 @*/
 
@@ -42,6 +45,8 @@ func (l *prefixLeaf) copy( /*@ ghost p perm @*/ ) (r *prefixLeaf) {
 	} else {
 		r.searchKey = utils.Copy(l.searchKey /*@, p @*/)
 		r.commitment = utils.Copy(l.commitment /*@, p @*/)
+		// @ assert len(r.searchKey) == len(utils.GetBytesContent(r.searchKey))
+		// @ assert len(l.searchKey) == len(utils.GetBytesContent(l.searchKey))
 		// @ fold r.Inv()
 	}
 	// @ fold acc(l.Inv(), p)
@@ -98,9 +103,12 @@ func commitmentLeaf(pl *proofs.PrefixLeaf /*@, ghost p perm @*/) (l *prefixLeaf)
 	if pl != nil {
 		// @ unfold acc(pl.Inv(), p)
 		c /*@@@*/ := utils.Copy(pl.Commitment /*@, p/2 @*/)
+		sk /*@@@*/ := utils.Copy(pl.Vrf_output /*@, p/2 @*/)
+		// @ assert len(sk) == len(utils.GetBytesContent(sk))
+		// @ assert len(pl.Vrf_output) == len(utils.GetBytesContent(pl.Vrf_output))
 		l = &prefixLeaf{
 			value:      nil,
-			searchKey:  utils.Copy(pl.Vrf_output /*@, p/2 @*/),
+			searchKey:  sk,
 			commitment: c,
 		}
 		// @ fold l.Inv()
@@ -534,6 +542,8 @@ func MkPrefix(prf *proofs.PrefixProof /*@, ghost p perm @*/) (tree *Tree, err er
 				Vrf_output: searchKey,
 				Commitment: utils.Copy(result.Leaf.Commitment /*@, p @*/),
 			}
+			// @ assert len(searchKey) == len(utils.GetBytesContent(searchKey))
+			// @ assert len(result.Leaf.Vrf_output) == len(utils.GetBytesContent(result.Leaf.Vrf_output))
 			// @ fold acc(result.Leaf.Inv(), p)
 			// @ fold acc((&l).Inv(), p)
 			// @ assume 0 <= result.Depth && result.Depth <= 255 // help gobra with uint
@@ -658,9 +668,12 @@ func leafTreeProof(leaf *prefixLeaf, depth uint8 /*@, ghost p perm @*/) (prf *pr
 
 	// @ unfold acc(leaf.Inv(), p)
 	if leaf.searchKey != nil && leaf.commitment != nil {
+		vrfOutput /*@@@*/ := utils.Copy(leaf.searchKey /*@, p @*/)
+		// @ assert len(vrfOutput) == len(utils.GetBytesContent(vrfOutput))
+		// @ assert len(leaf.searchKey) == len(utils.GetBytesContent(leaf.searchKey))
 		searchResult /*@@@*/ := proofs.PrefixSearchResult{
 			Leaf: &proofs.PrefixLeaf{
-				Vrf_output: utils.Copy(leaf.searchKey /*@, p @*/),
+				Vrf_output: vrfOutput,
 				Commitment: utils.Copy(leaf.commitment /*@, p @*/),
 			},
 			Depth: depth,
