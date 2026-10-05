@@ -55,6 +55,21 @@ type UserState struct {
 pred (s *UserState) Inv() {
 	acc(s) && (s.Tree != nil ==> acc(s.Tree.Inv())) && acc(utils.Monotonic(s.Frontier_timestamps)) && acc(s.Config.Inv())
 }
+
+ghost
+requires acc(s.Inv(), _)
+ensures  0 <= r
+decreases
+pure func (s *UserState) NumTimestamps() (r int) {
+	return unfolding acc(s.Inv(), _) in len(s.Frontier_timestamps)
+}
+
+ghost
+requires acc(s.Inv(), _)
+decreases
+pure func (s *UserState) HasTree() bool {
+	return unfolding acc(s.Inv(), _) in s.Tree != nil
+}
 @*/
 
 // @ requires  noPerm < p
@@ -154,8 +169,8 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 			// @ invariant 0 <= i && i <= len(prfs)
 			// @ invariant 0 <= i+mrd && i+mrd <= len(frontier)
 			// @ invariant acc(frontier) && acc(prfs, p) && acc(st.Inv(), p)
-			// @ invariant len(frontier) == unfolding acc(st.Inv(), p) in len(st.Frontier_timestamps)
-			// @ invariant unfolding acc(st.Inv(), p) in st.Tree != nil
+			// @ invariant len(frontier) == st.NumTimestamps()
+			// @ invariant st.HasTree()
 			// @ invariant forall j int :: {prfs[j]} i <= j && j < len(prfs) ==> acc(prfs[j].Inv(), p)
 			// @ invariant prefix.PrefixesInv(ts)
 			// @ invariant 0 < i && err == nil ==> 0 < len(ts)
