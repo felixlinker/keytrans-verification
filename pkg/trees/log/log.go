@@ -327,7 +327,7 @@ func (t *Tree) hashContent() (content []byte, err error) {
 		if t.size == 1 {
 			content[0] = 0x00
 		} else {
-			content[0] = 0x11
+			content[0] = 0x01
 		}
 		// @ unfold acc(utils.BytesMem(t.value))
 		content = append( /*@ perm(1/2), @*/ content, t.value...)

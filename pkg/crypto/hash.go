@@ -21,6 +21,7 @@ func sum(input []byte /*@, ghost p perm @*/) (output []byte) {
 // Pure model of hashing. Being a (pure) function, lowness of input directly
 // implies lowness of the hash.
 ghost
+ensures len(output) == sha256.Size
 decreases
 pure func HashOf(input seq[byte]) (output seq[byte])
 
