@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"math/rand"
+	"slices"
 	"testing"
 )
 
@@ -20,13 +21,25 @@ var byteBitsTests = []struct {
 }
 
 // @ trusted
-func equalBools(a []bool, b []bool) bool {
+func TestByteBit(t *testing.T) {
+	for _, tc := range byteBitsTests {
+		for i, want := range tc.want {
+			got := byteBit(tc.b, i)
+			if got != want {
+				t.Errorf("byteBit(%08b, %d) = %v; want %v", tc.b, i, got, want)
+			}
+		}
+	}
+}
+
+// @ trusted
+func equalBoolSlices(a [][]bool, b [][]bool) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
 	for i := range a {
-		if a[i] != b[i] {
+		if !slices.Equal(a[i], b[i]) {
 			return false
 		}
 	}
@@ -38,7 +51,7 @@ func equalBools(a []bool, b []bool) bool {
 func TestByteBits(t *testing.T) {
 	for _, tc := range byteBitsTests {
 		got := ByteBits(tc.b)
-		if !equalBools(got, tc.want) {
+		if !slices.Equal(got, tc.want) {
 			t.Errorf("ByteBits(%08b) = %v; want %v", tc.b, got, tc.want)
 		}
 	}
@@ -59,8 +72,56 @@ func TestBits(t *testing.T) {
 			}
 
 			got := Bits(bytes)
-			if !equalBools(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("Bits(%v) = %v; want %v", bytes, got, want)
+			}
+		})
+	}
+}
+
+var flippedTailsTests = []struct {
+	name  string
+	input []bool
+	start int
+	want  [][]bool
+}{
+	{
+		name:  "provided example",
+		input: []bool{true, false, true},
+		start: 1,
+		want: [][]bool{
+			[]bool{true, true},
+			[]bool{true, false, false},
+		},
+	},
+	{
+		name:  "all tails from start zero",
+		input: []bool{false, false, true, true},
+		start: 0,
+		want: [][]bool{
+			[]bool{true},
+			[]bool{false, true},
+			[]bool{false, false, false},
+			[]bool{false, false, true, false},
+		},
+	},
+	{
+		name:  "only final tail",
+		input: []bool{true, true, false, false},
+		start: 3,
+		want: [][]bool{
+			[]bool{true, true, false, true},
+		},
+	},
+}
+
+// @ trusted
+func TestFlippedTails(t *testing.T) {
+	for _, tc := range flippedTailsTests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FlippedTails(tc.input, tc.start)
+			if !equalBoolSlices(got, tc.want) {
+				t.Errorf("FlippedTails(%v, %d) = %v; want %v", tc.input, tc.start, got, tc.want)
 			}
 		})
 	}
