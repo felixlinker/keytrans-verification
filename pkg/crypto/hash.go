@@ -5,11 +5,9 @@ import (
 	// @ "github.com/felixlinker/keytrans-verification/pkg/utils"
 )
 
-// ##(--hyperMode extended --enableExperimentalHyperFeatures)
-
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(utils.BytesMem(input), p)
-// @ ensures  output != nil && utils.BytesMem(output)
+// @ ensures   utils.BytesMem(output)
 func sum(input []byte /*@, ghost p perm @*/) (output []byte) {
 	// @ unfold acc(utils.BytesMem(input), p)
 	digest /*@@@*/ := sha256.Sum256(input /*@, p @*/)
@@ -19,13 +17,36 @@ func sum(input []byte /*@, ghost p perm @*/) (output []byte) {
 	return
 }
 
-// @ requires noPerm < p
+/*@
+// Pure model of hashing. Being a (pure) function, lowness of input directly
+// implies lowness of the hash.
+ghost
+decreases
+pure func HashOf(input seq[byte]) (output seq[byte])
+
+// Instead of assuming injectivity for hashing, `IsCollision` keeps track of
+// whether a collision occurred. This allows us to state properties under the
+// assumption that no collision occurred.
+ghost
+decreases
+pure func IsCollision(a seq[byte], b seq[byte]) bool {
+	return a != b && HashOf(a) == HashOf(b)
+}
+
+ghost
+ensures HashOf(a) == HashOf(b) && !IsCollision(a, b) ==> a == b
+decreases
+func NoCollisionMeansEqual(a seq[byte], b seq[byte]) {
+	// no body needed
+}
+@*/
+
+// @ requires  noPerm < p
 // @ preserves acc(utils.BytesMem(input), p)
-// @ ensures  output != nil && utils.BytesMem(output)
-// @ ensures low(utils.GetBytesContent(input)) == low(utils.GetBytesContent(output))
+// @ ensures   utils.BytesMem(output)
+// @ ensures   utils.GetBytesContent(output) == HashOf(utils.GetBytesContent(input))
 func Sum(input []byte /*@, ghost p perm @*/) (output []byte) {
-	// Call sum, which is proven except for the bijectivity assumption.
 	output = sum(input /*@, p @*/)
-	// @ assume low(utils.GetBytesContent(input)) == low(utils.GetBytesContent(output))
+	// @ assume utils.GetBytesContent(output) == HashOf(utils.GetBytesContent(input))
 	return
 }

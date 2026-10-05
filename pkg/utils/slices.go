@@ -1,9 +1,9 @@
 package utils
 
-// @ requires noPerm < p
+// @ requires  noPerm < p
 // @ preserves acc(BytesMem(x), p)
-// @ ensures r != nil && acc(BytesMem(r))
-// @ ensures BytesEqual(x, r)
+// @ ensures   BytesMem(r) && r != nil
+// @ ensures   BytesEqual(x, r)
 func Copy(x []byte /*@, ghost p perm @*/) (r []byte) {
 	if len(x) == 0 {
 		r = []byte{}
@@ -15,6 +15,12 @@ func Copy(x []byte /*@, ghost p perm @*/) (r []byte) {
 		// @ fold acc(BytesMem(r))
 		// @ fold acc(BytesMem(x), p)
 	}
+	/* @
+	assert r != nil by contra {
+		unfold acc(BytesMem(r))
+	}
+	@ */
+	// @ assert reveal GetBytesContent(x) == reveal GetBytesContent(r)
 	return
 }
 
@@ -71,4 +77,29 @@ func Reverse(r_in []uint64, offset int) (r_out []uint64) {
 		r_out[i] = r_in[len(r_in)-1-i]
 	}
 	return r_out
+}
+
+// Concatenate two byte slices.
+// @ requires  noPerm < p
+// @ preserves acc(BytesMem(bs1), p) && acc(BytesMem(bs2), p)
+// @ ensures   BytesMem(r)
+// @ ensures   GetBytesContent(r) == GetBytesContent(bs1) ++ GetBytesContent(bs2)
+func Concat(bs1 []byte, bs2 []byte /*@, ghost p perm @*/) (r []byte) {
+	r = Copy(bs1 /*@, p @*/)
+
+	// @ invariant 0 <= i && i <= len(bs2)
+	// @ invariant acc(BytesMem(bs1), p/2) && acc(BytesMem(bs2), p/2)
+	// @ invariant BytesMem(r)
+	// @ invariant reveal GetBytesContent(r) == reveal GetBytesContent(bs1) ++ reveal GetBytesContent(bs2)[:i]
+	for i := 0; i < len(bs2); i++ {
+		// @ ghost prev := reveal GetBytesContent(r)
+		// @ unfold BytesMem(r)
+		// @ unfold acc(BytesMem(bs2), p/2)
+		// @ ghost b := bs2[i]
+		r = append( /*@ perm(1/2), @*/ r, bs2[i])
+		// @ fold acc(BytesMem(bs2), p/2)
+		// @ fold BytesMem(r)
+		// @ assert reveal GetBytesContent(r) == prev ++ seq[byte]{b}
+	}
+	return
 }
