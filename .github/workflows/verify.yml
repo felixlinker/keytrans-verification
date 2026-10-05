@@ -12,70 +12,6 @@ on:
   workflow_dispatch: # allow to manually trigger this workflow
 
 jobs:
-  verify-packages:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    container:
-      image: ghcr.io/viperproject/gobra:sha-810de06
-    env:
-      MOD_NAME: github.com/felixlinker/keytrans-verification
-      EXCLUDE_PKGS: "main"
-      UNARY_MODE_PKGS: "proofs utils"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Create stats dir
-        run: mkdir .gobra-unary .gobra-hyper
-
-      # --packageTimeout is PER PACKAGE: a package hitting it times out
-      # INSIDE Gobra, which reports its members as 'did not terminate' and
-      # still writes stats.json at the end of the run. However, if too many
-      # packages hit the timeout, the step is killed and no stats.json file
-      # is written.
-      - name: Verify packages (without hyperMode)
-        timeout-minutes: 15
-        run: |
-          java -jar -Xss128m /gobra/gobra.jar \
-            --gobraDirectory .gobra-unary \
-            --module ${{ env.MOD_NAME }} \
-            --hyperMode off \
-            --recursive \
-            --include "." ".verification" \
-            --checkConsistency \
-            --parallelizeBranches \
-            --packageTimeout 10m \
-            --includePackages ${{ env.UNARY_MODE_PKGS }}
-
-      - name: Upload Gobra statistics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: unary-stats.json
-          path: .gobra-unary/stats.json
-
-      - name: Verify packages (with hyperMode)
-        timeout-minutes: 50
-        run: |
-          java -jar -Xss128m /gobra/gobra.jar \
-            --gobraDirectory .gobra-hyper \
-            --module ${{ env.MOD_NAME }} \
-            --hyperMode extended \
-            --recursive \
-            --include "." ".verification" \
-            --checkConsistency \
-            --parallelizeBranches \
-            --packageTimeout 15m \
-            --excludePackages ${{ env.EXCLUDE_PKGS }} ${{ env.UNARY_MODE_PKGS }}
-
-      - name: Upload Gobra statistics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: hyper-stats.json
-          path: .gobra-hyper/stats.json
-
-
   test-packages:
     runs-on: ubuntu-latest
     steps:
@@ -90,3 +26,153 @@ jobs:
 
       - name: Test all packages
         run: go test ./...
+
+
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      ids: ${{ steps.plan.outputs.ids }}
+    steps:
+      - name: Define the verification split
+        id: plan
+        run: |
+          # The heavy packages get a job each: run sequentially the hyper phase
+          # exceeds any reasonable timeout. In parallel the wall time is the slowest
+          # single package, and one pathological package cannot starve the rest.
+          matrix='[
+            {"id": "unary",  "name": "unary",           "args": "--phase unary",                   "minutes": 15},
+            {"id": "search", "name": "hyper - search",  "args": "--phase hyper --packages search", "minutes": 45},
+            {"id": "prefix", "name": "hyper - prefix",  "args": "--phase hyper --packages prefix", "minutes": 45},
+            {"id": "log",    "name": "hyper - log",     "args": "--phase hyper --packages log",    "minutes": 45},
+            {"id": "client", "name": "hyper - client",  "args": "--phase hyper --packages client", "minutes": 45},
+            {"id": "rest",   "name": "hyper - rest",    "args": "--phase hyper --exclude search prefix log client", "minutes": 30}
+          ]'
+          echo "matrix=$(jq -c . <<<"$matrix")" >> "$GITHUB_OUTPUT"
+          echo "ids=$(jq -r '[.[].id] | join(" ")' <<<"$matrix")" >> "$GITHUB_OUTPUT"
+
+
+  verify-packages:
+    needs: plan
+    strategy:
+      fail-fast: false        # one slow package must not cancel the others
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: verify (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.minutes }}
+    container:
+      image: ghcr.io/viperproject/gobra:sha-810de06
+    steps:
+      - name: Install Python
+        run: apt-get update && apt-get install -y --no-install-recommends python3
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Verify
+        run: |
+          python3 tooling/verify.py ${{ matrix.args }} \
+            --out "$RUNNER_TEMP/out" --no-summary
+
+      - name: Upload Gobra statistics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: stats-${{ matrix.id }}
+          path: ${{ runner.temp }}/out/iter1/*/stats.json
+          if-no-files-found: ignore
+
+
+  visualize-times:
+    runs-on: ubuntu-latest
+    needs: [plan, verify-packages]
+    if: ${{ always() }}
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # One artifact per matrix job; keep them in separate directories so the
+      # stats.json files do not overwrite each other.
+      - name: Download statistics
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: stats-*
+          path: stats
+
+      # A job that timed out or crashed uploads nothing, and its packages then
+      # simply do not appear in the report -- which reads as a fast, healthy
+      # run rather than a truncated one. Name the absentees instead.
+      #
+      # Search each artifact directory recursively rather than expecting
+      # stats/stats-<id>/stats.json: upload-artifact roots an artifact at the
+      # non-wildcard prefix of its path, so `out/iter1/*/stats.json` keeps the
+      # phase directory inside and the file lands at stats/stats-<id>/<phase>/.
+      - name: Check which statistics arrived
+        id: stats
+        run: |
+          missing=""
+          for id in ${{ needs.plan.outputs.ids }}; do
+            [ -n "$(find "stats/stats-$id" -name stats.json 2>/dev/null)" ] \
+              || missing="${missing:+$missing,}$id"
+          done
+          if [ -z "$(find stats -name stats.json 2>/dev/null)" ]; then
+            echo "::notice::No statistics were produced; skipping the report."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            [ -n "$missing" ] && echo "::warning::No statistics from: $missing; the report covers the rest only."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "missing=$missing" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate report
+        if: ${{ steps.stats.outputs.skip != 'true' }}
+        env:
+          MISSING: ${{ steps.stats.outputs.missing }}
+        run: |
+          python3 tooling/summarize-verification-stats.py stats \
+            --summary summary.md \
+            ${MISSING:+--missing "$MISSING"}
+
+      - name: Append summary to job summary
+        if: ${{ steps.stats.outputs.skip != 'true' }}
+        run: cat summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: ${{ steps.stats.outputs.skip != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-times
+          path: summary.md
+
+      # Sticky PR comment: update the existing comment carrying the marker
+      # instead of posting a new one on every run. Fork PRs lack write
+      # permission, hence continue-on-error.
+      - name: Post or update PR comment
+        if: ${{ github.event_name == 'pull_request' && steps.stats.outputs.skip != 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # JSON-encode the comment body safely (no string interpolation).
+          jq -Rs '{body: .}' summary.md > "$RUNNER_TEMP/body.json"
+          # --paginate walks all pages; --jq is applied per page, so ids from
+          # every page are emitted and head -n 1 picks the first match.
+          comment_id="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | contains("<!-- verification-times -->")) | .id' \
+            | head -n 1)"
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              --input "$RUNNER_TEMP/body.json"
+          else
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --input "$RUNNER_TEMP/body.json"
+          fi
