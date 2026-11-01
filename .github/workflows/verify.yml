@@ -98,7 +98,7 @@ jobs:
       # One artifact per matrix job; keep them in separate directories so the
       # stats.json files do not overwrite each other.
       - name: Download statistics
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           pattern: stats-*
