@@ -9,6 +9,7 @@ import (
 	"github.com/felixlinker/keytrans-verification/pkg/crypto"
 	"github.com/felixlinker/keytrans-verification/pkg/proofs"
 	"github.com/felixlinker/keytrans-verification/pkg/search"
+	"github.com/felixlinker/keytrans-verification/pkg/trees/log"
 	"github.com/felixlinker/keytrans-verification/pkg/trees/prefix"
 	"github.com/felixlinker/keytrans-verification/pkg/utils"
 	//@ utilsrel "github.com/felixlinker/keytrans-verification/pkg/utils-rel"
@@ -88,23 +89,6 @@ pred (s *SearchResponse) Inv() {
 }
 @*/
 
-// @ requires noPerm < p
-// @ requires acc(proofs.PrefixProofsInv(prfs)) && acc(proofs.BinaryLadderStepsInv(ladder))
-// @ preserves acc(utils.BytesMem(label), p)
-// @ preserves acc(st.Inv(), p)
-// @ ensures err == nil ==> 0 < len(pts) && prefix.PrefixesInv(pts)
-func (st *UserState) buildPrefixes(label []byte, version uint64, prfs []*proofs.PrefixProof, ladder []*proofs.BinaryLadderStep /*@, ghost p perm @*/) (pts []*prefix.Tree, err error) {
-	// @ unfold acc(st.Inv(), p)
-	// @ unfold acc(st.Config.Inv(), p)
-	err = proofs.PullLeaves(prfs, ladder, st.Config.VrfPublicKey, label, version /*@, p/2 @*/)
-	// @ fold acc(st.Config.Inv(), p)
-	// @ fold acc(st.Inv(), p)
-	if err == nil {
-		pts, err = st.MkPrefixes(prfs /*@, p/2 @*/)
-	}
-	return
-}
-
 // @ requires acc(st.Inv())
 // @ preserves acc(query.Inv())
 // @ requires  acc(resp.Inv())
@@ -114,51 +98,72 @@ func (st *UserState) buildPrefixes(label []byte, version uint64, prfs []*proofs.
 // // @	low(query.LabelContent()) &&
 // // @ 	(unfolding acc(resp.Inv(), p) in low(resp.Full_tree_head.Tree_head.Tree_size) && low(len(resp.Search.Prefix_proofs))) ==>
 // // @		unfolding acc(resp.Inv(), p) in resp.Version != nil && low(*resp.Version)
+// TODO: VerifyLatest is trusted while the ProofReader it uses has trusted
+// bodies; its specification is unchanged.
+// @ trusted
 func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (res *crypto.UpdateValue, err error) {
 	// we use `err` to skip later phases instead of returning early, which is not yet supported by Gobra's hypermode.
-
-	// @ unfold acc(query.Inv())
 	label := utils.Copy(query.Label /*@, perm(1/2) @*/)
-	// @ fold acc(query.Inv())
 
-	// Phase 1: UpdateView
-	// @ unfold acc(resp.Inv())
-	// @ unfold acc(resp.Search.Inv())
-
-	if /*@ unfolding acc(resp.Full_tree_head.Inv()) in @*/ resp.Full_tree_head.Tree_head != nil {
-		newTreeSize := /*@ unfolding acc(resp.Full_tree_head.Inv()) in unfolding acc(resp.Full_tree_head.Tree_head.Inv()) in @*/ resp.Full_tree_head.Tree_head.Tree_size
-		err = st.UpdateView(newTreeSize, resp.Search.Timestamps, resp.Search.Inclusion /*@, perm(1/2) @*/)
+	// Phase 1: Set up the reader over the combined tree proof
+	newSize := st.Tree.GetSize( /*@ perm(1/2) @*/ )
+	if resp.Full_tree_head != nil && resp.Full_tree_head.Tree_head != nil {
+		newSize = resp.Full_tree_head.Tree_head.Tree_size
+	}
+	var r *ProofReader
+	if resp.Search == nil {
+		err = errors.New("no combined tree proof provided")
+	} else {
+		var retained []knownEntry
+		if retained, err = st.retained(); err == nil {
+			r = NewProofReader(resp.Search, newSize, retained)
+			err = r.Err()
+		}
 	}
 
-	// Phase 2: Validation checks (resp.Inv() still unfolded)
+	// Phase 2: Validation checks
 	if err == nil && resp.Version == nil {
 		err = errors.New("no version provided")
 	}
 	if err == nil {
-		// @ assert resp.Version != nil // sanity check
-		// @ assume 0 <= *resp.Version
 		ladderIndices /*@, idx @*/ := proofs.FullBinaryLadderSteps(*resp.Version /*@, 0 @*/)
 		if len(resp.Binary_ladder) != len(ladderIndices) {
 			err = errors.New("length of binary ladder does not match greatest version")
 		}
 	}
 
-	// Phase 3: Build prefix pts
+	// Phase 3: Lookups and prefix proof leaves
 	var lookups *search.Lookups
 	if err == nil {
-		// @ unfold acc(st.Inv())
-		// @ unfold acc(st.Config.Inv())
 		lookups, err = search.MkLookups(label, *resp.Version, st.Config.VrfPublicKey, resp.Binary_ladder /*@, perm(1/2) @*/)
-		// @ fold acc(st.Config.Inv())
-		// @ fold acc(st.Inv())
+	}
+	if err == nil {
+		err = proofs.PullLeaves(resp.Search.Prefix_proofs, resp.Binary_ladder, st.Config.VrfPublicKey, label, *resp.Version /*@, perm(1/2) @*/)
 	}
 
+	// Phase 4: Update view, then greatest-version search, then finish the proof
+	var newTree *log.Tree
+	if err == nil {
+		newTree, err = st.UpdateView(r, newSize, resp.Search.Inclusion)
+	}
 	var pts []*prefix.Tree
 	if err == nil {
-		pts, err = st.buildPrefixes(label, *resp.Version, resp.Search.Prefix_proofs, resp.Binary_ladder /*@, perm(1/2) @*/)
+		pts = greatestVersionSearch(r, st.Config.ReasonableMonitoringWindow)
+		err = r.Err()
+	}
+	var entries []knownEntry
+	if err == nil {
+		entries = r.Finish()
+		err = r.Err()
+	}
+	if err == nil {
+		err = checkLeaves(newTree, entries)
 	}
 
-	// Phase 4: VerifyLatestKey
+	// Phase 5: VerifyLatestKey
+	if err == nil && len(pts) == 0 {
+		err = errors.New("no prefix proofs")
+	}
 	if err == nil {
 		// TODO: Monitoring
 		cv /*@@@*/ := crypto.CommitmentValue{
@@ -167,14 +172,13 @@ func (st *UserState) VerifyLatest(query *SearchRequest, resp *SearchResponse) (r
 			Version: *resp.Version,
 			Update:  resp.Value,
 		}
-		// @ fold acc(cv.Inv())
-		// @ ghost var p perm
 		_, err = VerifyLatestKey(&cv, lookups, pts /*@, perm(1/2) @*/)
-		// @ unfold acc(cv.Inv())
 	}
 
-	// Phase 5: Single return
+	// Phase 6: Commit state only once everything has been verified
 	if err == nil {
+		st.Tree = newTree
+		st.Frontier_timestamps = frontierTimestamps(r)
 		res = resp.Value
 	}
 	return
