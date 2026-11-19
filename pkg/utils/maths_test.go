@@ -125,3 +125,27 @@ func TestTrueLargestSmallerPower(t *testing.T) {
 		}
 	}
 }
+
+// @ trusted
+func TestCheckIncreasing(t *testing.T) {
+	tests := []struct {
+		start      uint64
+		timestamps []uint64
+		want       bool
+	}{
+		{start: 0, timestamps: []uint64{0}, want: true},
+		{start: 5, timestamps: []uint64{6, 7, 8}, want: true},
+		{start: 5, timestamps: []uint64{5, 7, 8}, want: true},
+		{start: 5, timestamps: []uint64{6, 8, 8}, want: true},
+		{start: 5, timestamps: []uint64{5, 5, 5}, want: true},
+		{start: 5, timestamps: []uint64{4, 7, 8}, want: false},
+		{start: 5, timestamps: []uint64{6, 8, 7}, want: false},
+		{start: 5, timestamps: []uint64{8, 6, 9}, want: false},
+	}
+
+	for _, tc := range tests {
+		if got := CheckIncreasing(tc.start, tc.timestamps); got != tc.want {
+			t.Errorf("CheckIncreasing(%d, %v) = %v; want %v", tc.start, tc.timestamps, got, tc.want)
+		}
+	}
+}
