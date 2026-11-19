@@ -127,7 +127,7 @@ func TestTrueLargestSmallerPower(t *testing.T) {
 }
 
 // @ trusted
-func TestCheckIncreasing(t *testing.T) {
+func TestCheckMonotonic(t *testing.T) {
 	tests := []struct {
 		start      uint64
 		timestamps []uint64
@@ -144,8 +144,8 @@ func TestCheckIncreasing(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		if got := CheckIncreasing(tc.start, tc.timestamps); got != tc.want {
-			t.Errorf("CheckIncreasing(%d, %v) = %v; want %v", tc.start, tc.timestamps, got, tc.want)
+		if got := CheckMonotonic(tc.start, tc.timestamps); got != tc.want {
+			t.Errorf("CheckMonotonic(%d, %v) = %v; want %v", tc.start, tc.timestamps, got, tc.want)
 		}
 	}
 }

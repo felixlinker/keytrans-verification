@@ -91,15 +91,15 @@ func (st *UserState) UpdateView(newSize uint64, timestamps []uint64, prf *proofs
 			start = st.Frontier_timestamps[len(st.Frontier_timestamps)-1]
 		}
 
-		if !utils.CheckIncreasing(start, timestamps /*@, p @*/) {
-			err = errors.New("timestamps not increasing")
+		if !utils.CheckMonotonic(start, timestamps /*@, p @*/) {
+			err = errors.New("timestamps not monotonic")
 		} else if newTree, e := st.Tree.Grow(newSize, prf); e != nil {
 			err = e
 		} else {
 			st.Tree = newTree
 
 			// @ unfold acc(utils.Monotonic(timestamps), p)
-			// @ assert forall i, j int :: {st.Frontier_timestamps[i], timestamps[j]} 0 <= i && i < len(st.Frontier_timestamps) && 0 < j && j < len(timestamps) ==> st.Frontier_timestamps[i] < timestamps[j]
+			// @ assert forall i, j int :: {st.Frontier_timestamps[i], timestamps[j]} 0 <= i && i < len(st.Frontier_timestamps) && 0 < j && j < len(timestamps) ==> st.Frontier_timestamps[i] <= timestamps[j]
 
 			frontier := search.Frontier(newSize)
 			keep := len(frontier) - len(timestamps)
