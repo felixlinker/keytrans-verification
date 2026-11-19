@@ -166,7 +166,7 @@ func (st *UserState) MkPrefixes(prfs []*proofs.PrefixProof /*@, ghost p perm @*/
 
 		if len(frontier) != /*@ unfolding acc(st.Inv(), p) in @*/ len(st.Frontier_timestamps) {
 			err = errors.New("length mismatch between frontier and frontier timestamps")
-		} else if len(prfs)+mrd+1 != len(frontier) {
+		} else if len(prfs)+mrd != len(frontier) {
 			err = errors.New("too few or too many prefix proofs")
 		} else {
 			ts = make([]*prefix.Tree, 0, len(prfs))

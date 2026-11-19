@@ -135,6 +135,10 @@ func YoungerToMostRecent(n uint64, size uint64) (r []uint64) {
 }
 
 // Below is effectively a partial implementation of: https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-6.1-2
+// Given the timestamps of the frontier log entries, it returns the index (into
+// the frontier) of the rightmost distinguished log entry, or 0 (the root) if no
+// log entry is distinguished. Walking down the frontier suffices: the right
+// child of a non-distinguished entry is never distinguished.
 // @ requires noPerm < p
 // @ requires 0 < rmw
 // @ requires 0 < len(timestamps)
@@ -150,26 +154,23 @@ func MostRecentDistinguished(timestamps []uint64, rmw uint64 /*@, ghost p perm @
 	// @ fold acc(utils.Monotonic(timestamps), p)
 	done := false
 	// @ invariant t <= rightMost
-	// @ invariant 0 <= i && i <= len(timestamps)
+	// @ invariant 0 <= k && k <= len(timestamps)
+	// @ invariant 0 <= i && i < len(timestamps)
 	// @ invariant acc(utils.Monotonic(timestamps), p/2)
 	// @ invariant unfolding acc(utils.Monotonic(timestamps), p/2) in forall j int :: {timestamps[j]} 0 <= j && j < len(timestamps) ==> timestamps[j] <= rightMost && timestamps[j] == pureTimestamps[j]
-	// @ invariant done ==> 0 < i
-	// @ invariant low(pureTimestamps) && low(rmw) ==> low(rightMost) && low(done) && low(t) && low(i)
-	for ; !done && i < len(timestamps); i++ {
+	// @ invariant low(pureTimestamps) && low(rmw) ==> low(rightMost) && low(done) && low(t) && low(k) && low(i)
+	for k := 0; !done && k < len(timestamps); k++ {
 		if rightMost-t < rmw {
+			// frontier[k] is not distinguished, and neither is anything to its right.
 			done = true
 		} else {
+			// frontier[k] is distinguished.
+			i = k
 			// @ unfold acc(utils.Monotonic(timestamps), p/2)
-			t = timestamps[i]
+			t = timestamps[k]
 			// @ fold acc(utils.Monotonic(timestamps), p/2)
-			// @ assert t == pureTimestamps[i]
+			// @ assert t == pureTimestamps[k]
 		}
-	}
-
-	if done {
-		i = i - 1
-	} else {
-		i = 0
 	}
 
 	return
