@@ -100,3 +100,26 @@ func TestPathToMostRecent(t *testing.T) {
 		}
 	}
 }
+
+// @ trusted
+func TestMostRecentDistinguished(t *testing.T) {
+	tests := []struct {
+		name       string
+		timestamps []uint64
+		rmw        uint64
+		want       int
+	}{
+		{name: "none distinguished starts at root", timestamps: []uint64{5, 8, 9}, rmw: 10, want: 0},
+		{name: "only root distinguished", timestamps: []uint64{5, 8, 9}, rmw: 9, want: 0},
+		{name: "worked example: entry 11 (index 1)", timestamps: []uint64{7000, 11000, 12000}, rmw: 5000, want: 1},
+		{name: "all distinguished", timestamps: []uint64{10, 20, 40}, rmw: 20, want: 2},
+		{name: "single frontier entry distinguished", timestamps: []uint64{1}, rmw: 1, want: 0},
+		{name: "single frontier entry not distinguished", timestamps: []uint64{1}, rmw: 2, want: 0},
+	}
+
+	for _, tc := range tests {
+		if got := MostRecentDistinguished(tc.timestamps, tc.rmw); got != tc.want {
+			t.Errorf("%s: MostRecentDistinguished(%v, %d) = %d; want %d", tc.name, tc.timestamps, tc.rmw, got, tc.want)
+		}
+	}
+}
