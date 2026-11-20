@@ -85,3 +85,95 @@ func TestFullBinaryLadderSteps(t *testing.T) {
 		}
 	}
 }
+
+// referenceBinaryLadder ports base_binary_ladder from
+// draft-ietf-keytrans-protocol-06, Appendix "Binary Ladder", for n < 1<<32.
+// @ trusted
+func referenceBinaryLadder(n uint64) []uint64 {
+	out := []uint64{}
+	for {
+		value := uint64(1)<<len(out) - 1
+		out = append(out, value)
+		if value > n {
+			break
+		}
+	}
+	lower, upper := out[len(out)-2], out[len(out)-1]
+	for lower+1 < upper {
+		value := (lower + upper) / 2
+		out = append(out, value)
+		if value <= n && value < 1<<32 {
+			lower = value
+		} else {
+			upper = value
+		}
+	}
+	filtered := []uint64{}
+	for _, v := range out {
+		if v < 1<<32 {
+			filtered = append(filtered, v)
+		}
+	}
+	return filtered
+}
+
+// "The greatest possible version is 2^32-1. Any lookup for a greater version is
+// skipped and the algorithm above continues as if the lookup resulted in a
+// non-inclusion proof."
+// @ trusted
+func TestFullBinaryLadderStepsMaxVersion(t *testing.T) {
+	maxVersion := MaxVersion()
+	if maxVersion != 1<<32-1 {
+		t.Fatalf("MaxVersion() = %d; want %d", maxVersion, uint64(1<<32-1))
+	}
+
+	// For the greatest possible version, every power of two minus one up to
+	// and including 2^32-1 is included and nothing else is looked up.
+	powers := []uint64{}
+	for k := 0; k <= 32; k++ {
+		powers = append(powers, uint64(1)<<k-1)
+	}
+
+	if ref := referenceBinaryLadder(maxVersion); len(ref) != len(powers) {
+		t.Fatalf("referenceBinaryLadder(%d) = %v; want %v", maxVersion, ref, powers)
+	} else {
+		for i := range ref {
+			if ref[i] != powers[i] {
+				t.Fatalf("referenceBinaryLadder(%d) = %v; want %v", maxVersion, ref, powers)
+			}
+		}
+	}
+
+	targets := []uint64{
+		1<<31 - 1, 1 << 31, 1<<31 + 1,
+		maxVersion - 2, maxVersion - 1, maxVersion,
+		maxVersion + 1, 1 << 40, 1<<64 - 1,
+	}
+	for target := uint64(0); target < 1024; target++ {
+		targets = append(targets, target)
+	}
+
+	for _, target := range targets {
+		got := FullBinaryLadderSteps(target)
+		// Beyond MaxVersion, the reference ladder is that of MaxVersion. (The
+		// port itself would overflow there, unlike the Python original.)
+		want := powers
+		if target <= maxVersion {
+			want = referenceBinaryLadder(target)
+		}
+		if len(got) != len(want) {
+			t.Errorf("FullBinaryLadderSteps(%d) = %v; want %v", target, got, want)
+			continue
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Errorf("FullBinaryLadderSteps(%d) = %v; want %v", target, got, want)
+				break
+			}
+			if got[i] > maxVersion {
+				t.Errorf("FullBinaryLadderSteps(%d) looks up version %d > MaxVersion", target, got[i])
+				break
+			}
+		}
+	}
+}
