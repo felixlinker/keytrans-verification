@@ -44,13 +44,14 @@ func (s *BinaryLadderStep) Unmarshal(buf *bytes.Buffer) (err error) {
 	prf := make([]byte, 80)
 	if n, e := buf.Read(prf); n != len(prf) || e != nil {
 		err = utils.BufferError(e)
-	} else if present, e := buf.ReadByte(); e != nil {
+	} else if present, e := utils.ReadOptional(buf); e != nil {
+		// optional<HashValue> commitment
 		err = e
 	} else {
 		s.Proof = prf
 		// @ fold acc(utils.BytesMem(s.Proof))
 		s.Commitment = nil
-		if present == 1 {
+		if present {
 			s.Commitment = make([]byte, sha256.Size)
 			if n, e := buf.Read(s.Commitment); n != len(s.Commitment) || e != nil {
 				return utils.BufferError(e)
