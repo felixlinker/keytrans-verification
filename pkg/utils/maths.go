@@ -118,27 +118,31 @@ func TrueLargestSmallerPower(n uint64) (r uint64) {
 
 /*@
 pred Monotonic(ts []uint64) {
-	acc(ts) && forall i, j int :: { ts[i], ts[j] } 0 <= i && i < j && j < len(ts) ==> ts[i] < ts[j]
+	acc(ts) && forall i, j int :: { ts[i], ts[j] } 0 <= i && i < j && j < len(ts) ==> ts[i] <= ts[j]
 }
 @*/
 
+// CheckMonotonic reports whether [start, timestamps[0], timestamps[1], ...] is
+// non-decreasing.  Per §4.2.5, each subsequent timestamp MUST be "greater than
+// or equal to the one prior"
+// (https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-4.2-5).
 // @ requires noPerm < p
 // @ requires acc(timestamps, p)
 // @ ensures  !res ==> acc(timestamps, p)
-// @ ensures   res ==> acc(Monotonic(timestamps), p) && unfolding acc(Monotonic(timestamps), p) in forall i int :: 0 <= i && i < len(timestamps) ==> start < timestamps[i]
+// @ ensures   res ==> acc(Monotonic(timestamps), p) && unfolding acc(Monotonic(timestamps), p) in forall i int :: 0 <= i && i < len(timestamps) ==> start <= timestamps[i]
 // @ decreases
-func CheckIncreasing(start uint64, timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
+func CheckMonotonic(start uint64, timestamps []uint64 /*@, ghost p perm @*/) (res bool) {
 	tmp := start
 	res = true
 	// @ invariant k == 0 ==> tmp == start
 	// @ invariant 0 <= k && k <= len(timestamps)
 	// @ invariant acc(timestamps, p)
-	// @ invariant res && 0 < k ==> start < timestamps[0]
+	// @ invariant res && 0 < k ==> start <= timestamps[0]
 	// @ invariant res ==> forall i int :: { timestamps[i] } 0 <= i && i < k ==> timestamps[i] <= tmp
-	// @ invariant res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < k ==> timestamps[i] < timestamps[j]
+	// @ invariant res ==> forall i, j int :: { timestamps[i], timestamps[j] } 0 <= i && i < j && j < k ==> timestamps[i] <= timestamps[j]
 	// @ decreases len(timestamps) - k
 	for k := 0; k < len(timestamps); k++ {
-		if tmp >= timestamps[k] {
+		if tmp > timestamps[k] {
 			res = false
 		}
 		tmp = timestamps[k]
