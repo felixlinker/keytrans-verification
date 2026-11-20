@@ -50,7 +50,7 @@ pure func GetRootHashContent(hashes [][]byte, idx int) seq[byte] {
 @*/
 
 type SearchRequest struct {
-	Last  *uint32
+	Last  *uint64 // optional<uint64> last
 	Label []byte
 	// TODO: optional<uint32> version
 }
@@ -69,8 +69,8 @@ pure func (s *SearchRequest) LabelContent() seq[byte] {
 @*/
 
 type SearchResponse struct {
-	// NOTE: Per spec, Version is a uint32, but we use a uint64 for internal
-	// compatibility.
+	// NOTE: Per spec, Version is a uint32, but we use uint64s everywhere
+	// internally so that Gobra doesn't have to reason about casts.
 	Full_tree_head *FullTreeHead
 	Version        *uint64
 	Opening        []byte

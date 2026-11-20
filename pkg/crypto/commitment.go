@@ -65,8 +65,8 @@ func (cv *CommitmentValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 	buf.Write(cv.Opening)
 	buf.WriteByte(utils.Uint8(len(cv.Label)))
 	buf.Write(cv.Label)
-	// We represent version as uint64 to do less type casting, but spec uses
-	// uint32
+	// NB. We represent `version` internally as a uint64; see
+	// client.SearchResponse.
 	buf.Write(utils.Uint32(uint32(cv.Version)))
 	buf.Write(cv.Update.Marshal( /*@ p @*/ ))
 	// @ fold acc(cv.Inv(), p)
@@ -77,6 +77,16 @@ func (cv *CommitmentValue) Marshal( /*@ ghost p perm @*/ ) (r []byte) {
 func VerifyCommitmentValue(commitment []byte, cv *CommitmentValue /*@, ghost p perm @*/) bool {
 	// See https://www.ietf.org/archive/id/draft-ietf-keytrans-protocol-04.html#section-15.1-8.3.1
 	kc := []byte{0xd8, 0x21, 0xf8, 0x79, 0x0d, 0x97, 0x70, 0x97, 0x96, 0xb4, 0xd7, 0x90, 0x33, 0x57, 0xc3, 0xf5}
+
+	// CommitmentValue has label<0..2^8-1> and a uint32 version; fail closed
+	// rather than let Marshal() wrap.
+	// @ unfold acc(cv.Inv(), p)
+	labelLen := len(cv.Label)
+	version := cv.Version
+	// @ fold acc(cv.Inv(), p)
+	if labelLen > MaxLabelLen || version > MaxUint32 {
+		return false
+	}
 
 	// @ unfold acc(utils.BytesMem(commitment), p)
 	mac := hmac.New(sha256.New, kc /*@, perm(1/2) @*/)
