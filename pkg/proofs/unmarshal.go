@@ -15,7 +15,9 @@ func UnmarshalNodeValues(buf *bytes.Buffer, lenBytes int) (r []NodeValue, err er
 	if length, e := utils.ReadLen(buf, lenBytes); e != nil {
 		err = e
 	} else {
-		r = make([]NodeValue, 0, length)
+		// `length` is untrusted and may be as large as 2^32-1, so don't
+		// pre-allocate based on it.
+		r = make([]NodeValue, 0)
 		// @ fold acc(NodeValuesInv(r))
 
 		// @ invariant acc(NodeValuesInv(r))
@@ -44,13 +46,14 @@ func (s *BinaryLadderStep) Unmarshal(buf *bytes.Buffer) (err error) {
 	prf := make([]byte, 80)
 	if n, e := buf.Read(prf); n != len(prf) || e != nil {
 		err = utils.BufferError(e)
-	} else if present, e := buf.ReadByte(); e != nil {
+	} else if present, e := utils.ReadOptional(buf); e != nil {
+		// optional<HashValue> commitment
 		err = e
 	} else {
 		s.Proof = prf
 		// @ fold acc(utils.BytesMem(s.Proof))
 		s.Commitment = nil
-		if present == 1 {
+		if present {
 			s.Commitment = make([]byte, sha256.Size)
 			if n, e := buf.Read(s.Commitment); n != len(s.Commitment) || e != nil {
 				return utils.BufferError(e)
@@ -165,12 +168,12 @@ func (p *PrefixSearchResult) Unmarshal(buf *bytes.Buffer) (err error) {
 
 // @ ensures err == nil ==> acc(PrefixSearchResultsInv(r))
 func UnmarshalPrefixSearchResults(buf *bytes.Buffer) (r []*PrefixSearchResult, err error) {
-	if lengthByte, e := buf.ReadByte(); e != nil {
+	if length, e := utils.ReadLen(buf, 4); e != nil {
 		err = e
 	} else {
-		length := int(uint8(lengthByte))
-		// @ assume 0 <= length
-		r = make([]*PrefixSearchResult, 0, length)
+		// `length` is untrusted and may be as large as 2^32-1, so don't
+		// pre-allocate based on it.
+		r = make([]*PrefixSearchResult, 0)
 		// @ fold acc(PrefixSearchResultsInv(r))
 
 		// @ invariant acc(PrefixSearchResultsInv(r))
@@ -194,7 +197,8 @@ func UnmarshalPrefixSearchResults(buf *bytes.Buffer) (r []*PrefixSearchResult, e
 func (p *PrefixProof) Unmarshal(buf *bytes.Buffer) (err error) {
 	if results, e := UnmarshalPrefixSearchResults(buf); e != nil {
 		err = e
-	} else if values, e := UnmarshalNodeValues(buf, 2); e != nil {
+	} else if values, e := UnmarshalNodeValues(buf, 4); e != nil {
+		// HashValue elements<0..2^32-1>
 		err = e
 	} else {
 		p.Results = results

@@ -2,6 +2,28 @@ package proofs
 
 import "github.com/felixlinker/keytrans-verification/pkg/utils"
 
+// "The greatest possible version is `2^32-1`. Any lookup for a greater version
+// is skipped and the algorithm above continues as if the lookup resulted in a
+// non-inclusion proof."
+// (https://datatracker.ietf.org/doc/html/draft-ietf-keytrans-protocol-06#section-5-5)
+//
+// This is a function rather than a constant so that Gobra can compare it (via
+// its ghost version) to utils.PowOf2_pure().
+//
+// @ ensures r == MaxVersion_pure()
+// @ decreases
+func MaxVersion() (r uint64) {
+	return utils.PowOf2(32) - 1
+}
+
+/*@
+ghost
+decreases
+pure func MaxVersion_pure() uint64 {
+	return utils.PowOf2_pure(32) - 1
+}
+@*/
+
 /*@
 ghost
 requires 0 <= t1 && 0 <= t2
@@ -112,6 +134,7 @@ pure func IstStar(r []uint64, t1, t2 uint64, idx int) bool {
 // Construct a binary ladder, but on the interval [1, ...] so that reasoning
 // about logarithms and powers of two becomes simpler.
 // @ requires 0 < target && 0 < t2
+// @ requires target <= MaxVersion_pure() + 1 && t2 <= MaxVersion_pure() + 1
 // @ ensures acc(r)
 // @ ensures 0 <= idx && idx < len(r) && 0 < len(r) && r[0] == 1
 // @ ensures forall i int :: { r[i] } 0 <= i && i < len(r) ==> 0 < r[i]
@@ -133,6 +156,7 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 	// @ invariant acc(r)
 	// @ invariant len(r) == int(k)
 	// @ invariant 0 <= k && k <= target
+	// @ invariant i / 2 <= target
 	// @ invariant i == utils.PowOf2_pure(k) && k == utils.Log2Floor_pure(i)
 	// @ invariant 1 < k ==> k - 1 <= utils.Log2Floor_pure(target)
 	// @ invariant forall j int :: 0 <= j && j < len(r) ==> 0 < r[j]
@@ -158,6 +182,23 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 		// @ k = k+1
 	}
 	// i is now the smallest power of two s.t. i-1 is larger than target
+
+	// Starting with the next lookup for version i-1, we're above MaxVersion, so
+	// the ladder ends here.
+	if i-1 > MaxVersion() {
+		/*@
+		// i = 2^k > 2^32, so k > 32 and i/2 = 2^(k-1) >= 2^32.
+		ghost if k <= 32 {
+			assert let _ := utils.PowOf2Monotonic(k, 32) in i <= utils.PowOf2_pure(32)
+		}
+		assert i == 2 * utils.PowOf2_pure(k - 1)
+		assert let _ := utils.PowOf2Monotonic(32, k - 1) in utils.PowOf2_pure(32) <= i / 2
+		@*/
+		// @ assert t2 <= target
+		// @ assert t2 < target ==> jump_idx != 0
+		// @ assert t2 < target ==> tStar_pure(target, t2) == tStar_pure(t2, target)
+		return r /*@, target == t2 ? 0 : jump_idx @*/
+	}
 
 	var x_in uint64 = 1
 	if len(r) > 0 {
@@ -204,12 +245,17 @@ func fullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64@*/) (r []uint64 /*
 // binary ladder. This is the key interface used by CheckGreatest to obtain the
 // ladder steps.
 // @ ensures BinaryLadderInv(r)
-// @ ensures IstStar(r, target, t2, idx)
+// @ ensures IstStar(r,
+// @	utils.min(target, MaxVersion_pure()),
+// @	utils.min(t2, MaxVersion_pure()),
+// @	idx)
 // @ decreases
 func FullBinaryLadderSteps(target uint64 /*@, ghost t2 uint64 @*/) (r []uint64 /*@, ghost idx int @*/) {
 	// addresses an incompleteness of Gobra:
 	//@ assume 0 <= target && 0 <= t2
-	steps /*@, idx @*/ := fullBinaryLadderSteps(target + 1 /*@, t2 + 1 @*/)
+	cappedTarget := utils.Min(target, MaxVersion())
+	// @ ghost cappedT2 := utils.min(t2, MaxVersion_pure())
+	steps /*@, idx @*/ := fullBinaryLadderSteps(cappedTarget + 1 /*@, cappedT2 + 1 @*/)
 	r = utils.Decrement(steps)
 	//@ fold BinaryLadderInv(r)
 	return

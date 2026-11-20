@@ -38,7 +38,11 @@ func ReadLen(buf *bytes.Buffer, lenBytes int) (length int, err error) {
 			lenBuf = append( /*@ perm(1/2), @*/ pad, lenBuf...)
 		}
 		length = int(binary.BigEndian.Uint32(lenBuf /*@, perm(1/2) @*/))
-		// @ assume 0 <= length
+		// A 4-byte length >= 2^31 wraps negative where int is 32 bits.
+		if length < 0 {
+			length = 0
+			err = errors.New("length exceeds platform int")
+		}
 	}
 	return
 }
