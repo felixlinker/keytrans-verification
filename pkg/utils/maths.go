@@ -36,6 +36,15 @@ pure func Log2FloorMonotonic(a uint64, b uint64) uint64 {
 }
 @*/
 
+// @ ensures r == min(a, b)
+// @ decreases
+func Min(a, b uint64) (r uint64) {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // @ ensures   0 <= r
 // @ ensures   1 <= base ==> PowOf2_pure(r) <= base
 // @ ensures   base < PowOf2_pure(r+1)
